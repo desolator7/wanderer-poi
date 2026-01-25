@@ -42,6 +42,7 @@ FROM scratch
 WORKDIR /
 
 COPY --from=build /app/pocketbase /pocketbase
+COPY --from=build /etc/ssl/certs /etc/ssl/certs
 COPY --from=download-env /tmp/curl /curl
 COPY migrations ./migrations
 COPY templates ./templates
