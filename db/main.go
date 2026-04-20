@@ -156,12 +156,14 @@ func setupCommands(app *pocketbase.PocketBase) {
 func sanitizeHTML() func(e *core.RecordRequestEvent) error {
 	return func(e *core.RecordRequestEvent) error {
 		fieldsToSanitize := map[string][]string{
-			"lists":       {"description"},
-			"settings":    {"bio"},
-			"summit_logs": {"text"},
-			"trails":      {"description"},
-			"comments":    {"text"},
-			"waypoints":   {"description"},
+			"lists":          {"description"},
+			"settings":       {"bio"},
+			"summit_logs":    {"text"},
+			"trails":         {"description"},
+			"comments":       {"text"},
+			"waypoints":      {"description"},
+			"pois":           {"description"},
+			"poi_categories": {"description"},
 		}
 		collection := e.Collection.Name
 		fields, ok := fieldsToSanitize[collection]

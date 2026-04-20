@@ -1,3 +1,6 @@
+import { poi_attributes_index } from "$lib/stores/poi_attribute_store";
+import { poi_categories_index } from "$lib/stores/poi_category_store";
+import { pois_index } from "$lib/stores/poi_store";
 import { Trail } from "$lib/models/trail";
 import { categories_index } from "$lib/stores/category_store";
 import { lists_index } from "$lib/stores/list_store";
@@ -14,6 +17,11 @@ export const load: Load = async ({ params, fetch, url }) => {
     }
     const categories = await categories_index(fetch)
     const lists = await lists_index({ q: "", author: user?.actor ?? "" }, 1, -1, fetch)
+    const [poiCategories, poiAttributeDefinitions, poiResult] = await Promise.all([
+        poi_categories_index(fetch),
+        poi_attributes_index(undefined, fetch),
+        pois_index(undefined, 1, -1, undefined, fetch),
+    ]);
 
     let trail: Trail;
     if (params.id === "new") {
@@ -29,5 +37,11 @@ export const load: Load = async ({ params, fetch, url }) => {
         trail = await trails_show(params.id, undefined, url.searchParams.get("share") ?? undefined, true, fetch);
     }
 
-    return { trail: trail, lists: lists }
+    return {
+        trail: trail,
+        lists: lists,
+        poiCategories,
+        poiAttributeDefinitions,
+        pois: poiResult.items,
+    }
 };

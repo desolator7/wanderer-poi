@@ -3,6 +3,8 @@ import emptyStateTrailLight from "$lib/assets/svgs/empty_states/empty_state_trai
 import { haversineDistance } from "$lib/models/gpx/utils";
 import type { Trail } from "$lib/models/trail";
 import type { Waypoint } from "$lib/models/waypoint";
+import type { Poi } from "$lib/models/poi";
+import type { PoiAttribute } from "$lib/models/poi_attribute";
 import { theme } from "$lib/stores/theme_store";
 import M from "maplibre-gl";
 import { _ } from "svelte-i18n";
@@ -336,4 +338,141 @@ export function calculateScaleFactor(map: M.Map) {
     const scaleFactor = realWorldMetersPer100Pixels / screenMetersPer100Pixels
 
     return scaleFactor
+}
+
+export function createMarkerFromPoi(poi: Poi): FontawesomeMarker {
+    return new FontawesomeMarker(
+        {
+            id: poi.id,
+            icon: `fa fa-${poi.expand?.category?.icon ?? "location-dot"}`,
+            backgroundColor: poi.public ? "bg-primary" : "bg-gray-700",
+        },
+        {},
+    ).setLngLat([poi.lon, poi.lat]);
+}
+
+export function createPopupFromPoi(
+    poi: Poi,
+    attributeDefinitions: PoiAttribute[],
+    options?: {
+        editable?: boolean;
+        onSave?: (attributes: Record<string, string | boolean | null>) => Promise<void> | void;
+    },
+) {
+    const popup = new M.Popup({ offset: 25, maxWidth: "380px" });
+    const content = document.createElement("div");
+    content.className = "p-4 space-y-3 min-w-60";
+
+    const title = document.createElement("h4");
+    title.className = "text-lg font-semibold";
+    title.textContent = poi.name;
+    content.appendChild(title);
+
+    if (poi.expand?.category?.name || poi.location) {
+        const meta = document.createElement("p");
+        meta.className = "text-sm text-gray-500";
+        meta.textContent = [poi.expand?.category?.name, poi.location]
+            .filter(Boolean)
+            .join(" - ");
+        content.appendChild(meta);
+    }
+
+    if (poi.description?.length) {
+        const description = document.createElement("p");
+        description.textContent = poi.description;
+        content.appendChild(description);
+    }
+
+    if (attributeDefinitions.length) {
+        const divider = document.createElement("hr");
+        divider.className = "border-input-border";
+        content.appendChild(divider);
+
+        const attributesWrapper = document.createElement("div");
+        attributesWrapper.className = "space-y-3";
+
+        for (const definition of attributeDefinitions) {
+            const label = document.createElement("label");
+            label.className = "block";
+
+            const labelText = document.createElement("span");
+            labelText.className = "text-sm font-medium block mb-1";
+            labelText.textContent = definition.name;
+            label.appendChild(labelText);
+
+            const currentValue = poi.attributes?.[definition.key];
+
+            if (options?.editable) {
+                if (definition.type === "boolean") {
+                    const input = document.createElement("input");
+                    input.type = "checkbox";
+                    input.name = definition.key;
+                    input.checked = currentValue === true;
+                    label.appendChild(input);
+                } else {
+                    const input = document.createElement("input");
+                    input.type = definition.type === "date" ? "date" : "text";
+                    input.name = definition.key;
+                    input.value =
+                        typeof currentValue === "string" ? currentValue : "";
+                    input.className =
+                        "bg-input-background border border-input-border rounded-md p-2 w-full";
+                    label.appendChild(input);
+                }
+            } else {
+                const value = document.createElement("span");
+                value.className = "text-sm text-gray-600";
+                value.textContent =
+                    currentValue === null || currentValue === undefined
+                        ? "-"
+                        : typeof currentValue === "boolean"
+                          ? currentValue
+                              ? "Yes"
+                              : "No"
+                          : String(currentValue);
+                label.appendChild(value);
+            }
+
+            attributesWrapper.appendChild(label);
+        }
+
+        content.appendChild(attributesWrapper);
+
+        if (options?.editable) {
+            const saveButton = document.createElement("button");
+            saveButton.className = "btn-primary w-full";
+            saveButton.textContent = get(_)("save");
+            saveButton.addEventListener("click", async () => {
+                const values: Record<string, string | boolean | null> = {};
+                for (const definition of attributeDefinitions) {
+                    const field = content.querySelector(
+                        `[name="${definition.key}"]`,
+                    ) as HTMLInputElement | null;
+                    if (!field) {
+                        values[definition.key] = null;
+                        continue;
+                    }
+                    if (definition.type === "boolean") {
+                        values[definition.key] = field.checked;
+                    } else {
+                        values[definition.key] = field.value.trim().length
+                            ? field.value
+                            : null;
+                    }
+                }
+
+                saveButton.setAttribute("disabled", "true");
+                try {
+                    await options.onSave?.(values);
+                    popup.remove();
+                } finally {
+                    saveButton.removeAttribute("disabled");
+                }
+            });
+            content.appendChild(saveButton);
+        }
+    }
+
+    popup.setDOMContent(content);
+    return popup;
 }

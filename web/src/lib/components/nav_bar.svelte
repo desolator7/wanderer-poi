@@ -26,6 +26,7 @@
         { text: "Home", value: "/" },
         { text: $_("trail", { values: { n: 2 } }), value: "/trails" },
         { text: $_("map"), value: "/map" },
+        { text: $_("pois"), value: "/pois" },
         { text: $_("list", { values: { n: 2 } }), value: "/lists" },
     ];
 
@@ -40,6 +41,7 @@
     const importDropdownItems = [
         { text: $_("from-file"), value: "file", icon: "file-import" },
         { text: $_("from-url"), value: "url", icon: "server" },
+        { text: $_("pois"), value: "pois", icon: "location-dot" },
     ];
 
     const indicatorPosition = new Tween(0, {
@@ -75,8 +77,11 @@
             case "/map":
                 childPosition = 3;
                 break;
-            case "/lists/[[handle]]/[[id]]":
+            case "/pois":
                 childPosition = 4;
+                break;
+            case "/lists/[[handle]]/[[id]]":
+                childPosition = 5;
                 break;
             default:
                 break;
@@ -115,6 +120,8 @@
             goto(`/settings/export`);
         } else if (item.value == "url") {
             urlImportModal.openModal();
+        } else if (item.value == "pois") {
+            goto("/pois?tab=import");
         }
     }
 </script>
