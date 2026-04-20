@@ -126,14 +126,14 @@
             show_toast({
                 type: "success",
                 icon: "check",
-                text: "POI saved",
+                text: $_("poi-save-success"),
             });
         } catch (error) {
             console.error(error);
             show_toast({
                 type: "error",
                 icon: "close",
-                text: "POI could not be saved",
+                text: $_("poi-save-error"),
             });
         }
     }
@@ -162,7 +162,11 @@
     }
 
     async function removePoi(poi: Poi) {
-        if (!window.confirm(`Delete "${poi.name}"?`)) {
+        if (
+            !window.confirm(
+                $_("delete-poi-confirm", { values: { name: poi.name } }),
+            )
+        ) {
             return;
         }
         try {
@@ -173,7 +177,7 @@
             show_toast({
                 type: "error",
                 icon: "close",
-                text: "POI could not be deleted",
+                text: $_("poi-delete-error"),
             });
         }
     }
@@ -209,14 +213,14 @@
             show_toast({
                 type: "success",
                 icon: "check",
-                text: "POIs imported",
+                text: $_("poi-import-success"),
             });
         } catch (error) {
             console.error(error);
             show_toast({
                 type: "error",
                 icon: "close",
-                text: "POI import failed",
+                text: $_("poi-import-error"),
             });
         } finally {
             importBusy = false;
@@ -254,7 +258,7 @@
                 <Search
                     extraClasses="w-full"
                     items={[]}
-                    placeholder="Search POIs..."
+                    placeholder={$_("poi-search-placeholder")}
                     onupdate={(value) => (searchQuery = value)}
                 ></Search>
                 {#if page.data.user}
@@ -316,9 +320,9 @@
                                         >
                                         <span>
                                             {#if poi.attributes?.[definition.key] === true}
-                                                Yes
+                                                {$_("yes")}
                                             {:else if poi.attributes?.[definition.key] === false}
-                                                No
+                                                {$_("no")}
                                             {:else}
                                                 {poi.attributes?.[definition.key] ??
                                                     "-"}
@@ -353,13 +357,13 @@
                     {/each}
                 {:else}
                     <p class="text-sm text-gray-500">
-                        No matching POIs yet.
+                        {$_("no-matching-pois")}
                     </p>
                 {/if}
             </div>
         {:else}
             <div class="space-y-4">
-                <h2 class="text-xl font-semibold">Import KML as POIs</h2>
+                <h2 class="text-xl font-semibold">{$_("import-kml-as-pois")}</h2>
                 <Select
                     bind:value={importCategory}
                     label={$_("category")}
@@ -370,14 +374,14 @@
                 ></Select>
                 <Select
                     bind:value={importIcon}
-                    label="Icon"
+                    label={$_("icon")}
                     items={poiIconOptions.map((option) => ({
-                        text: option.text,
+                        text: $_(option.labelKey),
                         value: option.value,
                     }))}
                 ></Select>
                 <Button secondary={true} onclick={openFileBrowser}>
-                    Choose file
+                    {$_("choose-file")}
                 </Button>
                 <label class="inline-flex items-center gap-2 text-sm">
                     <input
@@ -401,7 +405,7 @@
                         await importFiles(event.dataTransfer?.files);
                     }}
                 >
-                    Drop KML or KMZ here or click
+                    {$_("drop-kml-kmz")}
                 </button>
                 <input
                     id="poi-import-input"

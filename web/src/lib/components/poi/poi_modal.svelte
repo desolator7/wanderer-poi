@@ -115,7 +115,7 @@
 
 <Modal
     id="poi-modal"
-    title={draft.id ? "POI bearbeiten" : "POI anlegen"}
+    title={draft.id ? $_("edit-poi") : $_("create-poi")}
     size="md:min-w-2xl"
     bind:this={modal}
 >
@@ -143,14 +143,14 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Select
                     bind:value={draft.icon}
-                    label="Icon"
+                    label={$_("icon")}
                     items={poiIconOptions.map((option) => ({
-                        text: option.text,
+                        text: $_(option.labelKey),
                         value: option.value,
                     }))}
                 ></Select>
                 <div>
-                    <label class="text-sm font-medium pb-1">Farbe</label>
+                    <label class="text-sm font-medium pb-1">{$_("color")}</label>
                     <div class="flex items-center gap-3">
                         <input
                             class="h-10 w-12 rounded-md border border-input-border bg-input-background"
@@ -181,7 +181,7 @@
 
             {#if selectedDefinitions.length}
                 <div class="space-y-3">
-                    <h4 class="text-lg font-semibold">Attribute</h4>
+                    <h4 class="text-lg font-semibold">{$_("attributes")}</h4>
                     {#each selectedDefinitions as definition}
                         {#if definition.type === "boolean"}
                             <Toggle

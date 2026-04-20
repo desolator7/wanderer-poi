@@ -18,7 +18,7 @@ import { getPoiDisplayColor } from "./poi_util";
 export class FontawesomeMarker extends M.Marker {
     constructor(options: { icon: string, fontSize?: string, width?: number, backgroundColor?: string, fontColor?: string, style?: string, id?: string }, markerOptions?: M.MarkerOptions) {
         const element = document.createElement('div')
-        element.className = `cursor-pointer flex items-center justify-center w-${options.width ?? 7} aspect-square rounded-full text-${options.fontSize ?? "normal"} ${options.style ?? ""}`
+        element.className = `cursor-pointer relative flex items-center justify-center w-${options.width ?? 7} aspect-square rounded-full text-${options.fontSize ?? "normal"} ${options.style ?? ""}`
         if (options.backgroundColor?.startsWith("#")) {
             element.style.backgroundColor = options.backgroundColor;
         } else {
@@ -360,7 +360,7 @@ export function createMarkerFromPoi(
 ): FontawesomeMarker {
     const icon = poi.icon ?? poi.expand?.category?.icon ?? "location-dot";
     const color = getPoiDisplayColor(poi, attributeDefinitions);
-    return new FontawesomeMarker(
+    const marker = new FontawesomeMarker(
         {
             id: poi.id,
             icon: `fa fa-${normalizePoiIcon(icon)}`,
@@ -369,6 +369,14 @@ export function createMarkerFromPoi(
         },
         {},
     ).setLngLat([poi.lon, poi.lat]);
+
+    const label = document.createElement("span");
+    label.className =
+        "poi-marker-label hidden pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-1 max-w-48 overflow-hidden text-ellipsis whitespace-nowrap rounded bg-background/90 px-1.5 py-0.5 text-xs font-medium text-content shadow";
+    label.textContent = poi.name;
+    marker.getElement().appendChild(label);
+
+    return marker;
 }
 
 export function createPopupFromPoi(

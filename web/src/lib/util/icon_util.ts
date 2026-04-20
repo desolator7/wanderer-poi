@@ -1393,10 +1393,10 @@ export const icons = ["0",
 ] as const
 
 export const poiIconOptions = [
-    { text: "Landmark", value: "landmark" },
-    { text: "Stempel", value: "stamp" },
-    { text: "Aussichtspunkt", value: "binoculars" },
-    { text: "Lost Place", value: "house-crack" },
+    { labelKey: "poi-icon-landmark", value: "landmark" },
+    { labelKey: "poi-icon-stamp", value: "stamp" },
+    { labelKey: "poi-icon-viewpoint", value: "binoculars" },
+    { labelKey: "poi-icon-lost-place", value: "house-crack" },
 ] as const;
 
 export const defaultPoiIcon = "landmark" satisfies typeof icons[number];
