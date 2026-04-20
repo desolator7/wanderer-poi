@@ -72,16 +72,19 @@
     import Search, {
         type SearchItem,
     } from "$lib/components/base/search.svelte";
+    import PoiFilterPanel from "$lib/components/poi/poi_filter_panel.svelte";
     import RouteEditor from "$lib/components/trail/route_editor.svelte";
     import { TagCreateSchema } from "$lib/models/api/tag_schema.js";
     import { convertDMSToDD } from "$lib/models/gpx/utils.js";
     import { Tag } from "$lib/models/tag.js";
+    import { Poi } from "$lib/models/poi";
     import {
         searchLocationReverse,
         searchLocations,
     } from "$lib/stores/search_store.js";
     import { tags_index } from "$lib/stores/tag_store.js";
     import { theme } from "$lib/stores/theme_store.js";
+    import { pois_update } from "$lib/stores/poi_store";
     import { currentUser } from "$lib/stores/user_store.js";
     import { getIconForLocation } from "$lib/util/icon_util.js";
     import {
@@ -129,6 +132,26 @@
 
     let cropStartMarker: FontawesomeMarker;
     let cropEndMarker: FontawesomeMarker;
+    let routePlannerPois: Poi[] = $state(untrack(() => data.pois));
+    let includePublicPois = $state(true);
+    let includeOwnPois = $state(true);
+    let selectedPoiCategoryIds = $state(
+        data.poiCategories.map((category) => category.id!),
+    );
+    let filteredRoutePlannerPois = $derived(
+        routePlannerPois.filter((poi) => {
+            if (!selectedPoiCategoryIds.includes(poi.category)) {
+                return false;
+            }
+            if (!includePublicPois && poi.public) {
+                return false;
+            }
+            if (!includeOwnPois && poi.author === page.data.user?.id) {
+                return false;
+            }
+            return true;
+        }),
+    );
 
     let croppedGPX: GPX | null = null;
 
@@ -1167,6 +1190,37 @@
         initRouteAnchors(valhallaStore.route, true);
         updateTrailWithRouteData();
     }
+
+    async function savePoiAttributes(
+        poi: Poi,
+        attributes: Record<string, string | boolean | null>,
+    ) {
+        const savedPoi = await pois_update(
+            new Poi(poi.lat, poi.lon, {
+                id: poi.id,
+                name: poi.name,
+                description: poi.description,
+                location: poi.location,
+                public: poi.public,
+                author: poi.author,
+                category: poi.category,
+                attributes,
+                expand: poi.expand,
+                created: poi.created,
+                updated: poi.updated,
+            }),
+        );
+        savedPoi.expand = {
+            category:
+                data.poiCategories.find((category) => category.id === savedPoi.category) ??
+                savedPoi.expand?.category,
+        };
+        const index = routePlannerPois.findIndex((item) => item.id === savedPoi.id);
+        if (index >= 0) {
+            routePlannerPois[index] = savedPoi;
+            routePlannerPois = [...routePlannerPois];
+        }
+    }
 </script>
 
 <svelte:head>
@@ -1396,6 +1450,16 @@
             onclick={() => openPhotoBrowser()}
             ><i class="fa fa-image mr-2"></i>{$_("from-photos")}</button
         >
+        <PoiFilterPanel
+            categories={data.poiCategories}
+            bind:selectedCategoryIds={selectedPoiCategoryIds}
+            bind:includePublic={includePublicPois}
+            bind:includeOwn={includeOwnPois}
+            title="POIs for map and routing"
+        ></PoiFilterPanel>
+        <p class="text-sm text-gray-500">
+            While editing the route, click any visible POI on the map to use it as a via point.
+        </p>
         <input
             type="file"
             id="waypoint-photo-input"
@@ -1508,6 +1572,11 @@
                 autoGeolocateOnDrawing={page.params.id === "new"}
                 onmarkerdragend={moveMarker}
                 activeTrail={0}
+                pois={filteredRoutePlannerPois}
+                poiAttributeDefinitions={data.poiAttributeDefinitions}
+                onpoiclick={(poi) => addAnchorAndRecalculate(poi.lat, poi.lon)}
+                caneditpoi={(poi) => page.data.user?.id === poi.author}
+                onpoisave={savePoiAttributes}
                 bind:map
                 onclick={(target) => handleMapClick(target)}
                 onsegmentclick={(data) => handleSegmentClick(data)}

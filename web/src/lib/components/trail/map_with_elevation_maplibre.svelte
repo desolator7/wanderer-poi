@@ -3,11 +3,15 @@
     import directionCaret from "$lib/assets/svgs/caret-right-solid.svg";
     import GPX from "$lib/models/gpx/gpx";
     import type { Trail } from "$lib/models/trail";
+    import type { Poi } from "$lib/models/poi";
+    import type { PoiAttribute } from "$lib/models/poi_attribute";
     import type { Waypoint } from "$lib/models/waypoint";
     import { theme } from "$lib/stores/theme_store";
     import { findStartAndEndPoints } from "$lib/util/geojson_util";
     import {
         createMarkerFromWaypoint,
+        createMarkerFromPoi,
+        createPopupFromPoi,
         createPopupFromTrail,
         FontawesomeMarker,
     } from "$lib/util/maplibre_util";
@@ -32,6 +36,8 @@
         trails?: Trail[];
         gpx?: GPX;
         waypoints?: Waypoint[];
+        pois?: Poi[];
+        poiAttributeDefinitions?: PoiAttribute[];
         markers?: M.Marker[];
         map?: M.Map | null;
         drawing?: boolean;
@@ -69,11 +75,19 @@
         ) => void;
         oninit?: (map: M.Map) => void;
         autoGeolocateOnDrawing?: boolean;
+        onpoiclick?: (poi: Poi) => void;
+        onpoisave?: (
+            poi: Poi,
+            attributes: Record<string, string | boolean | null>,
+        ) => Promise<void> | void;
+        caneditpoi?: (poi: Poi) => boolean;
     }
 
     let {
         trails = [],
         waypoints = [],
+        pois = [],
+        poiAttributeDefinitions = [],
         markers = $bindable([]),
         map = $bindable(),
         drawing = false,
@@ -100,6 +114,9 @@
         onUnclusteredClick,
         oninit,
         autoGeolocateOnDrawing = false,
+        onpoiclick,
+        onpoisave,
+        caneditpoi,
     }: Props = $props();
 
     let mapContainer: HTMLDivElement;
@@ -130,6 +147,7 @@
     ];
 
     let clusterPopup: M.Popup | null = null;
+    let poiMarkers: M.Marker[] = $state([]);
 
     let [data, clusterData, previewData] = $derived(getData(trails));
     $effect(() => {
@@ -180,6 +198,13 @@
         untrack(() => {
             showWaypoints();
             refreshElevationProfile();
+        });
+    });
+    $effect(() => {
+        pois;
+        poiAttributeDefinitions;
+        untrack(() => {
+            showPois();
         });
     });
 
@@ -274,11 +299,7 @@
             }
         });
 
-        if (
-            !drawing &&
-            fitBounds !== "off" &&
-            data.some((d) => d.bbox !== undefined)
-        ) {
+        if (!drawing && fitBounds !== "off" && (data.some((d) => d.bbox !== undefined) || pois.length)) {
             if (activeTrail !== null && trails[activeTrail] && mapLoaded) {
                 focusTrail(trails[activeTrail]);
             } else {
@@ -308,6 +329,13 @@
             minY = Math.min(minY, yMin);
             maxX = Math.max(maxX, xMax);
             maxY = Math.max(maxY, yMax);
+        }
+
+        for (const poi of pois) {
+            minX = Math.min(minX, poi.lon);
+            minY = Math.min(minY, poi.lat);
+            maxX = Math.max(maxX, poi.lon);
+            maxY = Math.max(maxY, poi.lat);
         }
 
         if (
@@ -732,6 +760,52 @@
         markers = [];
     }
 
+    function showPois() {
+        if (!map) {
+            return;
+        }
+
+        hidePois();
+        for (const poi of pois) {
+            const marker = createMarkerFromPoi(poi).addTo(map);
+            const popup = createPopupFromPoi(
+                poi,
+                poiAttributeDefinitions.filter(
+                    (definition) => definition.category === poi.category,
+                ),
+                {
+                    editable: caneditpoi?.(poi) ?? false,
+                    onSave: async (attributes) => {
+                        await onpoisave?.(poi, attributes);
+                    },
+                },
+            );
+
+            marker.getElement().addEventListener("click", (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                if (drawing && onpoiclick) {
+                    onpoiclick(poi);
+                    return;
+                }
+                if (popup.isOpen()) {
+                    popup.remove();
+                } else {
+                    popup.setLngLat([poi.lon, poi.lat]).addTo(map!);
+                }
+            });
+
+            poiMarkers.push(marker);
+        }
+    }
+
+    function hidePois() {
+        for (const marker of poiMarkers) {
+            marker.remove();
+        }
+        poiMarkers = [];
+    }
+
     function toggleEpcTheme() {
         if ($theme == "dark") {
             epc?.toggleTheme({
@@ -938,6 +1012,7 @@
     }
 
     onDestroy(() => {
+        hidePois();
         map?.remove();
     });
 

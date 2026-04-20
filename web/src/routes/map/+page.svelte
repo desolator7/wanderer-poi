@@ -9,10 +9,12 @@
     import Select from "$lib/components/base/select.svelte";
     import SkeletonCard from "$lib/components/base/skeleton_card.svelte";
     import EmptyStateSearch from "$lib/components/empty_states/empty_state_search.svelte";
+    import PoiFilterPanel from "$lib/components/poi/poi_filter_panel.svelte";
     import MapWithElevationMaplibre from "$lib/components/trail/map_with_elevation_maplibre.svelte";
     import TrailCard from "$lib/components/trail/trail_card.svelte";
     import TrailFilterPanel from "$lib/components/trail/trail_filter_panel.svelte";
     import type { Settings } from "$lib/models/settings";
+    import { Poi } from "$lib/models/poi";
     import {
         defaultTrailSearchAttributes,
         type Trail,
@@ -26,7 +28,9 @@
         type ListSearchResult,
         type LocationSearchResult,
     } from "$lib/stores/search_store";
+    import { pois_update } from "$lib/stores/poi_store";
     import { trails_search_bounding_box } from "$lib/stores/trail_store";
+    import { show_toast } from "$lib/stores/toast_store.svelte";
     import { getIconForLocation } from "$lib/util/icon_util";
     import type { Snapshot } from "@sveltejs/kit";
     import * as M from "maplibre-gl";
@@ -50,6 +54,27 @@
 
     let loading: boolean = $state(true);
     let loadingNextPage: boolean = false;
+    let pois: Poi[] = $state(page.data.pois);
+    let includePublicPois = $state(true);
+    let includeOwnPois = $state(Boolean(page.data.user));
+    let selectedPoiCategoryIds = $state(
+        page.data.poiCategories.map((category) => category.id!),
+    );
+
+    let filteredPois = $derived(
+        pois.filter((poi) => {
+            if (!selectedPoiCategoryIds.includes(poi.category)) {
+                return false;
+            }
+            if (!includePublicPois && poi.public) {
+                return false;
+            }
+            if (!includeOwnPois && poi.author === page.data.user?.id) {
+                return false;
+            }
+            return true;
+        }),
+    );
 
     let pagination = {
         page: 1,
@@ -316,6 +341,47 @@
         const bounds = map.getBounds();
         await searchTrails(bounds.getNorthEast(), bounds.getSouthWest(), false);
     }
+
+    async function savePoiAttributes(
+        poi: Poi,
+        attributes: Record<string, string | boolean | null>,
+    ) {
+        try {
+            const updatedPoi = await pois_update(
+                new Poi(poi.lat, poi.lon, {
+                    id: poi.id,
+                    name: poi.name,
+                    description: poi.description,
+                    location: poi.location,
+                    public: poi.public,
+                    author: poi.author,
+                    category: poi.category,
+                    attributes,
+                    expand: poi.expand,
+                    created: poi.created,
+                    updated: poi.updated,
+                }),
+            );
+            updatedPoi.expand = {
+                category:
+                    page.data.poiCategories.find(
+                        (category) => category.id === updatedPoi.category,
+                    ) ?? updatedPoi.expand?.category,
+            };
+            const index = pois.findIndex((item) => item.id === updatedPoi.id);
+            if (index >= 0) {
+                pois[index] = updatedPoi;
+                pois = [...pois];
+            }
+        } catch (error) {
+            console.error(error);
+            show_toast({
+                type: "error",
+                icon: "close",
+                text: "POI konnte nicht gespeichert werden",
+            });
+        }
+    }
 </script>
 
 <svelte:head>
@@ -380,6 +446,15 @@
                     ></TrailFilterPanel>
                 </div>
             {/if}
+            <div class="mt-4">
+                <PoiFilterPanel
+                    categories={page.data.poiCategories}
+                    bind:selectedCategoryIds={selectedPoiCategoryIds}
+                    bind:includePublic={includePublicPois}
+                    bind:includeOwn={includeOwnPois}
+                    showOwnToggle={Boolean(page.data.user)}
+                ></PoiFilterPanel>
+            </div>
         </div>
 
         {#if !showFilter && (!showMap || (browser && window.innerWidth >= 768))}
@@ -426,6 +501,10 @@
             activeTrail={-1}
             fitBounds="off"
             clusterTrails={true}
+            pois={filteredPois}
+            poiAttributeDefinitions={page.data.poiAttributeDefinitions}
+            caneditpoi={(poi) => page.data.user?.id === poi.author}
+            onpoisave={savePoiAttributes}
             bind:map
             bind:this={mapWithElevation}
         ></MapWithElevationMaplibre>

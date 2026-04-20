@@ -1,3 +1,6 @@
+import { poi_attributes_index } from "$lib/stores/poi_attribute_store";
+import { poi_categories_index } from "$lib/stores/poi_category_store";
+import { pois_index } from "$lib/stores/poi_store";
 import type { TrailFilter } from "$lib/models/trail";
 import { categories_index } from "$lib/stores/category_store";
 import { trails_get_bounding_box, trails_get_filter_values } from "$lib/stores/trail_store";
@@ -33,7 +36,19 @@ export const load: ServerLoad = async ({ params, locals, fetch }) => {
         sortOrder: "-",
     };
 
+    const [poiCategories, poiAttributeDefinitions, poiResult] = await Promise.all([
+        poi_categories_index(fetch),
+        poi_attributes_index(undefined, fetch),
+        pois_index(undefined, 1, -1, undefined, fetch),
+    ]);
+
     await categories_index(fetch)
 
-    return { filter: filter, boundingBox: boundingBox }
+    return {
+        filter: filter,
+        boundingBox: boundingBox,
+        poiCategories,
+        poiAttributeDefinitions,
+        pois: poiResult.items,
+    }
 };
