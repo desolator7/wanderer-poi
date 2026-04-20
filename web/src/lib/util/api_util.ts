@@ -12,7 +12,7 @@ export class APIError extends Error {
         super();
         this.status = status;
         this.message = message;
-        this.detail = detail
+        this.detail = detail;
     }
 }
 
@@ -162,10 +162,11 @@ export function handleError(e: any) {
     if (e instanceof ZodError) {
         return json({ message: "invalid_params", detail: e.issues }, { status: 400 })
     } else if (e instanceof ClientResponseError && e.status > 0) {
-        return json({ ...e.response, message: e.message, detail: e.originalError.data }, { status: e.status })
+        const detail = e.response?.data ?? e.originalError?.data ?? null;
+        return json({ ...e.response, message: e.message, detail }, { status: e.status })
     } else if (e instanceof SyntaxError) {
         return json({ message: "invalid_json" }, { status: 400 })
     } else {
-        return json({ message: e }, { status: 500 })
+        return json({ message: e instanceof Error ? e.message : String(e) }, { status: 500 })
     }
 }

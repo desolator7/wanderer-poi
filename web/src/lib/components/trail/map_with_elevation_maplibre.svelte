@@ -203,6 +203,7 @@
     $effect(() => {
         pois;
         poiAttributeDefinitions;
+        mapLoaded;
         untrack(() => {
             showPois();
         });
@@ -761,42 +762,46 @@
     }
 
     function showPois() {
-        if (!map) {
+        if (!map || !mapLoaded) {
             return;
         }
 
         hidePois();
         for (const poi of pois) {
-            const marker = createMarkerFromPoi(poi).addTo(map);
-            const popup = createPopupFromPoi(
-                poi,
-                poiAttributeDefinitions.filter(
-                    (definition) => definition.category === poi.category,
-                ),
-                {
-                    editable: caneditpoi?.(poi) ?? false,
-                    onSave: async (attributes) => {
-                        await onpoisave?.(poi, attributes);
-                    },
-                },
+            const definitions = poiAttributeDefinitions.filter(
+                (definition) => definition.category === poi.category,
             );
+            const marker = createMarkerFromPoi(poi, definitions).addTo(map);
+            const popup = onpoiclick
+                ? undefined
+                : createPopupFromPoi(
+                      poi,
+                      definitions,
+                      {
+                          editable: caneditpoi?.(poi) ?? false,
+                          onSave: async (attributes) => {
+                              await onpoisave?.(poi, attributes);
+                          },
+                      },
+                  );
 
             marker.getElement().addEventListener("click", (event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                if (drawing && onpoiclick) {
+                if (onpoiclick) {
                     onpoiclick(poi);
                     return;
                 }
-                if (popup.isOpen()) {
+                if (popup?.isOpen()) {
                     popup.remove();
                 } else {
-                    popup.setLngLat([poi.lon, poi.lat]).addTo(map!);
+                    popup?.setLngLat([poi.lon, poi.lat]).addTo(map!);
                 }
             });
 
             poiMarkers.push(marker);
         }
+        updatePoiLabelVisibility();
     }
 
     function hidePois() {
@@ -804,6 +809,51 @@
             marker.remove();
         }
         poiMarkers = [];
+    }
+
+    function parseScaleMeters(value: string) {
+        const match = value.trim().match(/^([\d.,]+)\s*([a-zA-Z]+)$/);
+        if (!match) {
+            return undefined;
+        }
+
+        const numericValue = Number(
+            match[1].includes(".") && match[1].includes(",")
+                ? match[1].replaceAll(",", "")
+                : match[1].replace(",", "."),
+        );
+        if (Number.isNaN(numericValue)) {
+            return undefined;
+        }
+
+        switch (match[2].toLowerCase()) {
+            case "km":
+                return numericValue * 1000;
+            case "m":
+                return numericValue;
+            case "mi":
+                return numericValue * 1609.344;
+            case "ft":
+                return numericValue * 0.3048;
+            default:
+                return undefined;
+        }
+    }
+
+    function updatePoiLabelVisibility() {
+        const scaleText =
+            map?.getContainer()
+                .querySelector(".maplibregl-ctrl-scale")
+                ?.textContent?.trim() ?? "";
+        const scaleMeters = parseScaleMeters(scaleText);
+        const visible = scaleMeters !== undefined && scaleMeters <= 1000;
+
+        for (const marker of poiMarkers) {
+            marker
+                .getElement()
+                .querySelector(".poi-marker-label")
+                ?.classList.toggle("hidden", !visible);
+        }
     }
 
     function toggleEpcTheme() {
@@ -976,10 +1026,12 @@
         });
 
         map.on("moveend", (e) => {
+            updatePoiLabelVisibility();
             onmoveend?.(e.target);
         });
 
         map.on("zoom", (e) => {
+            updatePoiLabelVisibility();
             onzoom?.(e.target);
         });
 
@@ -992,9 +1044,10 @@
 
         map.on("load", () => {
             layerManager.init();
-            initMap(true);
-            oninit?.(map!);
             mapLoaded = true;
+            initMap(true);
+            showPois();
+            oninit?.(map!);
         });
 
         showWaypoints();

@@ -30,6 +30,7 @@ export async function PUT(event: RequestEvent) {
             category,
             isPublic: data.get("public") === "true",
             author: event.locals.user.id,
+            icon: data.get("icon")?.toString(),
             attributeDefinitions: definitions,
         });
 

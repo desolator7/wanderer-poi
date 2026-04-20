@@ -17,6 +17,7 @@
     } from "$lib/stores/poi_category_store";
     import { show_toast } from "$lib/stores/toast_store.svelte";
     import { buildPoiAttributeKey } from "$lib/util/poi_util";
+    import { _ } from "svelte-i18n";
 
     let { data } = $props();
 
@@ -26,6 +27,14 @@
     let categoryForm = $state(new PoiCategory("", { icon: "location-dot" }));
     let attributeForm = $state(
         new PoiAttribute("", "", "boolean", data.categories[0]?.id ?? ""),
+    );
+    let primaryAttributeInCategory = $derived(
+        attributeDefinitions.find(
+            (attribute) =>
+                attribute.category === attributeForm.category &&
+                attribute.primary &&
+                attribute.id !== attributeForm.id,
+        ),
     );
 
     async function saveCategory() {
@@ -48,13 +57,21 @@
             show_toast({
                 type: "error",
                 icon: "close",
-                text: "Category could not be saved",
+                text: $_("category-save-error"),
             });
         }
     }
 
     async function saveAttribute() {
         try {
+            attributeForm.key ||= buildPoiAttributeKey(attributeForm.name);
+            attributeForm.required = false;
+            if (attributeForm.type !== "boolean") {
+                attributeForm.primary = false;
+            }
+            if (primaryAttributeInCategory && attributeForm.primary) {
+                attributeForm.primary = false;
+            }
             const savedAttribute = attributeForm.id
                 ? await poi_attributes_update(attributeForm)
                 : await poi_attributes_create(attributeForm);
@@ -72,6 +89,20 @@
             } else {
                 attributeDefinitions = [...attributeDefinitions, savedAttribute];
             }
+            if (savedAttribute.primary) {
+                attributeDefinitions = attributeDefinitions.map((attribute) =>
+                    attribute.id !== savedAttribute.id &&
+                    attribute.category === savedAttribute.category
+                        ? new PoiAttribute(
+                              attribute.name,
+                              attribute.key,
+                              attribute.type,
+                              attribute.category,
+                              { ...attribute, primary: false },
+                          )
+                        : attribute,
+                );
+            }
             attributeForm = new PoiAttribute(
                 "",
                 "",
@@ -83,13 +114,19 @@
             show_toast({
                 type: "error",
                 icon: "close",
-                text: "Attribute could not be saved",
+                text: $_("attribute-save-error"),
             });
         }
     }
 
     async function removeCategory(category: PoiCategory) {
-        if (!window.confirm(`Delete category "${category.name}"?`)) {
+        if (
+            !window.confirm(
+                $_("delete-category-confirm", {
+                    values: { name: category.name },
+                }),
+            )
+        ) {
             return;
         }
         await poi_categories_delete(category);
@@ -100,7 +137,13 @@
     }
 
     async function removeAttribute(attribute: PoiAttribute) {
-        if (!window.confirm(`Delete attribute "${attribute.name}"?`)) {
+        if (
+            !window.confirm(
+                $_("delete-attribute-confirm", {
+                    values: { name: attribute.name },
+                }),
+            )
+        ) {
             return;
         }
         await poi_attributes_delete(attribute);
@@ -112,22 +155,22 @@
 
 <div class="space-y-8">
     <div>
-        <h2 class="text-2xl font-semibold">POI Configuration</h2>
+        <h2 class="text-2xl font-semibold">{$_("poi-configuration")}</h2>
         <p class="text-sm text-gray-500 mt-2">
-            Manage categories and attribute definitions for POIs.
+            {$_("poi-configuration-description")}
         </p>
     </div>
 
     <section class="space-y-4">
-        <h3 class="text-xl font-semibold">Categories</h3>
+        <h3 class="text-xl font-semibold">{$_("categories")}</h3>
         <div class="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-4">
-            <TextField bind:value={categoryForm.name} label="Name"></TextField>
-            <TextField bind:value={categoryForm.icon} label="Icon"></TextField>
-            <Button primary={true} onclick={saveCategory}>Save</Button>
+            <TextField bind:value={categoryForm.name} label={$_("name")}></TextField>
+            <TextField bind:value={categoryForm.icon} label={$_("icon")}></TextField>
+            <Button primary={true} onclick={saveCategory}>{$_("save")}</Button>
         </div>
         <Textarea
             bind:value={categoryForm.description}
-            label="Description"
+            label={$_("description")}
         ></Textarea>
 
         <div class="space-y-3">
@@ -155,13 +198,13 @@
                                     category,
                                 ))}
                         >
-                            Edit
+                            {$_("edit")}
                         </button>
                         <button
                             class="btn-secondary text-red-500"
                             onclick={() => removeCategory(category)}
                         >
-                            Delete
+                            {$_("delete")}
                         </button>
                     </div>
                 </div>
@@ -170,11 +213,11 @@
     </section>
 
     <section class="space-y-4">
-        <h3 class="text-xl font-semibold">Attributes</h3>
+        <h3 class="text-xl font-semibold">{$_("attributes")}</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <TextField
                 bind:value={attributeForm.name}
-                label="Name"
+                label={$_("name")}
                 onchange={() => {
                     if (!attributeForm.id && !attributeForm.key.length) {
                         attributeForm.key = buildPoiAttributeKey(
@@ -183,10 +226,9 @@
                     }
                 }}
             ></TextField>
-            <TextField bind:value={attributeForm.key} label="Key"></TextField>
             <Select
                 bind:value={attributeForm.category}
-                label="Category"
+                label={$_("category")}
                 items={categories.map((category) => ({
                     text: category.name,
                     value: category.id,
@@ -194,27 +236,30 @@
             ></Select>
             <Select
                 bind:value={attributeForm.type}
-                label="Type"
+                label={$_("type")}
                 items={[
-                    { text: "Boolean", value: "boolean" },
-                    { text: "String", value: "string" },
-                    { text: "Date", value: "date" },
+                    { text: $_("boolean"), value: "boolean" },
+                    { text: $_("string"), value: "string" },
+                    { text: $_("date"), value: "date" },
                 ]}
             ></Select>
         </div>
         <div class="flex gap-4">
-            <label class="inline-flex items-center gap-2">
-                <input
-                    type="checkbox"
-                    checked={attributeForm.required}
-                    onchange={(event) =>
-                        (attributeForm.required = (
-                            event.currentTarget as HTMLInputElement
-                        ).checked)}
-                />
-                Required
-            </label>
-            <Button primary={true} onclick={saveAttribute}>Save</Button>
+            {#if attributeForm.type === "boolean"}
+                <label class="inline-flex items-center gap-2">
+                    <input
+                        type="checkbox"
+                        checked={attributeForm.primary}
+                        disabled={Boolean(primaryAttributeInCategory)}
+                        onchange={(event) =>
+                            (attributeForm.primary = (
+                                event.currentTarget as HTMLInputElement
+                            ).checked)}
+                    />
+                    {$_("color-marker")}
+                </label>
+            {/if}
+            <Button primary={true} onclick={saveAttribute}>{$_("save")}</Button>
         </div>
 
         <div class="space-y-3">
@@ -225,12 +270,18 @@
                     <div>
                         <h4 class="font-semibold">{attribute.name}</h4>
                         <p class="text-sm text-gray-500">
-                            {attribute.key} - {attribute.type} - {attribute.expand
+                            {attribute.type === "boolean"
+                                ? $_("boolean")
+                                : attribute.type === "string"
+                                  ? $_("string")
+                                  : $_("date")} - {attribute.expand
                                 ?.category?.name ??
                                 categories.find(
                                     (category) =>
                                         category.id === attribute.category,
-                                )?.name}
+                                )?.name}{#if attribute.primary}
+                                - {$_("color-marker")}
+                            {/if}
                         </p>
                     </div>
                     <div class="flex gap-2">
@@ -245,13 +296,13 @@
                                     attribute,
                                 ))}
                         >
-                            Edit
+                            {$_("edit")}
                         </button>
                         <button
                             class="btn-secondary text-red-500"
                             onclick={() => removeAttribute(attribute)}
                         >
-                            Delete
+                            {$_("delete")}
                         </button>
                     </div>
                 </div>

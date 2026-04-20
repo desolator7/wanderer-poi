@@ -1,7 +1,28 @@
 import { PoiAttributeUpdateSchema } from "$lib/models/api/poi_attribute_schema";
 import type { PoiAttribute } from "$lib/models/poi_attribute";
-import { Collection, handleError, remove, show, update } from "$lib/util/api_util";
+import { Collection, handleError, remove, show } from "$lib/util/api_util";
 import { json, type RequestEvent } from "@sveltejs/kit";
+
+async function clearOtherPrimaryAttributes(
+    event: RequestEvent,
+    attribute: PoiAttribute,
+) {
+    if (!attribute.primary || attribute.type !== "boolean") {
+        return;
+    }
+
+    const others = await event.locals.pb
+        .collection("poi_attributes")
+        .getFullList<PoiAttribute>({
+            filter: `category="${attribute.category}" && id!="${attribute.id}" && primary=true`,
+        });
+
+    for (const other of others) {
+        await event.locals.pb
+            .collection("poi_attributes")
+            .update(other.id!, { primary: false }, { requestKey: null });
+    }
+}
 
 export async function GET(event: RequestEvent) {
     try {
@@ -14,11 +35,22 @@ export async function GET(event: RequestEvent) {
 
 export async function POST(event: RequestEvent) {
     try {
-        const r = await update<PoiAttribute>(
-            event,
-            PoiAttributeUpdateSchema,
-            Collection.poi_attributes,
-        );
+        const id = event.params.id!;
+        const existing = await event.locals.pb
+            .collection("poi_attributes")
+            .getOne<PoiAttribute>(id);
+        const data = await event.request.json();
+        const safeData = PoiAttributeUpdateSchema.parse(data);
+        const nextType = safeData.type ?? existing.type;
+
+        if (nextType !== "boolean") {
+            safeData.primary = false;
+        }
+
+        const r = await event.locals.pb
+            .collection("poi_attributes")
+            .update<PoiAttribute>(id, safeData);
+        await clearOtherPrimaryAttributes(event, r);
         return json(r);
     } catch (e: any) {
         return handleError(e);

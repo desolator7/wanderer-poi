@@ -1,63 +1,67 @@
-<div align="center">
+# wanderer POI fork
 
-  <img src="web/static/svgs/logo_text_two_line_dark.svg" height="256" width="256">
+Dieses Repository ist ein experimenteller Fork von
+[open-wanderer/wanderer](https://github.com/open-wanderer/wanderer).
+Das Haupt-Repository bleibt die Quelle fuer das stabile Projekt, die offizielle
+Dokumentation, Releases, Docker-Images und Support-Kanaele.
 
-  <h4>The trail catalogue that makes your GPS data searchable</h4>
+Der Fork untersucht eine erweiterte POI-Funktion fuer wanderer. Ziel ist es,
+Points of Interest nicht nur als Karten-Overlay zu nutzen, sondern als eigene
+Datenobjekte mit Kategorien, Attributen, Sichtbarkeit und Import-Workflow.
 
-[![Docker Image Version (tag latest semver)](https://img.shields.io/docker/v/flomp/wanderer-web/latest)](https://github.com/open-wanderer/wanderer/)
-[![GitHub Repo stars](https://img.shields.io/github/stars/open-wanderer/wanderer?style=social)](https://github.com/open-wanderer/wanderer/)
-[![Buy Me A Coffee](https://img.shields.io/badge/Support-wanderer-yellow?logo=buy-me-a-coffee)](https://www.buymeacoffee.com/wanderertrails)
-[![Discord](https://img.shields.io/discord/1249895457396621332?style=social&logo=discord&label=Developer%20Discord)](https://discord.gg/USSEBY98CP)
+## Status
 
-[![Try the demo](https://img.shields.io/badge/Try_the_demo-EF2D5E?style=for-the-badge&logoColor=white&logo=rocket&color=2a56f1&labelColor=242734)](https://demo.wanderer.to)
+Dieser Fork ist ein Experiment und kein offizieller wanderer-Release. Teile der
+Implementierung und Dokumentation wurden mit Hilfe eines KI-Agenten erstellt und
+iterativ ueberarbeitet. Der Code sollte vor produktiver Nutzung geprueft werden;
+Datenbankmigrationen und API-Vertraege koennen sich noch aendern.
 
-</div>
+## Was dieser Fork ausprobiert
 
-wanderer is a self-hosted trail database. You can upload your recorded tracks or create new ones and add various metadata to build an easily searchable catalogue. 
+- eigene PocketBase-Collections fuer POIs, POI-Kategorien und POI-Attribute
+- eine POI-Seite mit Karte, Liste, Suche und Kategorie-/Sichtbarkeitsfiltern
+- Erstellen, Bearbeiten und Loeschen eigener POIs
+- oeffentliche und private POIs
+- konfigurierbare Kategorien mit Icons und Attributdefinitionen
+- KML/KMZ-Import fuer POIs
+- POI-Anzeige und Interaktion in Karten- und Routenplanungsansichten
+- API-Endpunkte unter `web/src/routes/api/v1/poi*`
+- deutsch- und englischsprachige UI-Texte fuer die experimentellen Bereiche
 
-## Core Features
+## Beziehung zum Hauptprojekt
 
-![Screenshot of wanderer](docs/src/assets/hero.png)
+wanderer selbst ist eine self-hosted Trail-Datenbank. Tracks koennen hochgeladen,
+erstellt, durchsucht, visualisiert und mit Metadaten organisiert werden. Alle
+grundlegenden Funktionen, Setup-Hinweise und Projektentscheidungen stammen aus
+dem upstream Projekt:
 
-- Manage your trails
-- Plan new routes
-- Extensive map integration and visualization
-- Share trails with other people and explore theirs
-- Advanced filter and search functionality
-- Create custom lists to organize your trails further
+- Haupt-Repository: [open-wanderer/wanderer](https://github.com/open-wanderer/wanderer)
+- Dokumentation: [wanderer.to](https://wanderer.to)
+- Lizenz: [AGPLv3](LICENSE)
 
+Issues, Feature-Diskussionen und Support fuer wanderer gehoeren grundsaetzlich
+ins Haupt-Repository. Rueckmeldungen zu den experimentellen POI-Erweiterungen
+sind in diesem Fork besser aufgehoben.
 
-## Getting started
-The recommended and quickest way to install wanderer is using docker compose:
+## Lokale Nutzung
 
-``` bash
-# download the docker compose file
-wget https://raw.githubusercontent.com/open-wanderer/wanderer/main/docker-compose.yml
+Zum Ausprobieren dieses Forks sollte der Code aus diesem Repository gebaut
+werden. Die veroeffentlichten Docker-Images des Hauptprojekts enthalten die
+POI-Erweiterungen dieses Forks nicht automatisch.
 
-# build and launch via docker compose
-docker compose up -d
+```bash
+git clone https://github.com/desolator7/wanderer-poi.git
+cd wanderer-poi
 ```
 
-The first startup can take up to 90 seconds after which you can access the frontend at localhost:3000.
+Fuer die Entwicklungsumgebung und den Aufbau der Services gelten weiterhin die
+upstream Hinweise zur Installation aus dem Quellcode:
+[Local development](https://wanderer.to/develop/local-development).
 
-> ℹ️ if you are not hosting wanderer at http://localhost:3000 make sure to change ORIGIN variable. Otherwise you will run into CORS errors.
+## Hinweise fuer Mitwirkende
 
-> ⚠️ if you are using wanderer in a production environment make sure to change the MEILI_MASTER_KEY variable.
-
-You can also run wanderer on bare-metal. Check out the [documentation](https://wanderer.to/run/installation/from-source) for a detailed how-to guide.
-
-## Support wanderer
-
-If you like wanderer and would like to give something back you can donate over [here](https://www.buymeacoffee.com/wanderertrails). If you prefer to support the development with a regular contribution you can donate via [Liberapay](https://liberapay.com/wanderer/).
-
-## Documentation
-
-Please check the [website](https://wanderer.to) for the complete documentation.
-
-## Contributing
-
-Help is welcome at any time. If you are not sure where you can start check the [roadmap](https://github.com/users/Flomp/projects/2/views/1) for features in the backlog.
-If you would like to contribute a translation, you can do so [here](https://crowdin.com/project/wanderer).
-
-## License
-This project is licensed under the AGPLv3 License. See the [LICENSE](LICENSE) file for the full license text.
+Dieser Fork ist bewusst klein gehalten: Aenderungen sollten moeglichst klar auf
+das POI-Experiment bezogen sein. Wenn eine Aenderung nicht POI-spezifisch ist,
+sollte sie nach Moeglichkeit upstream in
+[open-wanderer/wanderer](https://github.com/open-wanderer/wanderer)
+diskutiert werden.

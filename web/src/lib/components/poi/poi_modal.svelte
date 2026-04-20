@@ -9,6 +9,7 @@
     import Toggle from "../base/toggle.svelte";
     import Datepicker from "../base/datepicker.svelte";
     import { Poi } from "$lib/models/poi";
+    import { defaultPoiIcon, poiIconOptions } from "$lib/util/icon_util";
 
     interface Props {
         poi?: Poi;
@@ -34,6 +35,8 @@
                 name: source.name,
                 description: source.description,
                 location: source.location,
+                icon: source.icon,
+                color: source.color,
                 public: source.public,
                 category: source.category,
                 author: source.author,
@@ -47,6 +50,7 @@
         return new Poi(0, 0, {
             name: "",
             category: categories[0]?.id ?? "",
+            icon: defaultPoiIcon,
             attributes: {},
         });
     }
@@ -91,6 +95,8 @@
                     name: draft.name.trim(),
                     description: draft.description,
                     location: draft.location,
+                    icon: draft.icon ?? defaultPoiIcon,
+                    color: draft.color,
                     public: draft.public,
                     category: draft.category,
                     author: draft.author,
@@ -109,7 +115,7 @@
 
 <Modal
     id="poi-modal"
-    title={draft.id ? "POI bearbeiten" : "POI anlegen"}
+    title={draft.id ? $_("edit-poi") : $_("create-poi")}
     size="md:min-w-2xl"
     bind:this={modal}
 >
@@ -135,6 +141,33 @@
                 label={$_("description")}
             ></Textarea>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Select
+                    bind:value={draft.icon}
+                    label={$_("icon")}
+                    items={poiIconOptions.map((option) => ({
+                        text: $_(option.labelKey),
+                        value: option.value,
+                    }))}
+                ></Select>
+                <div>
+                    <label class="text-sm font-medium pb-1">{$_("color")}</label>
+                    <div class="flex items-center gap-3">
+                        <input
+                            class="h-10 w-12 rounded-md border border-input-border bg-input-background"
+                            type="color"
+                            value={draft.color ?? "#6B7280"}
+                            onchange={(event) =>
+                                (draft.color = (
+                                    event.currentTarget as HTMLInputElement
+                                ).value.toUpperCase())}
+                        />
+                        <span class="text-sm text-gray-500"
+                            >{draft.color ?? "#6B7280"}</span
+                        >
+                    </div>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <TextField bind:value={draft.lat} label={$_("latitude")}
                 ></TextField>
                 <TextField bind:value={draft.lon} label={$_("longitude")}
@@ -148,7 +181,7 @@
 
             {#if selectedDefinitions.length}
                 <div class="space-y-3">
-                    <h4 class="text-lg font-semibold">Attribute</h4>
+                    <h4 class="text-lg font-semibold">{$_("attributes")}</h4>
                     {#each selectedDefinitions as definition}
                         {#if definition.type === "boolean"}
                             <Toggle

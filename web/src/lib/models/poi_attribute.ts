@@ -10,6 +10,7 @@ export class PoiAttribute {
     type: PoiAttributeType;
     category: string;
     required: boolean;
+    primary: boolean;
     author: string;
     created?: string;
     updated?: string;
@@ -25,6 +26,7 @@ export class PoiAttribute {
         params?: {
             id?: string;
             required?: boolean;
+            primary?: boolean;
             author?: string;
             created?: string;
             updated?: string;
@@ -39,6 +41,7 @@ export class PoiAttribute {
         this.type = type;
         this.category = category;
         this.required = params?.required ?? false;
+        this.primary = params?.primary ?? false;
         this.author = params?.author ?? "000000000000000";
         this.created = params?.created;
         this.updated = params?.updated;

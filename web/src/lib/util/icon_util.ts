@@ -1392,6 +1392,26 @@ export const icons = ["0",
     "z",
 ] as const
 
+export const poiIconOptions = [
+    { labelKey: "poi-icon-landmark", value: "landmark" },
+    { labelKey: "poi-icon-stamp", value: "stamp" },
+    { labelKey: "poi-icon-viewpoint", value: "binoculars" },
+    { labelKey: "poi-icon-lost-place", value: "house-crack" },
+] as const;
+
+export const defaultPoiIcon = "landmark" satisfies typeof icons[number];
+
+export function normalizePoiIcon(value: unknown): typeof icons[number] {
+    if (
+        typeof value === "string" &&
+        icons.includes(value as typeof icons[number])
+    ) {
+        return value as typeof icons[number];
+    }
+
+    return defaultPoiIcon;
+}
+
 export function getIconForLocation(l: LocationSearchResult): typeof icons[number] {
     if (l.category === "aerialway") {
         return "cable-car"
