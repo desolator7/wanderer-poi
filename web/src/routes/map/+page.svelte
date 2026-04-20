@@ -353,6 +353,8 @@
                     name: poi.name,
                     description: poi.description,
                     location: poi.location,
+                    icon: poi.icon,
+                    color: poi.color,
                     public: poi.public,
                     author: poi.author,
                     category: poi.category,

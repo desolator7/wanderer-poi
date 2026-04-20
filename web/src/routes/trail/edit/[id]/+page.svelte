@@ -84,7 +84,6 @@
     } from "$lib/stores/search_store.js";
     import { tags_index } from "$lib/stores/tag_store.js";
     import { theme } from "$lib/stores/theme_store.js";
-    import { pois_update } from "$lib/stores/poi_store";
     import { currentUser } from "$lib/stores/user_store.js";
     import { getIconForLocation } from "$lib/util/icon_util.js";
     import {
@@ -677,6 +676,19 @@
         }
     }
 
+    async function addPoiAsRoutePoint(poi: Poi) {
+        if (!drawingActive) {
+            startDrawing();
+        }
+
+        if (!valhallaStore.anchors.length) {
+            addAnchor(poi.lat, poi.lon, valhallaStore.anchors.length);
+            return;
+        }
+
+        await addAnchorAndRecalculate(poi.lat, poi.lon);
+    }
+
     function addAnchor(
         lat: number,
         lon: number,
@@ -1191,36 +1203,6 @@
         updateTrailWithRouteData();
     }
 
-    async function savePoiAttributes(
-        poi: Poi,
-        attributes: Record<string, string | boolean | null>,
-    ) {
-        const savedPoi = await pois_update(
-            new Poi(poi.lat, poi.lon, {
-                id: poi.id,
-                name: poi.name,
-                description: poi.description,
-                location: poi.location,
-                public: poi.public,
-                author: poi.author,
-                category: poi.category,
-                attributes,
-                expand: poi.expand,
-                created: poi.created,
-                updated: poi.updated,
-            }),
-        );
-        savedPoi.expand = {
-            category:
-                data.poiCategories.find((category) => category.id === savedPoi.category) ??
-                savedPoi.expand?.category,
-        };
-        const index = routePlannerPois.findIndex((item) => item.id === savedPoi.id);
-        if (index >= 0) {
-            routePlannerPois[index] = savedPoi;
-            routePlannerPois = [...routePlannerPois];
-        }
-    }
 </script>
 
 <svelte:head>
@@ -1574,9 +1556,7 @@
                 activeTrail={0}
                 pois={filteredRoutePlannerPois}
                 poiAttributeDefinitions={data.poiAttributeDefinitions}
-                onpoiclick={(poi) => addAnchorAndRecalculate(poi.lat, poi.lon)}
-                caneditpoi={(poi) => page.data.user?.id === poi.author}
-                onpoisave={savePoiAttributes}
+                onpoiclick={addPoiAsRoutePoint}
                 bind:map
                 onclick={(target) => handleMapClick(target)}
                 onsegmentclick={(data) => handleSegmentClick(data)}

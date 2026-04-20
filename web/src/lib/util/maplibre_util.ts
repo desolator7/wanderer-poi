@@ -12,21 +12,35 @@ import { get } from "svelte/store";
 import { handleFromRecordWithIRI } from "./activitypub_util";
 import { getFileURL } from "./file_util";
 import { formatDistance, formatElevation, formatTimeHHMM } from "./format_util";
-import { icons } from "./icon_util";
+import { icons, normalizePoiIcon } from "./icon_util";
+import { getPoiDisplayColor } from "./poi_util";
 
 export class FontawesomeMarker extends M.Marker {
     constructor(options: { icon: string, fontSize?: string, width?: number, backgroundColor?: string, fontColor?: string, style?: string, id?: string }, markerOptions?: M.MarkerOptions) {
         const element = document.createElement('div')
-        element.className = `cursor-pointer flex items-center justify-center w-${options.width ?? 7} aspect-square ${options.backgroundColor ?? "bg-gray-500"} rounded-full text-${options.fontSize ?? "normal"} ${options.style ?? ""}`
+        element.className = `cursor-pointer flex items-center justify-center w-${options.width ?? 7} aspect-square rounded-full text-${options.fontSize ?? "normal"} ${options.style ?? ""}`
+        if (options.backgroundColor?.startsWith("#")) {
+            element.style.backgroundColor = options.backgroundColor;
+        } else {
+            element.classList.add(options.backgroundColor ?? "bg-gray-500");
+        }
         element.id = options.id ?? "";
         super({ element: element, ...markerOptions });
 
-        const {
-            icon,
-        } = options
+        const iconElement = document.createElement("i");
+        options.icon.split(" ").forEach((className) => {
+            if (className.length) {
+                iconElement.classList.add(className);
+            }
+        });
 
-        const iconElementString = `<i class="text-${options.fontColor ?? "white"} ${icon}"></i>`
-        this._element.insertAdjacentHTML('beforeend', iconElementString)
+        if (options.fontColor?.startsWith("#")) {
+            iconElement.style.color = options.fontColor;
+        } else {
+            iconElement.classList.add(`text-${options.fontColor ?? "white"}`);
+        }
+
+        this._element.appendChild(iconElement);
     }
 }
 
@@ -340,12 +354,18 @@ export function calculateScaleFactor(map: M.Map) {
     return scaleFactor
 }
 
-export function createMarkerFromPoi(poi: Poi): FontawesomeMarker {
+export function createMarkerFromPoi(
+    poi: Poi,
+    attributeDefinitions: PoiAttribute[] = [],
+): FontawesomeMarker {
+    const icon = poi.icon ?? poi.expand?.category?.icon ?? "location-dot";
+    const color = getPoiDisplayColor(poi, attributeDefinitions);
     return new FontawesomeMarker(
         {
             id: poi.id,
-            icon: `fa fa-${poi.expand?.category?.icon ?? "location-dot"}`,
+            icon: `fa fa-${normalizePoiIcon(icon)}`,
             backgroundColor: poi.public ? "bg-primary" : "bg-gray-700",
+            fontColor: color ?? "white",
         },
         {},
     ).setLngLat([poi.lon, poi.lat]);
@@ -364,8 +384,18 @@ export function createPopupFromPoi(
     content.className = "p-4 space-y-3 min-w-60";
 
     const title = document.createElement("h4");
-    title.className = "text-lg font-semibold";
-    title.textContent = poi.name;
+    title.className = "text-lg font-semibold flex items-center gap-2";
+    const titleIcon = document.createElement("i");
+    titleIcon.classList.add(
+        "fa",
+        `fa-${normalizePoiIcon(poi.icon ?? poi.expand?.category?.icon ?? "location-dot")}`,
+    );
+    const color = getPoiDisplayColor(poi, attributeDefinitions);
+    if (color) {
+        titleIcon.style.color = color;
+    }
+    title.appendChild(titleIcon);
+    title.appendChild(document.createTextNode(poi.name));
     content.appendChild(title);
 
     if (poi.expand?.category?.name || poi.location) {

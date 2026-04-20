@@ -55,6 +55,9 @@
 
     async function saveAttribute() {
         try {
+            if (attributeForm.type !== "boolean") {
+                attributeForm.primary = false;
+            }
             const savedAttribute = attributeForm.id
                 ? await poi_attributes_update(attributeForm)
                 : await poi_attributes_create(attributeForm);
@@ -71,6 +74,20 @@
                 attributeDefinitions = [...attributeDefinitions];
             } else {
                 attributeDefinitions = [...attributeDefinitions, savedAttribute];
+            }
+            if (savedAttribute.primary) {
+                attributeDefinitions = attributeDefinitions.map((attribute) =>
+                    attribute.id !== savedAttribute.id &&
+                    attribute.category === savedAttribute.category
+                        ? new PoiAttribute(
+                              attribute.name,
+                              attribute.key,
+                              attribute.type,
+                              attribute.category,
+                              { ...attribute, primary: false },
+                          )
+                        : attribute,
+                );
             }
             attributeForm = new PoiAttribute(
                 "",
@@ -214,6 +231,19 @@
                 />
                 Required
             </label>
+            {#if attributeForm.type === "boolean"}
+                <label class="inline-flex items-center gap-2">
+                    <input
+                        type="checkbox"
+                        checked={attributeForm.primary}
+                        onchange={(event) =>
+                            (attributeForm.primary = (
+                                event.currentTarget as HTMLInputElement
+                            ).checked)}
+                    />
+                    Primaerfarbe
+                </label>
+            {/if}
             <Button primary={true} onclick={saveAttribute}>Save</Button>
         </div>
 
@@ -230,7 +260,9 @@
                                 categories.find(
                                     (category) =>
                                         category.id === attribute.category,
-                                )?.name}
+                                )?.name}{attribute.primary
+                                ? " - Primaerfarbe"
+                                : ""}
                         </p>
                     </div>
                     <div class="flex gap-2">

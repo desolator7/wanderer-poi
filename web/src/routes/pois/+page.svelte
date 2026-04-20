@@ -14,6 +14,8 @@
         pois_update,
     } from "$lib/stores/poi_store";
     import { show_toast } from "$lib/stores/toast_store.svelte";
+    import { defaultPoiIcon, poiIconOptions } from "$lib/util/icon_util";
+    import { getPoiDisplayColor } from "$lib/util/poi_util";
     import { _ } from "svelte-i18n";
 
     let { data } = $props();
@@ -31,6 +33,7 @@
     let editingPoi = $state<Poi | undefined>(undefined);
     let poiModal: PoiModal;
     let importCategory = $state(data.categories[0]?.id ?? "");
+    let importIcon: string = $state(defaultPoiIcon);
     let importPublic = $state(false);
     let importBusy = $state(false);
     let offerUpload = $state(false);
@@ -58,6 +61,15 @@
         }),
     );
 
+    function getPoiIconColor(poi: Poi) {
+        return getPoiDisplayColor(
+            poi,
+            data.attributeDefinitions.filter(
+                (definition) => definition.category === poi.category,
+            ),
+        );
+    }
+
     function setPoiInList(savedPoi: Poi) {
         const existingIndex = allPois.findIndex(
             (existingPoi) => existingPoi.id === savedPoi.id,
@@ -74,6 +86,7 @@
         editingPoi = new Poi(0, 0, {
             name: "",
             category: data.categories[0]?.id ?? "",
+            icon: defaultPoiIcon,
             public: false,
         });
         poiModal.openModal();
@@ -85,6 +98,8 @@
             name: poi.name,
             description: poi.description,
             location: poi.location,
+            icon: poi.icon,
+            color: poi.color,
             public: poi.public,
             author: poi.author,
             category: poi.category,
@@ -133,6 +148,8 @@
                 name: poi.name,
                 description: poi.description,
                 location: poi.location,
+                icon: poi.icon,
+                color: poi.color,
                 public: poi.public,
                 author: poi.author,
                 category: poi.category,
@@ -176,6 +193,7 @@
                 const imported = await pois_import(file, {
                     category: importCategory,
                     isPublic: importPublic,
+                    icon: importIcon,
                 });
 
                 for (const poi of imported) {
@@ -264,8 +282,12 @@
                                 <div>
                                     <h3 class="text-lg font-semibold">
                                         <i
-                                            class="fa fa-{poi.expand?.category
-                                                ?.icon ?? 'location-dot'} mr-2"
+                                            class="fa fa-{poi.icon ??
+                                                poi.expand?.category?.icon ??
+                                                'location-dot'} mr-2"
+                                            style={getPoiIconColor(poi)
+                                                ? `color: ${getPoiIconColor(poi)}`
+                                                : undefined}
                                         ></i>
                                         {poi.name}
                                     </h3>
@@ -344,6 +366,14 @@
                     items={data.categories.map((category) => ({
                         text: category.name,
                         value: category.id,
+                    }))}
+                ></Select>
+                <Select
+                    bind:value={importIcon}
+                    label="Icon"
+                    items={poiIconOptions.map((option) => ({
+                        text: option.text,
+                        value: option.value,
                     }))}
                 ></Select>
                 <Button secondary={true} onclick={openFileBrowser}>

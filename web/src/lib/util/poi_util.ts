@@ -5,6 +5,9 @@ import JSZip from "jszip";
 import { kml } from "$lib/vendor/toGeoJSON/toGeoJSON";
 import { Poi, type PoiFilter } from "$lib/models/poi";
 import type { PoiAttribute, PoiAttributeValue } from "$lib/models/poi_attribute";
+import { normalizePoiIcon } from "./icon_util";
+
+export const primaryPoiColor = "#16A34A";
 
 function sanitizeAttributeKey(value: string) {
     return value
@@ -62,6 +65,41 @@ export function coercePoiAttributeValue(
     return String(value);
 }
 
+export function normalizePoiColor(value: unknown) {
+    if (typeof value !== "string") {
+        return undefined;
+    }
+
+    const trimmed = value.trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) {
+        return trimmed.toUpperCase();
+    }
+
+    if (/^[0-9a-fA-F]{6}$/.test(trimmed)) {
+        return `#${trimmed.toUpperCase()}`;
+    }
+
+    return undefined;
+}
+
+export function getPoiDisplayColor(
+    poi: Pick<Poi, "attributes" | "color">,
+    definitions: PoiAttribute[] = [],
+) {
+    const primaryDefinition = definitions.find(
+        (definition) => definition.type === "boolean" && definition.primary,
+    );
+
+    if (
+        primaryDefinition &&
+        poi.attributes?.[primaryDefinition.key] === true
+    ) {
+        return primaryPoiColor;
+    }
+
+    return normalizePoiColor(poi.color);
+}
+
 export function coercePoiAttributes(
     rawAttributes: Record<string, unknown> | undefined,
     definitions: PoiAttribute[],
@@ -107,6 +145,7 @@ export function parsePoisFromGeoJSON(
         category: string;
         isPublic: boolean;
         author: string;
+        icon?: string;
         attributeDefinitions?: PoiAttribute[];
     },
 ) {
@@ -126,11 +165,18 @@ export function parsePoisFromGeoJSON(
             const description = String(
                 properties.description ?? properties.desc ?? "",
             );
+            const color = normalizePoiColor(
+                properties["icon-color"] ??
+                    properties["marker-color"] ??
+                    properties.color,
+            );
 
             pois.push(
                 new Poi(coordinate[1], coordinate[0], {
                     name,
                     description,
+                    icon: normalizePoiIcon(options.icon),
+                    color,
                     public: options.isPublic,
                     author: options.author,
                     category: options.category,
@@ -152,6 +198,7 @@ export async function parsePoisFromKmlFile(
         category: string;
         isPublic: boolean;
         author: string;
+        icon?: string;
         attributeDefinitions?: PoiAttribute[];
     },
 ) {

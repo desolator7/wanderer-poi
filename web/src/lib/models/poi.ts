@@ -1,6 +1,7 @@
 import type * as M from "maplibre-gl";
 import type { PoiAttributeValue } from "./poi_attribute";
 import type { PoiCategory } from "./poi_category";
+import type { icons } from "$lib/util/icon_util";
 
 export class Poi {
     id?: string;
@@ -9,6 +10,8 @@ export class Poi {
     location?: string;
     lat: number;
     lon: number;
+    icon?: typeof icons[number];
+    color?: string;
     public: boolean;
     category: string;
     author: string;
@@ -29,6 +32,8 @@ export class Poi {
             id?: string;
             description?: string;
             location?: string;
+            icon?: typeof icons[number];
+            color?: string;
             public?: boolean;
             author?: string;
             attributes?: Record<string, PoiAttributeValue>;
@@ -45,6 +50,8 @@ export class Poi {
         this.location = params.location ?? "";
         this.lat = lat;
         this.lon = lon;
+        this.icon = params.icon;
+        this.color = params.color;
         this.public = params.public ?? false;
         this.category = params.category;
         this.author = params.author ?? "000000000000000";

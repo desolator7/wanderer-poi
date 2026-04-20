@@ -767,31 +767,34 @@
 
         hidePois();
         for (const poi of pois) {
-            const marker = createMarkerFromPoi(poi).addTo(map);
-            const popup = createPopupFromPoi(
-                poi,
-                poiAttributeDefinitions.filter(
-                    (definition) => definition.category === poi.category,
-                ),
-                {
-                    editable: caneditpoi?.(poi) ?? false,
-                    onSave: async (attributes) => {
-                        await onpoisave?.(poi, attributes);
-                    },
-                },
+            const definitions = poiAttributeDefinitions.filter(
+                (definition) => definition.category === poi.category,
             );
+            const marker = createMarkerFromPoi(poi, definitions).addTo(map);
+            const popup = onpoiclick
+                ? undefined
+                : createPopupFromPoi(
+                      poi,
+                      definitions,
+                      {
+                          editable: caneditpoi?.(poi) ?? false,
+                          onSave: async (attributes) => {
+                              await onpoisave?.(poi, attributes);
+                          },
+                      },
+                  );
 
             marker.getElement().addEventListener("click", (event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                if (drawing && onpoiclick) {
+                if (onpoiclick) {
                     onpoiclick(poi);
                     return;
                 }
-                if (popup.isOpen()) {
+                if (popup?.isOpen()) {
                     popup.remove();
                 } else {
-                    popup.setLngLat([poi.lon, poi.lat]).addTo(map!);
+                    popup?.setLngLat([poi.lon, poi.lat]).addTo(map!);
                 }
             });
 
