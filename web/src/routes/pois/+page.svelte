@@ -1,13 +1,19 @@
 <script lang="ts">
     import { page } from "$app/state";
     import Button from "$lib/components/base/button.svelte";
+    import Datepicker from "$lib/components/base/datepicker.svelte";
     import Search from "$lib/components/base/search.svelte";
     import Select from "$lib/components/base/select.svelte";
+    import TextField from "$lib/components/base/text_field.svelte";
     import Toggle from "$lib/components/base/toggle.svelte";
     import PoiFilterPanel from "$lib/components/poi/poi_filter_panel.svelte";
     import PoiModal from "$lib/components/poi/poi_modal.svelte";
     import MapWithElevationMaplibre from "$lib/components/trail/map_with_elevation_maplibre.svelte";
     import { Poi } from "$lib/models/poi";
+    import type {
+        PoiAttribute,
+        PoiAttributeValue,
+    } from "$lib/models/poi_attribute";
     import {
         pois_create,
         pois_delete,
@@ -38,6 +44,11 @@
     let importPublic = $state(false);
     let importBusy = $state(false);
     let offerUpload = $state(false);
+    let selectedPoiIds = $state<string[]>([]);
+    let bulkSaveBusy = $state(false);
+    let bulkDeleteBusy = $state(false);
+    let bulkAttributeKeys = $state<string[]>([]);
+    let bulkAttributeValues = $state<Record<string, string | boolean>>({});
 
     let filteredPois = $derived(
         allPois.filter((poi) => {
@@ -61,6 +72,91 @@
             return true;
         }),
     );
+    let editableFilteredPois = $derived(
+        filteredPois.filter((poi) => canManagePoi(poi)),
+    );
+    let selectedPois = $derived(
+        allPois.filter(
+            (poi) =>
+                typeof poi.id === "string" &&
+                selectedPoiIds.includes(poi.id) &&
+                canManagePoi(poi),
+        ),
+    );
+    let selectedPoiCategoryIds = $derived(
+        Array.from(new Set(selectedPois.map((poi) => poi.category))),
+    );
+    let bulkAttributeDefinitions = $derived(
+        selectedPoiCategoryIds.length === 1
+            ? data.attributeDefinitions.filter(
+                  (definition) =>
+                      definition.category === selectedPoiCategoryIds[0],
+              )
+            : [],
+    );
+    let bulkBusy = $derived(bulkSaveBusy || bulkDeleteBusy);
+
+    $effect(() => {
+        const editableIds = new Set(
+            allPois
+                .filter((poi) => canManagePoi(poi))
+                .map((poi) => poi.id)
+                .filter((id): id is string => typeof id === "string"),
+        );
+        const nextSelectedIds = selectedPoiIds.filter((id) =>
+            editableIds.has(id),
+        );
+        if (nextSelectedIds.length !== selectedPoiIds.length) {
+            selectedPoiIds = nextSelectedIds;
+        }
+    });
+
+    $effect(() => {
+        const validKeys = new Set(
+            bulkAttributeDefinitions.map((definition) => definition.key),
+        );
+        const nextKeys = bulkAttributeKeys.filter((key) => validKeys.has(key));
+        if (nextKeys.length !== bulkAttributeKeys.length) {
+            bulkAttributeKeys = nextKeys;
+        }
+
+        const nextValues = Object.fromEntries(
+            Object.entries(bulkAttributeValues).filter(([key]) =>
+                validKeys.has(key),
+            ),
+        ) as Record<string, string | boolean>;
+        if (
+            Object.keys(nextValues).length !==
+            Object.keys(bulkAttributeValues).length
+        ) {
+            bulkAttributeValues = nextValues;
+        }
+    });
+
+    function canManagePoi(poi: Poi) {
+        return page.data.user?.id === poi.author;
+    }
+
+    function clonePoiWithAttributes(
+        poi: Poi,
+        attributes: Record<string, PoiAttributeValue>,
+    ) {
+        return new Poi(poi.lat, poi.lon, {
+            id: poi.id,
+            name: poi.name,
+            description: poi.description,
+            location: poi.location,
+            icon: poi.icon,
+            color: poi.color,
+            public: poi.public,
+            author: poi.author,
+            category: poi.category,
+            attributes,
+            expand: poi.expand,
+            created: poi.created,
+            updated: poi.updated,
+        });
+    }
 
     function getPoiIconColor(poi: Poi) {
         return getPoiDisplayColor(
@@ -81,6 +177,103 @@
         } else {
             allPois = [savedPoi, ...allPois];
         }
+    }
+
+    function setPoisInList(savedPois: Poi[]) {
+        const savedPoisById = new Map(
+            savedPois
+                .filter((poi) => typeof poi.id === "string")
+                .map((poi) => [poi.id, poi]),
+        );
+        allPois = allPois.map((poi) =>
+            typeof poi.id === "string" && savedPoisById.has(poi.id)
+                ? savedPoisById.get(poi.id)!
+                : poi,
+        );
+    }
+
+    function isPoiSelected(poi: Poi) {
+        return typeof poi.id === "string" && selectedPoiIds.includes(poi.id);
+    }
+
+    function togglePoiSelection(poi: Poi, selected: boolean) {
+        if (typeof poi.id !== "string" || !canManagePoi(poi)) {
+            return;
+        }
+
+        selectedPoiIds = selected
+            ? Array.from(new Set([...selectedPoiIds, poi.id]))
+            : selectedPoiIds.filter((id) => id !== poi.id);
+    }
+
+    function selectAllFilteredPois() {
+        selectedPoiIds = Array.from(
+            new Set([
+                ...selectedPoiIds,
+                ...editableFilteredPois
+                    .map((poi) => poi.id)
+                    .filter((id): id is string => typeof id === "string"),
+            ]),
+        );
+    }
+
+    function clearPoiSelection() {
+        selectedPoiIds = [];
+        bulkAttributeKeys = [];
+        bulkAttributeValues = {};
+    }
+
+    function isBulkAttributeSelected(definition: PoiAttribute) {
+        return bulkAttributeKeys.includes(definition.key);
+    }
+
+    function toggleBulkAttribute(definition: PoiAttribute, selected: boolean) {
+        bulkAttributeKeys = selected
+            ? Array.from(new Set([...bulkAttributeKeys, definition.key]))
+            : bulkAttributeKeys.filter((key) => key !== definition.key);
+
+        if (
+            selected &&
+            bulkAttributeValues[definition.key] === undefined
+        ) {
+            bulkAttributeValues = {
+                ...bulkAttributeValues,
+                [definition.key]: definition.type === "boolean" ? false : "",
+            };
+        }
+    }
+
+    function setBulkAttributeValue(
+        definition: PoiAttribute,
+        value: string | boolean,
+    ) {
+        bulkAttributeValues = {
+            ...bulkAttributeValues,
+            [definition.key]: value,
+        };
+    }
+
+    function getBulkAttributeTextValue(definition: PoiAttribute) {
+        const value = bulkAttributeValues[definition.key];
+        return typeof value === "string" ? value : "";
+    }
+
+    function getBulkAttributeBooleanValue(definition: PoiAttribute) {
+        return bulkAttributeValues[definition.key] === true;
+    }
+
+    function normalizeBulkAttributeValue(
+        definition: PoiAttribute,
+    ): PoiAttributeValue {
+        const value = bulkAttributeValues[definition.key];
+        if (definition.type === "boolean") {
+            return value === true;
+        }
+        if (typeof value !== "string") {
+            return null;
+        }
+        const normalized = value.trim();
+        return normalized.length ? normalized : null;
     }
 
     function createPoi() {
@@ -143,23 +336,56 @@
         poi: Poi,
         attributes: Record<string, string | boolean | null>,
     ) {
-        await savePoi(
-            new Poi(poi.lat, poi.lon, {
-                id: poi.id,
-                name: poi.name,
-                description: poi.description,
-                location: poi.location,
-                icon: poi.icon,
-                color: poi.color,
-                public: poi.public,
-                author: poi.author,
-                category: poi.category,
-                attributes,
-                expand: poi.expand,
-                created: poi.created,
-                updated: poi.updated,
-            }),
-        );
+        await savePoi(clonePoiWithAttributes(poi, attributes));
+    }
+
+    async function saveBulkAttributes() {
+        if (
+            !selectedPois.length ||
+            selectedPoiCategoryIds.length !== 1 ||
+            !bulkAttributeKeys.length
+        ) {
+            return;
+        }
+
+        bulkSaveBusy = true;
+        try {
+            const savedPois: Poi[] = [];
+            for (const poi of selectedPois) {
+                const attributes = { ...(poi.attributes ?? {}) };
+                for (const definition of bulkAttributeDefinitions) {
+                    if (bulkAttributeKeys.includes(definition.key)) {
+                        attributes[definition.key] =
+                            normalizeBulkAttributeValue(definition);
+                    }
+                }
+                const savedPoi = await pois_update(
+                    clonePoiWithAttributes(poi, attributes),
+                );
+                savedPoi.expand = {
+                    category:
+                        data.categories.find(
+                            (category) => category.id === savedPoi.category,
+                        ) ?? savedPoi.expand?.category,
+                };
+                savedPois.push(savedPoi);
+            }
+            setPoisInList(savedPois);
+            show_toast({
+                type: "success",
+                icon: "check",
+                text: $_("poi-bulk-attributes-saved"),
+            });
+        } catch (error) {
+            console.error(error);
+            show_toast({
+                type: "error",
+                icon: "close",
+                text: $_("poi-bulk-save-error"),
+            });
+        } finally {
+            bulkSaveBusy = false;
+        }
     }
 
     async function removePoi(poi: Poi) {
@@ -180,6 +406,43 @@
                 icon: "close",
                 text: $_("poi-delete-error"),
             });
+        }
+    }
+
+    async function removeSelectedPois() {
+        if (!selectedPois.length) {
+            return;
+        }
+        if (
+            !window.confirm(
+                $_("poi-bulk-delete-confirm", {
+                    values: { n: selectedPois.length },
+                }),
+            )
+        ) {
+            return;
+        }
+
+        bulkDeleteBusy = true;
+        try {
+            await Promise.all(selectedPois.map((poi) => pois_delete(poi)));
+            const deletedIds = new Set(selectedPois.map((poi) => poi.id));
+            allPois = allPois.filter((poi) => !deletedIds.has(poi.id));
+            clearPoiSelection();
+            show_toast({
+                type: "success",
+                icon: "check",
+                text: $_("poi-bulk-delete-success"),
+            });
+        } catch (error) {
+            console.error(error);
+            show_toast({
+                type: "error",
+                icon: "close",
+                text: $_("poi-delete-error"),
+            });
+        } finally {
+            bulkDeleteBusy = false;
         }
     }
 
@@ -277,6 +540,145 @@
                 showOwnToggle={Boolean(page.data.user)}
             ></PoiFilterPanel>
 
+            {#if page.data.user}
+                <div
+                    class="rounded-xl border border-input-border p-4 space-y-4"
+                >
+                    <div
+                        class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"
+                    >
+                        <span class="text-sm text-gray-500">
+                            {selectedPois.length} {$_("selected")}
+                        </span>
+                        <div class="flex flex-wrap gap-2">
+                            <Button
+                                secondary={true}
+                                onclick={selectAllFilteredPois}
+                                disabled={!editableFilteredPois.length}
+                            >
+                                {$_("select-all")}
+                            </Button>
+                            <Button
+                                secondary={true}
+                                onclick={clearPoiSelection}
+                                disabled={!selectedPois.length}
+                            >
+                                {$_("clear-selection")}
+                            </Button>
+                            <Button
+                                secondary={true}
+                                onclick={removeSelectedPois}
+                                disabled={!selectedPois.length || bulkBusy}
+                                loading={bulkDeleteBusy}
+                            >
+                                {$_("delete-selected")}
+                            </Button>
+                        </div>
+                    </div>
+
+                    {#if selectedPois.length}
+                        {#if selectedPoiCategoryIds.length === 1 && bulkAttributeDefinitions.length}
+                            <div class="space-y-3">
+                                <h3 class="font-semibold">
+                                    {$_("attributes")}
+                                </h3>
+                                {#each bulkAttributeDefinitions as definition}
+                                    <div
+                                        class="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-3 md:items-center"
+                                    >
+                                        <label
+                                            class="inline-flex items-center gap-2 text-sm"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={isBulkAttributeSelected(
+                                                    definition,
+                                                )}
+                                                onchange={(event) =>
+                                                    toggleBulkAttribute(
+                                                        definition,
+                                                        (
+                                                            event.currentTarget as HTMLInputElement
+                                                        ).checked,
+                                                    )}
+                                            />
+                                            {$_("overwrite")}
+                                        </label>
+
+                                        {#if definition.type === "boolean"}
+                                            <Toggle
+                                                value={getBulkAttributeBooleanValue(
+                                                    definition,
+                                                )}
+                                                label={definition.name}
+                                                disabled={!isBulkAttributeSelected(
+                                                    definition,
+                                                )}
+                                                onchange={(value) =>
+                                                    setBulkAttributeValue(
+                                                        definition,
+                                                        value,
+                                                    )}
+                                            ></Toggle>
+                                        {:else if definition.type === "date"}
+                                            <Datepicker
+                                                value={getBulkAttributeTextValue(
+                                                    definition,
+                                                )}
+                                                label={definition.name}
+                                                disabled={!isBulkAttributeSelected(
+                                                    definition,
+                                                )}
+                                                onchange={(event) =>
+                                                    setBulkAttributeValue(
+                                                        definition,
+                                                        (
+                                                            event.currentTarget as HTMLInputElement
+                                                        ).value,
+                                                    )}
+                                            ></Datepicker>
+                                        {:else}
+                                            <TextField
+                                                value={getBulkAttributeTextValue(
+                                                    definition,
+                                                )}
+                                                label={definition.name}
+                                                disabled={!isBulkAttributeSelected(
+                                                    definition,
+                                                )}
+                                                onchange={(event) =>
+                                                    setBulkAttributeValue(
+                                                        definition,
+                                                        (
+                                                            event.currentTarget as HTMLInputElement
+                                                        ).value,
+                                                    )}
+                                            ></TextField>
+                                        {/if}
+                                    </div>
+                                {/each}
+                                <Button
+                                    primary={true}
+                                    onclick={saveBulkAttributes}
+                                    disabled={!bulkAttributeKeys.length || bulkBusy}
+                                    loading={bulkSaveBusy}
+                                >
+                                    {$_("apply-to-selection")}
+                                </Button>
+                            </div>
+                        {:else if selectedPoiCategoryIds.length > 1}
+                            <p class="text-sm text-gray-500">
+                                {$_("poi-bulk-one-category-only")}
+                            </p>
+                        {:else}
+                            <p class="text-sm text-gray-500">
+                                {$_("poi-bulk-no-attributes")}
+                            </p>
+                        {/if}
+                    {/if}
+                </div>
+            {/if}
+
             <div class="space-y-3">
                 {#if filteredPois.length}
                     {#each filteredPois as poi}
@@ -284,23 +686,40 @@
                             class="rounded-xl border border-input-border p-4 space-y-3"
                         >
                             <div class="flex items-start justify-between gap-4">
-                                <div>
-                                    <h3 class="text-lg font-semibold">
-                                        <i
-                                            class="fa fa-{poi.icon ??
-                                                poi.expand?.category?.icon ??
-                                                'location-dot'} mr-2"
-                                            style={getPoiIconColor(poi)
-                                                ? `color: ${getPoiIconColor(poi)}`
-                                                : undefined}
-                                        ></i>
-                                        {poi.name}
-                                    </h3>
-                                    <p class="text-sm text-gray-500">
-                                        {[poi.expand?.category?.name, poi.location]
-                                            .filter(Boolean)
-                                            .join(" - ")}
-                                    </p>
+                                <div class="flex items-start gap-3">
+                                    {#if canManagePoi(poi)}
+                                        <input
+                                            class="mt-1"
+                                            type="checkbox"
+                                            aria-label={$_("select-poi")}
+                                            checked={isPoiSelected(poi)}
+                                            onchange={(event) =>
+                                                togglePoiSelection(
+                                                    poi,
+                                                    (
+                                                        event.currentTarget as HTMLInputElement
+                                                    ).checked,
+                                                )}
+                                        />
+                                    {/if}
+                                    <div>
+                                        <h3 class="text-lg font-semibold">
+                                            <i
+                                                class="fa fa-{poi.icon ??
+                                                    poi.expand?.category?.icon ??
+                                                    'location-dot'} mr-2"
+                                                style={getPoiIconColor(poi)
+                                                    ? `color: ${getPoiIconColor(poi)}`
+                                                    : undefined}
+                                            ></i>
+                                            {poi.name}
+                                        </h3>
+                                        <p class="text-sm text-gray-500">
+                                            {[poi.expand?.category?.name, poi.location]
+                                                .filter(Boolean)
+                                                .join(" - ")}
+                                        </p>
+                                    </div>
                                 </div>
                                 <span class="text-sm text-gray-500">
                                     {poi.public
