@@ -12,8 +12,8 @@ func init() {
 		collections := []string{
 			`{
 				"id": "p0icat420260001",
-				"listRule": "author = @request.auth.id || pois_via_category.public ?= true",
-				"viewRule": "author = @request.auth.id || pois_via_category.public ?= true",
+				"listRule": "author = @request.auth.id",
+				"viewRule": "author = @request.auth.id",
 				"createRule": "@request.auth.id != \"\" && @request.body.author = @request.auth.id",
 				"updateRule": "@request.auth.id != \"\" && author = @request.auth.id",
 				"deleteRule": "@request.auth.id != \"\" && author = @request.auth.id",
@@ -115,8 +115,8 @@ func init() {
 			}`,
 			`{
 				"id": "p0iatr420260011",
-				"listRule": "author = @request.auth.id || category.pois_via_category.public ?= true",
-				"viewRule": "author = @request.auth.id || category.pois_via_category.public ?= true",
+				"listRule": "author = @request.auth.id",
+				"viewRule": "author = @request.auth.id",
 				"createRule": "@request.auth.id != \"\" && @request.body.author = @request.auth.id",
 				"updateRule": "@request.auth.id != \"\" && author = @request.auth.id",
 				"deleteRule": "@request.auth.id != \"\" && author = @request.auth.id",
