@@ -3,6 +3,7 @@
     import Button from "$lib/components/base/button.svelte";
     import Search from "$lib/components/base/search.svelte";
     import Select from "$lib/components/base/select.svelte";
+    import Toggle from "$lib/components/base/toggle.svelte";
     import PoiFilterPanel from "$lib/components/poi/poi_filter_panel.svelte";
     import PoiModal from "$lib/components/poi/poi_modal.svelte";
     import MapWithElevationMaplibre from "$lib/components/trail/map_with_elevation_maplibre.svelte";
@@ -383,13 +384,11 @@
                 <Button secondary={true} onclick={openFileBrowser}>
                     {$_("choose-file")}
                 </Button>
-                <label class="inline-flex items-center gap-2 text-sm">
-                    <input
-                        type="checkbox"
-                        bind:checked={importPublic}
-                    />
-                    {importPublic ? $_("public") : $_("private")}
-                </label>
+                <Toggle
+                    bind:value={importPublic}
+                    label={importPublic ? $_("public") : $_("private")}
+                    icon={importPublic ? "globe" : "lock"}
+                ></Toggle>
                 <button
                     class="drop-area relative h-56 w-full p-4 border border-content border-dashed rounded-xl flex items-center justify-center text-gray-500 bg-background cursor-pointer hover:bg-menu-item-background-hover transition-colors"
                     class:border-2={offerUpload}
