@@ -509,5 +509,8 @@
   "wrong-username-or-password": "Wrong username or password",
   "overwrite": "Overwrite",
   "yes": "Yes",
-  "you-can": "You can"
+  "you-can": "You can",
+  "poi-routing-panel-title": "POIs for map and routing",
+  "via": "Via",
+  "goal": "Goal"
 }
