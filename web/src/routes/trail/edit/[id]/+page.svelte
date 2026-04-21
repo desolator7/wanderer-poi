@@ -182,7 +182,6 @@
         autoRouting: true,
         modeOfTransport: "pedestrian",
     });
-    let waypointConnectionMode = $state<"snap" | "straight" | "original-kml">("snap");
     let mapWaypointPopup: M.Popup | null = $state(null);
     let importedOriginalRoute: GPX | null = $state(null);
 
@@ -408,7 +407,15 @@
             }
 
             $formData.expand!.waypoints_via_trail =
-                parseResult.trail.expand?.waypoints_via_trail ?? [];
+                (parseResult.trail.expand?.waypoints_via_trail ?? []).map(
+                    (waypoint, index) => ({
+                        ...waypoint,
+                        connectionMode:
+                            index === 0
+                                ? waypoint.connectionMode
+                                : waypoint.connectionMode ?? "snap",
+                    }),
+                );
             syncWaypointIconsWithRoutingRole();
             updateTrailOnMap();
         } catch (e) {
@@ -480,12 +487,14 @@
     }
 
     function deleteWaypoint(index: number) {
-        $formData.expand!.waypoints_via_trail?.splice(index, 1);
+        const waypoints = [...($formData.expand!.waypoints_via_trail ?? [])];
+        waypoints.splice(index, 1);
 
-        if (!$formData.expand!.waypoints_via_trail?.length) {
-            $formData.expand!.waypoints_via_trail = [];
+        for (let i = 0; i < waypoints.length; i++) {
+            waypoints[i].connectionMode =
+                i === 0 ? undefined : waypoints[i].connectionMode ?? "snap";
         }
-        $formData.expand!.waypoints_via_trail = $formData.expand!.waypoints_via_trail;
+        $formData.expand!.waypoints_via_trail = waypoints;
         syncWaypointIconsWithRoutingRole();
 
         void recalculateRouteFromWaypoints({ showSuccessToast: false });
@@ -504,6 +513,10 @@
 
         const [movedWaypoint] = waypoints.splice(fromIndex, 1);
         waypoints.splice(toIndex, 0, movedWaypoint);
+        for (let i = 0; i < waypoints.length; i++) {
+            waypoints[i].connectionMode =
+                i === 0 ? undefined : waypoints[i].connectionMode ?? "snap";
+        }
         syncWaypointIconsWithRoutingRole();
         $formData.expand!.waypoints_via_trail = [...waypoints];
 
@@ -540,20 +553,46 @@
         }
 
         try {
-            const effectiveRoutingOptions: RoutingOptions = {
-                ...routingOptions,
-                autoRouting: waypointConnectionMode === "snap",
-            };
+            const importedSegments =
+                importedOriginalRoute?.trk?.at(0)?.trkseg?.map(
+                    (segment) => segment.trkpt ?? [],
+                ) ?? [];
+
             for (let i = 1; i < waypoints.length; i++) {
                 const previousWaypoint = waypoints[i - 1];
-                const currentWaypoint = waypoints[i];
-                const routeWaypoints = await calculateRouteBetween(
-                    previousWaypoint.lat,
-                    previousWaypoint.lon,
-                    currentWaypoint.lat,
-                    currentWaypoint.lon,
-                    effectiveRoutingOptions,
-                );
+                const currentWaypoint = waypoints[i] as Waypoint & {
+                    connectionMode?: "snap" | "straight" | "original-kml";
+                };
+                const connectionMode = currentWaypoint.connectionMode ?? "snap";
+
+                let routeWaypoints: GPXWaypoint[];
+                if (
+                    connectionMode === "original-kml" &&
+                    importedSegments[i - 1]?.length
+                ) {
+                    routeWaypoints = importedSegments[i - 1].map(
+                        (point) =>
+                            new GPXWaypoint({
+                                ...point,
+                                $: {
+                                    lat: point.$.lat,
+                                    lon: point.$.lon,
+                                },
+                            }),
+                    );
+                } else {
+                    routeWaypoints = await calculateRouteBetween(
+                        previousWaypoint.lat,
+                        previousWaypoint.lon,
+                        currentWaypoint.lat,
+                        currentWaypoint.lon,
+                        {
+                            ...routingOptions,
+                            autoRouting: connectionMode === "snap",
+                        },
+                    );
+                }
+
                 insertIntoRoute(routeWaypoints);
             }
             normalizeRouteTime();
@@ -857,6 +896,7 @@
                     ? namingInfo.fallback
                     : "",
         });
+        insertedWaypoint.connectionMode = "snap";
         insertedWaypoint.id = cryptoRandomString({ length: 15 });
 
         const insertIndex = getWaypointInsertIndexByNearestSegment(
@@ -869,6 +909,10 @@
 
         const updatedWaypoints = [...existingWaypoints];
         updatedWaypoints.splice(insertIndex, 0, insertedWaypoint);
+        for (let i = 0; i < updatedWaypoints.length; i++) {
+            updatedWaypoints[i].connectionMode =
+                i === 0 ? undefined : updatedWaypoints[i].connectionMode ?? "snap";
+        }
         $formData.expand!.waypoints_via_trail = updatedWaypoints;
 
         if (options?.openEditor) {
@@ -1691,6 +1735,35 @@
                             ></i>
                         </button>
                     </div>
+                    {#if i > 0}
+                        <Select
+                            name={`waypoint-connection-mode-${waypoint.id ?? i}`}
+                            label={`Verbindung ab Wegpunkt #${i}`}
+                            value={waypoint.connectionMode ?? "snap"}
+                            items={[
+                                { text: "An Straßennetz snappen", value: "snap" },
+                                { text: "Luftlinie", value: "straight" },
+                                {
+                                    text: importedOriginalRoute
+                                        ? "Ursprüngliche KML-Geometrie"
+                                        : "Ursprüngliche KML-Geometrie (nicht verfügbar)",
+                                    value: "original-kml",
+                                },
+                            ]}
+                            onchange={(value) => {
+                                if (value === "original-kml" && !importedOriginalRoute) {
+                                    return;
+                                }
+                                waypoint.connectionMode = value;
+                                $formData.expand!.waypoints_via_trail = [
+                                    ...($formData.expand!.waypoints_via_trail ?? []),
+                                ];
+                                void recalculateRouteFromWaypoints({
+                                    showSuccessToast: false,
+                                });
+                            }}
+                        ></Select>
+                    {/if}
                     <WaypointCard
                         {waypoint}
                         routingRole={getRoutingRoleByIndex(
