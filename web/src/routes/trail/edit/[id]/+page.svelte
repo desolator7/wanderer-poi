@@ -183,6 +183,7 @@
         modeOfTransport: "pedestrian",
     });
     let mapWaypointPopup: M.Popup | null = $state(null);
+    let pendingWaypointInsertIndex: number | null = null;
     let importedOriginalRoute: GPX | null = $state(null);
 
     let savedAtLeastOnce = $state(false);
@@ -527,9 +528,6 @@
 
     async function recalculateRouteFromWaypoints(options?: { showSuccessToast?: boolean }) {
         const waypoints = $formData.expand!.waypoints_via_trail ?? [];
-        if (waypoints.length < 2) {
-            return;
-        }
 
         clearRoute();
         clearAnchors();
@@ -538,6 +536,11 @@
         for (let i = 0; i < waypoints.length; i++) {
             const waypoint = waypoints[i];
             addAnchor(waypoint.lat, waypoint.lon, i);
+        }
+
+        if (waypoints.length < 2) {
+            updateTrailWithRouteData();
+            return;
         }
 
         try {
@@ -648,7 +651,7 @@
 
         const addButton = document.createElement("button");
         addButton.className = "btn-secondary text-sm";
-        addButton.textContent = get(_)("add");
+        addButton.textContent = get(_)("quick-add-waypoint");
         addButton.addEventListener("click", async () => {
             await addWaypointFromTap(lnglat.lat, lnglat.lng, {
                 openEditor: false,
@@ -697,12 +700,16 @@
             $formData.expand!.waypoints_via_trail![editedWaypointIndex] = savedWaypoint;
         } else {
             savedWaypoint.id = cryptoRandomString({ length: 15 });
-            $formData.expand!.waypoints_via_trail = [
-                ...($formData.expand!.waypoints_via_trail ?? []),
-                savedWaypoint,
-            ];
-
+            const updatedWaypoints = [...($formData.expand!.waypoints_via_trail ?? [])];
+            const insertIndex =
+                pendingWaypointInsertIndex === null
+                    ? updatedWaypoints.length
+                    : Math.max(0, Math.min(updatedWaypoints.length, pendingWaypointInsertIndex));
+            updatedWaypoints.splice(insertIndex, 0, savedWaypoint);
+            $formData.expand!.waypoints_via_trail = updatedWaypoints;
         }
+
+        pendingWaypointInsertIndex = null;
         void recalculateRouteFromWaypoints({ showSuccessToast: false });
     }
 
@@ -901,12 +908,17 @@
             updatedWaypoints[i].connectionMode =
                 i === 0 ? undefined : updatedWaypoints[i].connectionMode ?? "snap";
         }
-        $formData.expand!.waypoints_via_trail = updatedWaypoints;
 
         if (options?.openEditor) {
+            pendingWaypointInsertIndex = insertIndex;
+            insertedWaypoint.id = undefined;
             waypoint.set(insertedWaypoint);
             waypointModal.openModal();
+            return;
         }
+
+        pendingWaypointInsertIndex = null;
+        $formData.expand!.waypoints_via_trail = updatedWaypoints;
 
         if (updatedWaypoints.length > 1) {
             await recalculateRouteFromWaypoints();
@@ -992,6 +1004,16 @@
                 thisAnchor.lat = position.lat;
                 thisAnchor.lon = position.lng;
 
+                const waypoints = [...($formData.expand!.waypoints_via_trail ?? [])];
+                if (waypoints[anchorIndex]) {
+                    waypoints[anchorIndex].lat = position.lat;
+                    waypoints[anchorIndex].lon = position.lng;
+                    waypoints[anchorIndex].name =
+                        waypoints[anchorIndex].name?.trim() ||
+                        getWaypointCoordinateName(position.lat, position.lng);
+                    $formData.expand!.waypoints_via_trail = waypoints;
+                }
+
                 await recalculateRoute(anchorIndex);
 
                 draggingMarker = false;
@@ -1037,6 +1059,15 @@
         }
         valhallaStore.anchors[anchorIndex]?.marker?.remove();
         valhallaStore.anchors.splice(anchorIndex, 1);
+
+        const waypoints = [...($formData.expand!.waypoints_via_trail ?? [])];
+        waypoints.splice(anchorIndex, 1);
+        for (let i = 0; i < waypoints.length; i++) {
+            waypoints[i].connectionMode =
+                i === 0 ? undefined : waypoints[i].connectionMode ?? "snap";
+        }
+        $formData.expand!.waypoints_via_trail = waypoints;
+        syncWaypointIconsWithRoutingRole();
         for (let i = anchorIndex; i < valhallaStore.anchors.length; i++) {
             const anchor = valhallaStore.anchors[i];
             const markerIcon = anchor.marker?.getElement();
@@ -1131,6 +1162,19 @@
             data.event.lngLat.lng,
             data.segment + 1,
         );
+        const insertedWaypoint = createWaypointFromTap(data.event.lngLat.lat, data.event.lngLat.lng, {
+            name: getWaypointCoordinateName(data.event.lngLat.lat, data.event.lngLat.lng),
+        });
+        insertedWaypoint.id = cryptoRandomString({ length: 15 });
+
+        const waypoints = [...($formData.expand!.waypoints_via_trail ?? [])];
+        waypoints.splice(data.segment + 1, 0, insertedWaypoint);
+        for (let i = 0; i < waypoints.length; i++) {
+            waypoints[i].connectionMode =
+                i === 0 ? undefined : waypoints[i].connectionMode ?? "snap";
+        }
+        $formData.expand!.waypoints_via_trail = waypoints;
+        syncWaypointIconsWithRoutingRole();
         const markerText = startAnchorLoading(anchor);
         updateFollowingAnchors(data.segment);
 

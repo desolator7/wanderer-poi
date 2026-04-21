@@ -467,5 +467,6 @@
   "welcome_to": "Bienvenue sur",
   "width": "Largeur",
   "wrong-username-or-password": "Nom d'utilisateur ou mot de passe incorrect",
-  "you-can": "Vous pouvez"
+  "you-can": "Vous pouvez",
+  "quick-add-waypoint": "Quick add"
 }

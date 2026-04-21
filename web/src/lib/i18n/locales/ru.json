@@ -466,5 +466,6 @@
   "welcome_to": "Добро пожаловать в",
   "width": "Ширина",
   "wrong-username-or-password": "Неверный логин или пароль",
-  "you-can": "Вы можете"
+  "you-can": "Вы можете",
+  "quick-add-waypoint": "Quick add"
 }
