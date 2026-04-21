@@ -364,11 +364,18 @@ export function createMarkerFromPoi(
         {
             id: poi.id,
             icon: `fa fa-${normalizePoiIcon(icon)}`,
+            width: 9,
             backgroundColor: poi.public ? "bg-primary" : "bg-gray-700",
             fontColor: color ?? "white",
+            style: "shadow-md",
         },
         {},
     ).setLngLat([poi.lon, poi.lat]);
+
+    const clickHitArea = document.createElement("span");
+    clickHitArea.className =
+        "absolute -inset-2 rounded-full bg-transparent";
+    marker.getElement().appendChild(clickHitArea);
 
     const label = document.createElement("span");
     label.className =

@@ -80,6 +80,7 @@
     import { Poi } from "$lib/models/poi";
     import {
         searchLocationReverse,
+        searchLocationReverseFeature,
         searchLocations,
     } from "$lib/stores/search_store.js";
     import { tags_index } from "$lib/stores/tag_store.js";
@@ -469,6 +470,7 @@
             $formData.expand!.waypoints_via_trail = [];
         }
         $formData.expand!.waypoints_via_trail = $formData.expand!.waypoints_via_trail;
+        syncWaypointIconsWithRoutingRole();
 
         void recalculateRouteFromWaypoints({ showSuccessToast: false });
     }
@@ -486,6 +488,7 @@
 
         const [movedWaypoint] = waypoints.splice(fromIndex, 1);
         waypoints.splice(toIndex, 0, movedWaypoint);
+        syncWaypointIconsWithRoutingRole();
         $formData.expand!.waypoints_via_trail = [...waypoints];
 
         if (waypoints.length > 1) {
@@ -692,7 +695,7 @@
                 (
                     e.originalEvent.target as HTMLElement
                 ).tagName.toLowerCase() !== "canvas"
-            ) {
+                ) {
                 return;
             }
             await addWaypointFromTap(e.lngLat.lat, e.lngLat.lng);
