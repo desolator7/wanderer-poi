@@ -804,6 +804,12 @@
                 }
             };
             marker.getElement().addEventListener("click", handlePoiMarkerClick);
+            marker
+                .getElement()
+                .addEventListener("touchstart", handlePoiMarkerClick, {
+                    passive: false,
+                });
+
             poiMarkers.push(marker);
         }
         updatePoiLabelVisibility();
