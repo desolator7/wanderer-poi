@@ -737,11 +737,12 @@
         }
 
         hideWaypoints();
-        for (const waypoint of waypoints) {
+        for (const [index, waypoint] of waypoints.entries()) {
             if (!markers.find((m) => m._element.id == waypoint.id)) {
                 const marker = createMarkerFromWaypoint(
                     waypoint,
                     onmarkerdragend,
+                    index + 1,
                 );
                 marker.addTo(map);
                 markers.push(marker);
