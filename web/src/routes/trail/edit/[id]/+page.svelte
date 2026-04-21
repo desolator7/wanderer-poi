@@ -490,20 +490,13 @@
         $formData.expand!.waypoints_via_trail = [...waypoints];
 
         if (waypoints.length > 1) {
-            await recalculateRouteFromWaypoints();
+            await recalculateRouteFromWaypoints({ showSuccessToast: false });
         }
     }
 
     async function recalculateRouteFromWaypoints(options?: { showSuccessToast?: boolean }) {
         const waypoints = $formData.expand!.waypoints_via_trail ?? [];
         if (waypoints.length < 2) {
-            if (options?.showSuccessToast !== false) {
-                show_toast({
-                    text: "Please add at least two waypoints",
-                    icon: "warning",
-                    type: "warning",
-                });
-            }
             return;
         }
 
@@ -1636,9 +1629,7 @@
             bind:includeOwn={includeOwnPois}
             title={$_("poi-routing-panel-title")}
         ></PoiFilterPanel>
-        <p class="text-sm text-gray-500">
-            While editing the route, click any visible POI on the map to use it as a via point.
-        </p>
+        <p class="text-sm text-gray-500">{$_("poi-routing-panel-hint")}</p>
         <input
             type="file"
             id="waypoint-photo-input"
