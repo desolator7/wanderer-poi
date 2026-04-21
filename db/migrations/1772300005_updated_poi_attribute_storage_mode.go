@@ -1,71 +1,72 @@
 package migrations
 
 import (
-	"encoding/json"
-
 	"github.com/pocketbase/pocketbase/core"
 	m "github.com/pocketbase/pocketbase/migrations"
 )
 
 func init() {
 	m.Register(func(app core.App) error {
-		updates := map[string]string{
-			"poi_attributes": `{
-				"fields": [
-					{
-						"hidden": false,
-						"id": "p0iatr_valst01",
-						"maxSelect": 1,
-						"name": "value_storage",
-						"presentable": false,
-						"required": true,
-						"system": false,
-						"type": "select",
-						"values": ["public", "private"]
-					},
-					{
-						"hidden": false,
-						"id": "p0iatr_pubwr01",
-						"maxSelect": 1,
-						"name": "public_write_access",
-						"presentable": false,
-						"required": true,
-						"system": false,
-						"type": "select",
-						"values": ["all", "admin"]
-					}
-				]
-			}`,
-			"pois": `{
-				"fields": [
-					{
-						"hidden": false,
-						"id": "p0ipoi_patt001",
-						"maxSize": 2000000,
-						"name": "private_attributes",
-						"presentable": false,
-						"required": false,
-						"system": false,
-						"type": "json"
-					}
-				]
-			}`,
+		attributeCollection, err := app.FindCollectionByNameOrId("poi_attributes")
+		if err != nil {
+			return err
 		}
 
-		for name, jsonData := range updates {
-			collection, err := app.FindCollectionByNameOrId(name)
-			if err != nil {
-				return err
-			}
-			if err := json.Unmarshal([]byte(jsonData), &collection); err != nil {
-				return err
-			}
-			if err := app.Save(collection); err != nil {
-				return err
-			}
+		if err := attributeCollection.Fields.AddMarshaledJSONAt(6, []byte(`{
+			"hidden": false,
+			"id": "p0iatr_valst01",
+			"maxSelect": 1,
+			"name": "value_storage",
+			"presentable": false,
+			"required": true,
+			"system": false,
+			"type": "select",
+			"values": ["public", "private"]
+		}`)); err != nil {
+			return err
 		}
 
-		poiAttributes, err := app.FindRecordsByFilter("poi_attributes", "", "", 0, 0)
+		if err := attributeCollection.Fields.AddMarshaledJSONAt(7, []byte(`{
+			"hidden": false,
+			"id": "p0iatr_pubwr01",
+			"maxSelect": 1,
+			"name": "public_write_access",
+			"presentable": false,
+			"required": true,
+			"system": false,
+			"type": "select",
+			"values": ["all", "admin"]
+		}`)); err != nil {
+			return err
+		}
+
+		if err := app.Save(attributeCollection); err != nil {
+			return err
+		}
+
+		poiCollection, err := app.FindCollectionByNameOrId("pois")
+		if err != nil {
+			return err
+		}
+
+		if err := poiCollection.Fields.AddMarshaledJSONAt(10, []byte(`{
+			"hidden": false,
+			"id": "p0ipoi_patt001",
+			"maxSize": 2000000,
+			"name": "private_attributes",
+			"presentable": false,
+			"required": false,
+			"system": false,
+			"type": "json"
+		}`)); err != nil {
+			return err
+		}
+
+		if err := app.Save(poiCollection); err != nil {
+			return err
+		}
+
+		poiAttributes, err := app.FindRecordsByFilter("poi_attributes", "", "", -1, 0)
 		if err != nil {
 			return err
 		}
@@ -79,60 +80,25 @@ func init() {
 
 		return nil
 	}, func(app core.App) error {
-		updates := map[string]string{
-			"poi_attributes": `{
-				"fields": [
-					{
-						"id": "p0iatr_valst01",
-						"name": "value_storage",
-						"type": "select",
-						"system": false,
-						"hidden": false,
-						"presentable": false,
-						"required": false,
-						"maxSelect": 1,
-						"values": []
-					},
-					{
-						"id": "p0iatr_pubwr01",
-						"name": "public_write_access",
-						"type": "select",
-						"system": false,
-						"hidden": false,
-						"presentable": false,
-						"required": false,
-						"maxSelect": 1,
-						"values": []
-					}
-				]
-			}`,
-			"pois": `{
-				"fields": [
-					{
-						"id": "p0ipoi_patt001",
-						"name": "private_attributes",
-						"type": "json",
-						"system": false,
-						"hidden": false,
-						"presentable": false,
-						"required": false,
-						"maxSize": 1
-					}
-				]
-			}`,
+		attributeCollection, err := app.FindCollectionByNameOrId("poi_attributes")
+		if err != nil {
+			return err
 		}
-		for name, jsonData := range updates {
-			collection, err := app.FindCollectionByNameOrId(name)
-			if err != nil {
-				return err
-			}
-			if err := json.Unmarshal([]byte(jsonData), &collection); err != nil {
-				return err
-			}
-			if err := app.Save(collection); err != nil {
-				return err
-			}
+
+		attributeCollection.Fields.RemoveById("p0iatr_valst01")
+		attributeCollection.Fields.RemoveById("p0iatr_pubwr01")
+
+		if err := app.Save(attributeCollection); err != nil {
+			return err
 		}
-		return nil
+
+		poiCollection, err := app.FindCollectionByNameOrId("pois")
+		if err != nil {
+			return err
+		}
+
+		poiCollection.Fields.RemoveById("p0ipoi_patt001")
+
+		return app.Save(poiCollection)
 	})
 }
