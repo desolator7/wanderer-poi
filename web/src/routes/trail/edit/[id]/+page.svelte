@@ -531,6 +531,18 @@
             return;
         }
 
+        if (waypointConnectionMode === "original-kml" && importedOriginalRoute) {
+            clearAnchors();
+            clearUndoRedoStack();
+            const clonedOriginalRoute = GPX.parse(importedOriginalRoute.toString());
+            if (clonedOriginalRoute instanceof Error) {
+                return;
+            }
+            setRoute(clonedOriginalRoute);
+            updateTrailWithRouteData();
+            return;
+        }
+
         clearRoute();
         clearAnchors();
         clearUndoRedoStack();
@@ -1667,6 +1679,24 @@
         <h3 class="text-xl font-semibold">
             {$_("waypoints", { values: { n: 2 } })}
         </h3>
+        <Select
+            name="waypoint-connection-mode"
+            label="Waypoint-Verbindung"
+            bind:value={waypointConnectionMode}
+            items={[
+                { text: "An Straßennetz snappen", value: "snap" },
+                { text: "Luftlinie", value: "straight" },
+                {
+                    text: importedOriginalRoute
+                        ? "Ursprüngliche KML-Wege behalten"
+                        : "Ursprüngliche KML-Wege behalten (kein KML aktiv)",
+                    value: "original-kml",
+                },
+            ]}
+            onchange={() => {
+                void recalculateRouteFromWaypoints({ showSuccessToast: false });
+            }}
+        ></Select>
         <ul>
             {#each $formData.expand?.waypoints_via_trail ?? [] as waypoint, i}
                 <li
