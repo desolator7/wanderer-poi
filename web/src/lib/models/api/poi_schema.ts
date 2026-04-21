@@ -8,6 +8,10 @@ const PoiAttributeValueSchema = z.union([
     z.boolean(),
     z.null(),
 ]);
+const PoiPrivateAttributesSchema = z.record(
+    z.string(),
+    z.record(z.string(), PoiAttributeValueSchema),
+);
 
 const PoiIconSchema = z
     .string()
@@ -34,6 +38,7 @@ export const PoiCreateSchema = z.object({
     category: z.string().length(15),
     author: z.string().length(15),
     attributes: z.record(z.string(), PoiAttributeValueSchema).optional().default({}),
+    private_attributes: PoiPrivateAttributesSchema.optional().default({}),
 }) satisfies ZodType<Partial<Poi>>;
 
 export const PoiUpdateSchema = z.object({
@@ -47,4 +52,5 @@ export const PoiUpdateSchema = z.object({
     public: z.boolean().optional(),
     category: z.string().length(15).optional(),
     attributes: z.record(z.string(), PoiAttributeValueSchema).optional(),
+    private_attributes: PoiPrivateAttributesSchema.optional(),
 }) satisfies ZodType<Partial<Poi>>;

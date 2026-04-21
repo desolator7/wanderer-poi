@@ -6,6 +6,7 @@
     import type { Poi } from "$lib/models/poi";
     import type { PoiAttribute } from "$lib/models/poi_attribute";
     import type { Waypoint } from "$lib/models/waypoint";
+    import { currentUser } from "$lib/stores/user_store";
     import { theme } from "$lib/stores/theme_store";
     import { findStartAndEndPoints } from "$lib/util/geojson_util";
     import {
@@ -82,6 +83,9 @@
         ) => Promise<void> | void;
         caneditpoi?: (poi: Poi) => boolean;
     }
+
+    let user = $derived($currentUser);
+    let isAdmin = $derived(Boolean((user as any)?.collectionName?.includes("super")));
 
     let {
         trails = [],
@@ -780,6 +784,8 @@
                           onSave: async (attributes) => {
                               await onpoisave?.(poi, attributes);
                           },
+                          currentUserId: user?.id,
+                          isAdmin,
                       },
                   );
 
