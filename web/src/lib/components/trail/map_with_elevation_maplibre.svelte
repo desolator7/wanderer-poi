@@ -1147,6 +1147,7 @@
     #map {
         width: 100%;
         height: 100%;
+        touch-action: pan-x pan-y pinch-zoom;
     }
 
     :global(.maplibregl-popup-content) {

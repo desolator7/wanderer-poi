@@ -89,6 +89,7 @@ export function createMarkerFromWaypoint(waypoint: Waypoint, onDragEnd?: (marker
 
     const clickHitArea = document.createElement("span");
     clickHitArea.className = "absolute -inset-2 rounded-full bg-transparent";
+    clickHitArea.style.touchAction = "pan-x pan-y pinch-zoom";
     marker.getElement().appendChild(clickHitArea);
 
     if (onDragEnd) {
@@ -381,6 +382,7 @@ export function createMarkerFromPoi(
     const clickHitArea = document.createElement("span");
     clickHitArea.className =
         "absolute -inset-2 rounded-full bg-transparent";
+    clickHitArea.style.touchAction = "pan-x pan-y pinch-zoom";
     marker.getElement().appendChild(clickHitArea);
 
     const label = document.createElement("span");
