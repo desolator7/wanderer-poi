@@ -737,24 +737,16 @@
         }
 
         hideWaypoints();
+        markers = [];
         for (const [index, waypoint] of waypoints.entries()) {
-            if (!markers.find((m) => m._element.id == waypoint.id)) {
-                const marker = createMarkerFromWaypoint(
-                    waypoint,
-                    onmarkerdragend,
-                    index + 1,
-                );
-                marker.addTo(map);
-                markers.push(marker);
-            }
+            const marker = createMarkerFromWaypoint(
+                waypoint,
+                onmarkerdragend,
+                index + 1,
+            );
+            marker.addTo(map);
+            markers.push(marker);
         }
-        markers = markers.filter((marker) => {
-            if (!waypoints.find((w) => w.id == marker._element.id)) {
-                marker.remove();
-                return false;
-            }
-            return true;
-        });
     }
 
     function hideWaypoints() {
