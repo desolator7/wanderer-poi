@@ -10,6 +10,8 @@
     import Datepicker from "../base/datepicker.svelte";
     import { Poi } from "$lib/models/poi";
     import { defaultPoiIcon, poiIconOptions } from "$lib/util/icon_util";
+    import { currentUser } from "$lib/stores/user_store";
+    import { canEditPoiAttributeValue } from "$lib/util/poi_util";
 
     interface Props {
         poi?: Poi;
@@ -27,6 +29,8 @@
 
     let modal: Modal;
     let saving = $state(false);
+    let user = $derived($currentUser);
+    let isAdmin = $derived(Boolean((user as any)?.collectionName?.includes("super")));
 
     function clonePoi(source?: Poi) {
         if (source) {
@@ -76,6 +80,14 @@
         }
         draft.attributes = nextAttributes;
     });
+
+
+    function isAttributeEditable(definition: PoiAttribute) {
+        return canEditPoiAttributeValue(definition, {
+            currentUserId: user?.id,
+            isAdmin,
+        });
+    }
 
     export function openModal() {
         draft = clonePoi(poi);
@@ -187,6 +199,7 @@
                             <Toggle
                                 value={draft.attributes?.[definition.key] === true}
                                 label={definition.name}
+                                disabled={!isAttributeEditable(definition)}
                                 onchange={(value) =>
                                     (draft.attributes = {
                                         ...(draft.attributes ?? {}),
@@ -198,6 +211,7 @@
                                 value={typeof draft.attributes?.[definition.key] === "string"
                                     ? draft.attributes?.[definition.key]
                                     : ""}
+                                disabled={!isAttributeEditable(definition)}
                                 label={definition.name}
                                 onchange={(event) =>
                                     (draft.attributes = {
@@ -211,6 +225,7 @@
                                 value={typeof draft.attributes?.[definition.key] === "string"
                                     ? draft.attributes?.[definition.key]
                                     : ""}
+                                disabled={!isAttributeEditable(definition)}
                                 label={definition.name}
                                 onchange={(event) =>
                                     (draft.attributes = {

@@ -514,5 +514,10 @@
   "poi-routing-panel-title": "POIs for map and routing",
   "via": "Via",
   "goal": "Goal",
-  "quick-add-waypoint": "Quick add"
+  "quick-add-waypoint": "Quick add",
+  "value-storage": "Value storage",
+  "public-write-access": "Public value editing",
+  "all-users": "All users",
+  "admins-only": "Admins only",
+  "public-admin-only": "Public (admins only)"
 }

@@ -16,6 +16,7 @@ export class Poi {
     category: string;
     author: string;
     attributes: Record<string, PoiAttributeValue>;
+    private_attributes?: Record<string, Record<string, PoiAttributeValue>>;
     marker?: M.Marker;
     created?: string;
     updated?: string;
@@ -37,6 +38,7 @@ export class Poi {
             public?: boolean;
             author?: string;
             attributes?: Record<string, PoiAttributeValue>;
+            private_attributes?: Record<string, Record<string, PoiAttributeValue>>;
             created?: string;
             updated?: string;
             expand?: {
@@ -56,6 +58,7 @@ export class Poi {
         this.category = params.category;
         this.author = params.author ?? "000000000000000";
         this.attributes = params.attributes ?? {};
+        this.private_attributes = params.private_attributes ?? {};
         this.created = params.created;
         this.updated = params.updated;
         this.expand = params.expand;

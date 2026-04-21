@@ -10,6 +10,8 @@ export const PoiAttributeCreateSchema = z.object({
     required: z.boolean().optional().default(false),
     primary: z.boolean().optional().default(false),
     author: z.string().length(15),
+    value_storage: z.enum(["public", "private"]).optional().default("public"),
+    public_write_access: z.enum(["all", "admin"]).optional().default("all"),
 }) satisfies ZodType<Partial<PoiAttribute>>;
 
 export const PoiAttributeUpdateSchema = z.object({
@@ -19,4 +21,6 @@ export const PoiAttributeUpdateSchema = z.object({
     category: z.string().length(15).optional(),
     required: z.boolean().optional(),
     primary: z.boolean().optional(),
+    value_storage: z.enum(["public", "private"]).optional(),
+    public_write_access: z.enum(["all", "admin"]).optional(),
 }) satisfies ZodType<Partial<PoiAttribute>>;

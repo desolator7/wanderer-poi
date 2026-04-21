@@ -1,6 +1,8 @@
 import type { PoiCategory } from "./poi_category";
 
 export type PoiAttributeType = "string" | "boolean" | "date";
+export type PoiAttributeValueStorage = "public" | "private";
+export type PoiAttributePublicWriteAccess = "all" | "admin";
 export type PoiAttributeValue = string | boolean | null;
 
 export class PoiAttribute {
@@ -12,6 +14,8 @@ export class PoiAttribute {
     required: boolean;
     primary: boolean;
     author: string;
+    value_storage: PoiAttributeValueStorage;
+    public_write_access: PoiAttributePublicWriteAccess;
     created?: string;
     updated?: string;
     expand?: {
@@ -28,6 +32,8 @@ export class PoiAttribute {
             required?: boolean;
             primary?: boolean;
             author?: string;
+            value_storage?: PoiAttributeValueStorage;
+            public_write_access?: PoiAttributePublicWriteAccess;
             created?: string;
             updated?: string;
             expand?: {
@@ -43,6 +49,8 @@ export class PoiAttribute {
         this.required = params?.required ?? false;
         this.primary = params?.primary ?? false;
         this.author = params?.author ?? "000000000000000";
+        this.value_storage = params?.value_storage ?? "public";
+        this.public_write_access = params?.public_write_access ?? "all";
         this.created = params?.created;
         this.updated = params?.updated;
         this.expand = params?.expand;
