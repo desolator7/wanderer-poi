@@ -40,6 +40,9 @@ export async function PUT(event: RequestEvent) {
         if (safeData.type !== "boolean") {
             safeData.primary = false;
         }
+        if (safeData.value_storage === "private") {
+            safeData.public_write_access = "all";
+        }
 
         const r = await event.locals.pb
             .collection("poi_attributes")
