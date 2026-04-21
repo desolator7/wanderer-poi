@@ -119,6 +119,24 @@ export function coercePoiAttributes(
     return result;
 }
 
+
+export function canEditPoiAttributeValue(
+    definition: Pick<PoiAttribute, "value_storage" | "public_write_access">,
+    options?: {
+        currentUserId?: string;
+        isAdmin?: boolean;
+    },
+) {
+    if (definition.value_storage === "private") {
+        return Boolean(options?.currentUserId);
+    }
+
+    if (definition.public_write_access === "admin") {
+        return Boolean(options?.isAdmin);
+    }
+
+    return true;
+}
 export function getPoiAttributeDefinitionsForCategory(
     definitions: PoiAttribute[],
     categoryId?: string,

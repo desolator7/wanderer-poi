@@ -69,6 +69,9 @@
             if (attributeForm.type !== "boolean") {
                 attributeForm.primary = false;
             }
+            if (attributeForm.value_storage === "private") {
+                attributeForm.public_write_access = "all";
+            }
             if (primaryAttributeInCategory && attributeForm.primary) {
                 attributeForm.primary = false;
             }
@@ -243,6 +246,24 @@
                     { text: $_("date"), value: "date" },
                 ]}
             ></Select>
+            <Select
+                bind:value={attributeForm.value_storage}
+                label={$_("value-storage")}
+                items={[
+                    { text: $_("public"), value: "public" },
+                    { text: $_("private"), value: "private" },
+                ]}
+            ></Select>
+            {#if attributeForm.value_storage === "public"}
+                <Select
+                    bind:value={attributeForm.public_write_access}
+                    label={$_("public-write-access")}
+                    items={[
+                        { text: $_("all-users"), value: "all" },
+                        { text: $_("admins-only"), value: "admin" },
+                    ]}
+                ></Select>
+            {/if}
         </div>
         <div class="flex gap-4">
             {#if attributeForm.type === "boolean"}
@@ -279,7 +300,12 @@
                                 categories.find(
                                     (category) =>
                                         category.id === attribute.category,
-                                )?.name}{#if attribute.primary}
+                                )?.name} - {attribute.value_storage === "private"
+                                ? $_("private")
+                                : attribute.public_write_access === "admin"
+                                  ? $_("public-admin-only")
+                                  : $_("public")}
+                            {#if attribute.primary}
                                 - {$_("color-marker")}
                             {/if}
                         </p>

@@ -13,7 +13,7 @@ import { handleFromRecordWithIRI } from "./activitypub_util";
 import { getFileURL } from "./file_util";
 import { formatDistance, formatElevation, formatTimeHHMM } from "./format_util";
 import { icons, normalizePoiIcon } from "./icon_util";
-import { getPoiDisplayColor } from "./poi_util";
+import { canEditPoiAttributeValue, getPoiDisplayColor } from "./poi_util";
 
 export class FontawesomeMarker extends M.Marker {
     constructor(options: { icon: string, fontSize?: string, width?: number, backgroundColor?: string, fontColor?: string, style?: string, id?: string }, markerOptions?: M.MarkerOptions) {
@@ -411,6 +411,8 @@ export function createPopupFromPoi(
     options?: {
         editable?: boolean;
         onSave?: (attributes: Record<string, string | boolean | null>) => Promise<void> | void;
+        currentUserId?: string;
+        isAdmin?: boolean;
     },
 ) {
     const popup = new M.Popup({ offset: 25, maxWidth: "380px" });
@@ -465,8 +467,13 @@ export function createPopupFromPoi(
             label.appendChild(labelText);
 
             const currentValue = poi.attributes?.[definition.key];
+            const editable = Boolean(options?.editable) &&
+                canEditPoiAttributeValue(definition, {
+                    currentUserId: options?.currentUserId,
+                    isAdmin: options?.isAdmin,
+                });
 
-            if (options?.editable) {
+            if (editable) {
                 if (definition.type === "boolean") {
                     const input = document.createElement("input");
                     input.type = "checkbox";
@@ -502,13 +509,24 @@ export function createPopupFromPoi(
 
         content.appendChild(attributesWrapper);
 
-        if (options?.editable) {
+        if (options?.editable && attributeDefinitions.some((definition) =>
+            canEditPoiAttributeValue(definition, {
+                currentUserId: options?.currentUserId,
+                isAdmin: options?.isAdmin,
+            }),
+        )) {
             const saveButton = document.createElement("button");
             saveButton.className = "btn-primary w-full";
             saveButton.textContent = get(_)("save");
             saveButton.addEventListener("click", async () => {
                 const values: Record<string, string | boolean | null> = {};
                 for (const definition of attributeDefinitions) {
+                    if (!canEditPoiAttributeValue(definition, {
+                        currentUserId: options?.currentUserId,
+                        isAdmin: options?.isAdmin,
+                    })) {
+                        continue;
+                    }
                     const field = content.querySelector(
                         `[name="${definition.key}"]`,
                     ) as HTMLInputElement | null;

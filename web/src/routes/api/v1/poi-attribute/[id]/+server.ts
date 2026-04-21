@@ -47,6 +47,11 @@ export async function POST(event: RequestEvent) {
             safeData.primary = false;
         }
 
+        const nextStorage = safeData.value_storage ?? existing.value_storage ?? "public";
+        if (nextStorage === "private") {
+            safeData.public_write_access = "all";
+        }
+
         const r = await event.locals.pb
             .collection("poi_attributes")
             .update<PoiAttribute>(id, safeData);
