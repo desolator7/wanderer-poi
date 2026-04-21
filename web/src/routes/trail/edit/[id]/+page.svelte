@@ -185,6 +185,7 @@
     let mapWaypointPopup: M.Popup | null = $state(null);
     let pendingWaypointInsertIndex: number | null = null;
     let importedOriginalRoute: GPX | null = $state(null);
+    let importedOriginalSegments: GPXWaypoint[][] = $state([]);
 
     let savedAtLeastOnce = $state(false);
 
@@ -403,20 +404,29 @@
                     parsedOriginalRoute instanceof Error
                         ? null
                         : parsedOriginalRoute;
+                importedOriginalSegments =
+                    parsedOriginalRoute instanceof Error
+                        ? []
+                        : buildOriginalSegmentsFromGPX(parsedOriginalRoute);
             } else {
                 importedOriginalRoute = null;
+                importedOriginalSegments = [];
             }
 
-            $formData.expand!.waypoints_via_trail =
-                (parseResult.trail.expand?.waypoints_via_trail ?? []).map(
-                    (waypoint, index) => ({
-                        ...waypoint,
-                        connectionMode:
-                            index === 0
-                                ? waypoint.connectionMode
-                                : waypoint.connectionMode ?? "snap",
-                    }),
-                );
+            const importedRouteWaypoints = buildRouteWaypointsFromOriginalSegments(
+                importedOriginalSegments,
+            );
+            $formData.expand!.waypoints_via_trail = importedRouteWaypoints.length
+                ? importedRouteWaypoints
+                : (parseResult.trail.expand?.waypoints_via_trail ?? []).map(
+                      (waypoint, index) => ({
+                          ...waypoint,
+                          connectionMode:
+                              index === 0
+                                  ? waypoint.connectionMode
+                                  : waypoint.connectionMode ?? "snap",
+                      }),
+                  );
             syncWaypointIconsWithRoutingRole();
             updateTrailOnMap();
         } catch (e) {
@@ -441,6 +451,62 @@
             waypoint.marker?.remove();
         }
         $formData.expand!.waypoints_via_trail = [];
+    }
+
+    function buildOriginalSegmentsFromGPX(gpx: GPX | null): GPXWaypoint[][] {
+        if (!gpx) {
+            return [];
+        }
+        const segments: GPXWaypoint[][] = [];
+        for (const track of gpx.trk ?? []) {
+            for (const trkseg of track.trkseg ?? []) {
+                const points = trkseg.trkpt ?? [];
+                for (let i = 1; i < points.length; i++) {
+                    const start = points[i - 1];
+                    const end = points[i];
+                    segments.push([
+                        new GPXWaypoint({
+                            ...start,
+                            $: { lat: start.$.lat, lon: start.$.lon },
+                        }),
+                        new GPXWaypoint({
+                            ...end,
+                            $: { lat: end.$.lat, lon: end.$.lon },
+                        }),
+                    ]);
+                }
+            }
+        }
+        return segments;
+    }
+
+    function buildRouteWaypointsFromOriginalSegments(
+        segments: GPXWaypoint[][],
+    ): Waypoint[] {
+        if (!segments.length) {
+            return [];
+        }
+        const routeWaypoints: Waypoint[] = [];
+        const firstPoint = segments[0][0];
+        routeWaypoints.push(
+            new Waypoint(firstPoint.$.lat, firstPoint.$.lon, {
+                id: cryptoRandomString({ length: 15 }),
+                name: getWaypointCoordinateName(firstPoint.$.lat, firstPoint.$.lon),
+                icon: "play",
+            }),
+        );
+        for (let i = 0; i < segments.length; i++) {
+            const endPoint = segments[i][segments[i].length - 1];
+            routeWaypoints.push(
+                new Waypoint(endPoint.$.lat, endPoint.$.lon, {
+                    id: cryptoRandomString({ length: 15 }),
+                    name: getWaypointCoordinateName(endPoint.$.lat, endPoint.$.lon),
+                    icon: i === segments.length - 1 ? "flag-checkered" : "circle",
+                    connectionMode: "original-kml",
+                }),
+            );
+        }
+        return routeWaypoints;
     }
 
     function initRouteAnchors(gpx: GPX, addToMap: boolean = false) {
@@ -544,11 +610,6 @@
         }
 
         try {
-            const importedSegments =
-                importedOriginalRoute?.trk?.at(0)?.trkseg?.map(
-                    (segment) => segment.trkpt ?? [],
-                ) ?? [];
-
             for (let i = 1; i < waypoints.length; i++) {
                 const previousWaypoint = waypoints[i - 1];
                 const currentWaypoint = waypoints[i] as Waypoint & {
@@ -559,9 +620,9 @@
                 let routeWaypoints: GPXWaypoint[];
                 if (
                     connectionMode === "original-kml" &&
-                    importedSegments[i - 1]?.length
+                    importedOriginalSegments[i - 1]?.length
                 ) {
-                    routeWaypoints = importedSegments[i - 1].map(
+                    routeWaypoints = importedOriginalSegments[i - 1].map(
                         (point) =>
                             new GPXWaypoint({
                                 ...point,
