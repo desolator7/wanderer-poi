@@ -88,9 +88,13 @@
     import { getIconForLocation } from "$lib/util/icon_util.js";
     import {
         createAnchorMarker,
-        createEditTrailMapPopup,
         FontawesomeMarker,
     } from "$lib/util/maplibre_util";
+    import {
+        createWaypointFromTap,
+        getRoutingRoleByIndex,
+        getWaypointInsertIndexByNearestSegment,
+    } from "$lib/util/waypoint_routing";
     import EXIF from "$lib/vendor/exif-js/exif.js";
     import { validator } from "@felte/validator-zod";
     import cryptoRandomString from "crypto-random-string";
@@ -107,7 +111,6 @@
     let { data } = $props();
 
     let map: M.Map | undefined = $state();
-    let mapPopup: M.Popup | undefined;
     let mapTrail: Trail[] = $state([]);
     let lists = $state(untrack(() => data.lists));
 
@@ -459,15 +462,6 @@
         }
     }
 
-    function beforeWaypointModalOpen(lat?: number, lon?: number) {
-        if (!map) {
-            return;
-        }
-        const mapCenter = map.getCenter();
-        waypoint.set(new Waypoint(lat ?? mapCenter.lat, lon ?? mapCenter.lng));
-        waypointModal.openModal();
-    }
-
     function deleteWaypoint(index: number) {
         const wp = $formData.expand!.waypoints_via_trail?.splice(index, 1);
 
@@ -479,7 +473,7 @@
         // updateTrailOnMap();
     }
 
-    function moveWaypoint(fromIndex: number, toIndex: number) {
+    async function moveWaypoint(fromIndex: number, toIndex: number) {
         const waypoints = $formData.expand!.waypoints_via_trail ?? [];
         if (
             toIndex < 0 ||
@@ -493,6 +487,10 @@
         const [movedWaypoint] = waypoints.splice(fromIndex, 1);
         waypoints.splice(toIndex, 0, movedWaypoint);
         $formData.expand!.waypoints_via_trail = [...waypoints];
+
+        if (waypoints.length > 1) {
+            await recalculateRouteFromWaypoints();
+        }
     }
 
     async function recalculateRouteFromWaypoints() {
@@ -693,13 +691,7 @@
             ) {
                 return;
             }
-            mapPopup?.remove();
-
-            mapPopup = createEditTrailMapPopup(e.lngLat, () => {
-                mapPopup?.remove();
-                beforeWaypointModalOpen(e.lngLat.lat, e.lngLat.lng);
-            });
-            mapPopup.addTo(map!);
+            await addWaypointFromTap(e.lngLat.lat, e.lngLat.lng);
         } else {
             const anchorCount = valhallaStore.anchors.length;
             if (anchorCount == 0) {
@@ -711,6 +703,31 @@
             } else {
                 await addAnchorAndRecalculate(e.lngLat.lat, e.lngLat.lng);
             }
+        }
+    }
+
+    async function addWaypointFromTap(lat: number, lon: number) {
+        const existingWaypoints = $formData.expand!.waypoints_via_trail ?? [];
+        const insertedWaypoint = createWaypointFromTap(lat, lon);
+        insertedWaypoint.id = cryptoRandomString({ length: 15 });
+
+        const insertIndex = getWaypointInsertIndexByNearestSegment(
+            existingWaypoints.map((waypoint) => ({
+                lat: waypoint.lat,
+                lon: waypoint.lon,
+            })),
+            { lat, lon },
+        );
+
+        const updatedWaypoints = [...existingWaypoints];
+        updatedWaypoints.splice(insertIndex, 0, insertedWaypoint);
+        $formData.expand!.waypoints_via_trail = updatedWaypoints;
+
+        waypoint.set(insertedWaypoint);
+        waypointModal.openModal();
+
+        if (updatedWaypoints.length > 1) {
+            await recalculateRouteFromWaypoints();
         }
     }
 
@@ -1511,6 +1528,10 @@
                     </div>
                     <WaypointCard
                         {waypoint}
+                        routingRole={getRoutingRoleByIndex(
+                            i,
+                            $formData.expand?.waypoints_via_trail?.length ?? 0,
+                        )}
                         mode="edit"
                         onchange={(item) =>
                             handleWaypointMenuClick(waypoint, i, item)}
@@ -1518,12 +1539,6 @@
                 </li>
             {/each}
         </ul>
-        <button
-            class="btn-secondary"
-            type="button"
-            onclick={() => beforeWaypointModalOpen()}
-            ><i class="fa fa-plus mr-2"></i>{$_("add-waypoint")}</button
-        >
         <button
             class="btn-secondary"
             type="button"
@@ -1541,7 +1556,7 @@
             bind:selectedCategoryIds={selectedPoiCategoryIds}
             bind:includePublic={includePublicPois}
             bind:includeOwn={includeOwnPois}
-            title="POIs for map and routing"
+            title={$_("poi-routing-panel-title")}
         ></PoiFilterPanel>
         <p class="text-sm text-gray-500">
             While editing the route, click any visible POI on the map to use it as a via point.

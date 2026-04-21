@@ -14,9 +14,10 @@
         waypoint: Waypoint;
         mode?: "show" | "edit";
         onchange?: (item: DropdownItem) => void;
+        routingRole?: "start" | "via" | "goal";
     }
 
-    let { waypoint, mode = "show", onchange }: Props = $props();
+    let { waypoint, mode = "show", onchange, routingRole }: Props = $props();
 
     let gallery: PhotoGallery | undefined = $state();
 
@@ -93,9 +94,16 @@
             <h5>
                 <i class="fa fa-{waypoint.icon} mr-2"></i>{waypoint.name}
             </h5>
-            {#if mode == "edit"}
-                <Dropdown items={dropdownItems} {onchange}></Dropdown>
-            {/if}
+            <div class="flex items-center gap-2">
+                {#if routingRole}
+                    <span class="text-xs uppercase bg-slate-100 px-2 py-1 rounded text-slate-700"
+                        >{$_(routingRole)}</span
+                    >
+                {/if}
+                {#if mode == "edit"}
+                    <Dropdown items={dropdownItems} {onchange}></Dropdown>
+                {/if}
+            </div>
         </div>
 
         {#if waypoint.description}

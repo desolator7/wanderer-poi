@@ -510,5 +510,8 @@
   "wrong-username-or-password": "Falscher Nutzername oder falsches Passwort",
   "overwrite": "Überschreiben",
   "yes": "Ja",
-  "you-can": "Du kannst"
+  "you-can": "Du kannst",
+  "poi-routing-panel-title": "POIs für Karte und Routing",
+  "via": "Via",
+  "goal": "Ziel"
 }
