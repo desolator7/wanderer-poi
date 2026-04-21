@@ -44,7 +44,11 @@ export class FontawesomeMarker extends M.Marker {
     }
 }
 
-export function createMarkerFromWaypoint(waypoint: Waypoint, onDragEnd?: (marker: M.Marker, wpId?: string) => void): FontawesomeMarker {
+export function createMarkerFromWaypoint(
+    waypoint: Waypoint,
+    onDragEnd?: (marker: M.Marker, wpId?: string) => void,
+    order?: number,
+): FontawesomeMarker {
     const marker = new FontawesomeMarker({
         id: waypoint.id,
         icon: `fa fa-${waypoint.icon}`,
@@ -91,6 +95,13 @@ export function createMarkerFromWaypoint(waypoint: Waypoint, onDragEnd?: (marker
     clickHitArea.className = "absolute -inset-2 rounded-full bg-transparent";
     clickHitArea.style.touchAction = "pan-x pan-y pinch-zoom";
     marker.getElement().appendChild(clickHitArea);
+
+    if (order !== undefined) {
+        const orderElement = document.createElement("span");
+        orderElement.className = "absolute -right-1 -top-1 min-w-4 h-4 px-1 rounded-full bg-primary text-white text-[10px] leading-4 text-center border border-white pointer-events-none";
+        orderElement.textContent = String(order);
+        marker.getElement().appendChild(orderElement);
+    }
 
     if (onDragEnd) {
         marker.on("dragend", () => onDragEnd(marker, waypoint.id,));
