@@ -12,6 +12,7 @@
   "add-entry": "Add Entry",
   "add-to-list": "Manage lists",
   "add-waypoint": "Add Waypoint",
+  "add-waypoint-advanced": "Add waypoint (advanced)",
   "added-trail-to": "Added trail to",
   "added-trails-to": "Added trails to",
   "after": "After",
@@ -509,5 +510,9 @@
   "wrong-username-or-password": "Wrong username or password",
   "overwrite": "Overwrite",
   "yes": "Yes",
-  "you-can": "You can"
+  "you-can": "You can",
+  "poi-routing-panel-title": "POIs for map and routing",
+  "poi-routing-panel-hint": "While editing the route, click any visible POI on the map to add it as a via point.",
+  "via": "Via",
+  "goal": "Goal"
 }

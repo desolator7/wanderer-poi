@@ -785,7 +785,7 @@
                       },
                   );
 
-            marker.getElement().addEventListener("click", (event) => {
+            const handlePoiMarkerClick = (event: Event) => {
                 event.preventDefault();
                 event.stopPropagation();
                 if (onpoiclick) {
@@ -797,7 +797,13 @@
                 } else {
                     popup?.setLngLat([poi.lon, poi.lat]).addTo(map!);
                 }
-            });
+            };
+            marker.getElement().addEventListener("click", handlePoiMarkerClick);
+            marker
+                .getElement()
+                .addEventListener("touchstart", handlePoiMarkerClick, {
+                    passive: false,
+                });
 
             poiMarkers.push(marker);
         }

@@ -49,20 +49,29 @@ type Feature = {
 }
 
 type Address = {
-    amenity: string
-    road: string
-    neighbourhood: string
-    suburb: string
+    amenity?: string
+    road?: string
+    footway?: string
+    path?: string
+    track?: string
+    pedestrian?: string
+    cycleway?: string
+    bridleway?: string
+    house_number?: string
+    neighbourhood?: string
+    suburb?: string
+    forest?: string
+    quarter?: string
     city_district?: string
     city?: string
     town?: string
     hamlet?: string
     village?: string;
-    state: string
-    "ISO3166-2-lvl4": string
-    postcode: string
-    country: string
-    country_code: string
+    state?: string
+    "ISO3166-2-lvl4"?: string
+    postcode?: string
+    country?: string
+    country_code?: string
 }
 type Properties = {
     place_id: number
@@ -128,6 +137,14 @@ export async function searchLocations(q: string, limit?: number): Promise<Hits<L
 }
 
 export async function searchLocationReverse(lat: number, lon: number) {
+    const feature = await searchLocationReverseFeature(lat, lon);
+    if (feature?.properties.address) {
+        return getLocationDescription(feature.properties.address)
+    }
+    return ""
+}
+
+export async function searchLocationReverseFeature(lat: number, lon: number) {
     const nominatimURL = env.PUBLIC_NOMINATIM_URL ?? "https://nominatim.openstreetmap.org"
     const r = await fetch(`${nominatimURL}/reverse?lat=${lat}&lon=${lon}&format=geojson&addressdetails=1`, {
         method: "GET",
@@ -140,11 +157,7 @@ export async function searchLocationReverse(lat: number, lon: number) {
         throw new APIError(r.status, response.message, response.detail)
     }
     const response: NominatimResponse = await r.json();
-
-    if (response.features?.at(0)?.properties.address) {
-        return getLocationDescription(response.features[0].properties.address)
-    }
-    return ""
+    return response.features?.at(0)
 }
 
 function getLocationDescription(address: Address) {

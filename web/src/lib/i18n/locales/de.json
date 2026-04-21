@@ -12,6 +12,7 @@
   "add-entry": "Eintrag hinzufügen",
   "add-to-list": "Listen verwalten",
   "add-waypoint": "Wegpunkt hinzufügen",
+  "add-waypoint-advanced": "Erweitert hinzufügen",
   "added-trail-to": "Route hinzugefügt zu",
   "added-trails-to": "Routen hinzugefügt zu",
   "after": "Nach",
@@ -510,5 +511,9 @@
   "wrong-username-or-password": "Falscher Nutzername oder falsches Passwort",
   "overwrite": "Überschreiben",
   "yes": "Ja",
-  "you-can": "Du kannst"
+  "you-can": "Du kannst",
+  "poi-routing-panel-title": "POIs für Karte und Routing",
+  "poi-routing-panel-hint": "Während der Routenbearbeitung kannst du sichtbare POIs auf der Karte anklicken, um sie als Via-Punkt hinzuzufügen.",
+  "via": "Via",
+  "goal": "Ziel"
 }
