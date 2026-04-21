@@ -70,12 +70,7 @@ describe("trail editor integration", () => {
 
     it("hooks map tap directly to waypoint creation", () => {
         const source = readFileSync(trailEditorPath, "utf8");
-        expect(source).toContain("await addWaypointFromTap(e.lngLat.lat, e.lngLat.lng, {");
-    });
-
-    it("removes the manual route recalculation button", () => {
-        const source = readFileSync(trailEditorPath, "utf8");
-        expect(source).not.toContain("Recalculate route from waypoints");
+        expect(source).toContain("await addWaypointFromTap(e.lngLat.lat, e.lngLat.lng);");
     });
 });
 

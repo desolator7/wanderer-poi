@@ -112,8 +112,6 @@
     let { data } = $props();
 
     let map: M.Map | undefined = $state();
-    let waypointQuickEditPopup: M.Popup | undefined;
-    let waypointAddActionPopup: M.Popup | undefined;
     let mapTrail: Trail[] = $state([]);
     let lists = $state(untrack(() => data.lists));
 
@@ -494,7 +492,7 @@
         $formData.expand!.waypoints_via_trail = [...waypoints];
 
         if (waypoints.length > 1) {
-            await recalculateRouteFromWaypoints({ showSuccessToast: false });
+            await recalculateRouteFromWaypoints();
         }
     }
 
@@ -549,93 +547,6 @@
         return `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
     }
 
-    const routingRoleIcons: Record<"start" | "via" | "goal", string> = {
-        start: "play",
-        via: "location-dot",
-        goal: "flag-checkered",
-    };
-
-    function syncWaypointIconsWithRoutingRole() {
-        const waypoints = $formData.expand!.waypoints_via_trail ?? [];
-        const managedIcons = new Set(Object.values(routingRoleIcons));
-
-        for (let i = 0; i < waypoints.length; i++) {
-            const role = getRoutingRoleByIndex(i, waypoints.length);
-            if (!role) {
-                continue;
-            }
-            const currentIcon = waypoints[i].icon;
-            if (!currentIcon || managedIcons.has(currentIcon)) {
-                waypoints[i].icon = routingRoleIcons[role];
-            }
-        }
-    }
-
-    function distanceInMeters(
-        lat1: number,
-        lon1: number,
-        lat2: number,
-        lon2: number,
-    ): number {
-        const earthRadius = 6371000;
-        const toRad = (value: number) => (value * Math.PI) / 180;
-        const dLat = toRad(lat2 - lat1);
-        const dLon = toRad(lon2 - lon1);
-        const a =
-            Math.sin(dLat / 2) ** 2 +
-            Math.cos(toRad(lat1)) *
-                Math.cos(toRad(lat2)) *
-                Math.sin(dLon / 2) ** 2;
-        return 2 * earthRadius * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    }
-
-    async function getWaypointDefaultNameFromOSM(lat: number, lon: number): Promise<string> {
-        try {
-            const feature = await searchLocationReverseFeature(lat, lon);
-            const address = feature?.properties?.address;
-            const [featureLon, featureLat] = feature?.geometry?.coordinates ?? [];
-            const featureDistance =
-                typeof featureLat === "number" && typeof featureLon === "number"
-                    ? distanceInMeters(lat, lon, featureLat, featureLon)
-                    : Number.POSITIVE_INFINITY;
-
-            const roadLikeName =
-                address?.road ||
-                address?.footway ||
-                address?.path ||
-                address?.track ||
-                address?.pedestrian ||
-                address?.cycleway ||
-                address?.bridleway ||
-                feature?.properties?.name;
-
-            if (roadLikeName && featureDistance <= 20) {
-                const houseNumber = address?.house_number;
-                return houseNumber
-                    ? `${roadLikeName} ${houseNumber}`
-                    : roadLikeName;
-            }
-
-            const forestReference =
-                address?.forest ||
-                address?.hamlet ||
-                address?.village ||
-                address?.suburb ||
-                address?.town ||
-                address?.city;
-            if (roadLikeName && forestReference) {
-                return `${roadLikeName} (${forestReference})`;
-            }
-            if (forestReference) {
-                return `Waldweg bei ${forestReference}`;
-            }
-        } catch (e) {
-            console.warn("Failed to resolve OSM-based waypoint name", e);
-        }
-
-        return getWaypointCoordinateName(lat, lon);
-    }
-
     function saveWaypoint(savedWaypoint: Waypoint) {
         let editedWaypointIndex =
             $formData.expand!.waypoints_via_trail?.findIndex(
@@ -652,7 +563,6 @@
             ];
 
         }
-        syncWaypointIconsWithRoutingRole();
         void recalculateRouteFromWaypoints({ showSuccessToast: false });
     }
 
@@ -670,7 +580,6 @@
         editableWaypoint.name =
             editableWaypoint.name?.trim() ||
             getWaypointCoordinateName(position.lat, position.lng);
-        syncWaypointIconsWithRoutingRole();
         $formData.expand!.waypoints_via_trail = [...($formData.expand!.waypoints_via_trail ?? [])];
         void recalculateRouteFromWaypoints({ showSuccessToast: false });
     }
@@ -789,7 +698,7 @@
                 ) {
                 return;
             }
-            openWaypointAddActionPopup(e.lngLat.lat, e.lngLat.lng);
+            await addWaypointFromTap(e.lngLat.lat, e.lngLat.lng);
         } else {
             const anchorCount = valhallaStore.anchors.length;
             await addWaypointFromTap(e.lngLat.lat, e.lngLat.lng);
@@ -805,115 +714,10 @@
         }
     }
 
-    function openWaypointAddActionPopup(lat: number, lon: number) {
-        waypointAddActionPopup?.remove();
-
-        const popupContent = document.createElement("div");
-        popupContent.className = "flex flex-col gap-2 min-w-56";
-
-        const addButton = document.createElement("button");
-        addButton.className = "btn-secondary";
-        addButton.textContent = $_("add-waypoint");
-        addButton.addEventListener("click", async () => {
-            waypointAddActionPopup?.remove();
-            await addWaypointFromTap(lat, lon);
-        });
-        popupContent.appendChild(addButton);
-
-        const advancedButton = document.createElement("button");
-        advancedButton.className = "btn-secondary";
-        advancedButton.textContent = $_("add-waypoint-advanced");
-        advancedButton.addEventListener("click", async () => {
-            waypointAddActionPopup?.remove();
-            await addWaypointFromTap(lat, lon, { openAdvancedModal: true });
-        });
-        popupContent.appendChild(advancedButton);
-
-        const cancelButton = document.createElement("button");
-        cancelButton.className = "btn-text";
-        cancelButton.textContent = $_("cancel");
-        cancelButton.addEventListener("click", () => {
-            waypointAddActionPopup?.remove();
-        });
-        popupContent.appendChild(cancelButton);
-
-        waypointAddActionPopup = new M.Popup({
-            closeOnClick: true,
-            closeButton: false,
-        })
-            .setLngLat([lon, lat])
-            .setDOMContent(popupContent)
-            .addTo(map!);
-    }
-
-    function openOptionalWaypointQuickEditPopup(waypoint: Waypoint) {
-        waypointQuickEditPopup?.remove();
-
-        const popupContent = document.createElement("div");
-        popupContent.className = "space-y-2 text-sm min-w-56";
-
-        const nameInput = document.createElement("input");
-        nameInput.className = "input w-full";
-        nameInput.placeholder = $_("name");
-        nameInput.value = waypoint.name ?? "";
-        popupContent.appendChild(nameInput);
-
-        const descriptionInput = document.createElement("textarea");
-        descriptionInput.className = "input w-full min-h-16";
-        descriptionInput.placeholder = $_("description");
-        descriptionInput.value = waypoint.description ?? "";
-        popupContent.appendChild(descriptionInput);
-
-        const saveButton = document.createElement("button");
-        saveButton.className = "btn-secondary w-full";
-        saveButton.textContent = $_("save");
-        saveButton.addEventListener("click", () => {
-            const editableWaypointIndex =
-                $formData.expand!.waypoints_via_trail?.findIndex(
-                    (existingWaypoint) => existingWaypoint.id == waypoint.id,
-                ) ?? -1;
-            if (editableWaypointIndex < 0) {
-                return;
-            }
-
-            const updatedWaypoint =
-                $formData.expand!.waypoints_via_trail![editableWaypointIndex];
-            const trimmedName = nameInput.value.trim();
-            updatedWaypoint.name =
-                trimmedName ||
-                getWaypointCoordinateName(updatedWaypoint.lat, updatedWaypoint.lon);
-            updatedWaypoint.description = descriptionInput.value.trim();
-            $formData.expand!.waypoints_via_trail = [
-                ...($formData.expand!.waypoints_via_trail ?? []),
-            ];
-            waypointQuickEditPopup?.remove();
-            void recalculateRouteFromWaypoints({ showSuccessToast: false });
-        });
-        popupContent.appendChild(saveButton);
-
-        waypointQuickEditPopup = new M.Popup({
-            closeOnClick: true,
-            closeButton: false,
-        })
-            .setLngLat([waypoint.lon, waypoint.lat])
-            .setDOMContent(popupContent)
-            .addTo(map!);
-    }
-
-    async function addWaypointFromTap(
-        lat: number,
-        lon: number,
-        options: { openOptionalPopup?: boolean; openAdvancedModal?: boolean; preset?: Partial<Waypoint> } = {},
-    ) {
+    async function addWaypointFromTap(lat: number, lon: number) {
         const existingWaypoints = $formData.expand!.waypoints_via_trail ?? [];
-        const defaultName = await getWaypointDefaultNameFromOSM(lat, lon);
-        const insertedWaypoint = createWaypointFromTap(lat, lon, {
-            name: options.preset?.name || defaultName,
-            description: options.preset?.description,
-            icon: options.preset?.icon,
-        });
+        const insertedWaypoint = createWaypointFromTap(lat, lon);
         insertedWaypoint.id = cryptoRandomString({ length: 15 });
-        insertedWaypoint.name = insertedWaypoint.name?.trim() || defaultName;
 
         const insertIndex = getWaypointInsertIndexByNearestSegment(
             existingWaypoints.map((waypoint) => ({
@@ -926,18 +730,12 @@
         const updatedWaypoints = [...existingWaypoints];
         updatedWaypoints.splice(insertIndex, 0, insertedWaypoint);
         $formData.expand!.waypoints_via_trail = updatedWaypoints;
-        syncWaypointIconsWithRoutingRole();
 
-        if (options.openOptionalPopup) {
-            openOptionalWaypointQuickEditPopup(insertedWaypoint);
-        }
-        if (options.openAdvancedModal) {
-            waypoint.set(insertedWaypoint);
-            waypointModal.openModal();
-        }
+        waypoint.set(insertedWaypoint);
+        waypointModal.openModal();
 
         if (updatedWaypoints.length > 1) {
-            await recalculateRouteFromWaypoints({ showSuccessToast: false });
+            await recalculateRouteFromWaypoints();
         }
     }
 
