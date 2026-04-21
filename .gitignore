@@ -12,3 +12,4 @@ build*.sh
 start*.*
 
 data*/
+docker-compose.yml
