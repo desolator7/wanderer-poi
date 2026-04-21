@@ -184,6 +184,8 @@
     });
     let mapWaypointPopup: M.Popup | null = $state(null);
     let importedOriginalRoute: GPX | null = $state(null);
+    let waypointConnectionMode: "snap" | "straight" | "original-kml" =
+        $state("snap");
 
     let savedAtLeastOnce = $state(false);
 
