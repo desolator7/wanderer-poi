@@ -48,6 +48,8 @@ export function createMarkerFromWaypoint(waypoint: Waypoint, onDragEnd?: (marker
     const marker = new FontawesomeMarker({
         id: waypoint.id,
         icon: `fa fa-${waypoint.icon}`,
+        width: 9,
+        style: "shadow-md",
     }, {
         draggable: onDragEnd !== undefined,
         color: "#6b7280"
@@ -84,6 +86,10 @@ export function createMarkerFromWaypoint(waypoint: Waypoint, onDragEnd?: (marker
     marker
         .setLngLat([waypoint.lon, waypoint.lat])
         .setPopup(popup)
+
+    const clickHitArea = document.createElement("span");
+    clickHitArea.className = "absolute -inset-2 rounded-full bg-transparent";
+    marker.getElement().appendChild(clickHitArea);
 
     if (onDragEnd) {
         marker.on("dragend", () => onDragEnd(marker, waypoint.id,));

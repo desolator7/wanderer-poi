@@ -92,7 +92,7 @@
     <div class="basis-full">
         <div class="flex justify-between items-center mb-2">
             <h5>
-                <i class="fa fa-{waypoint.icon} mr-2"></i>{waypoint.name}
+                <i class="fa fa-{waypoint.icon} mr-2"></i>{waypoint.name || `${waypoint.lat.toFixed(5)}, ${waypoint.lon.toFixed(5)}`}
             </h5>
             <div class="flex items-center gap-2">
                 {#if routingRole}
