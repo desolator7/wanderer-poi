@@ -15,9 +15,14 @@ export function canEditAttributeValue(attribute: PoiAttribute, userId: string | 
 }
 
 export async function getPoiAttributeDefinitions(pb: PocketBase, categoryId: string) {
-    return await pb.collection("poi_attributes").getFullList<PoiAttribute>({
-        filter: `category=\"${categoryId}\"`,
-    });
+    try {
+        return await pb.collection("poi_attributes").getFullList<PoiAttribute>({
+            filter: `category=\"${categoryId}\"`,
+            requestKey: null,
+        });
+    } catch (_) {
+        return [];
+    }
 }
 
 export function applyPrivateAttributesForUser(
@@ -57,6 +62,13 @@ export function splitAttributeUpdates(
 
     if (!incomingAttributes) {
         return { attributes: nextPublic, private_attributes: nextPrivate };
+    }
+
+    if (!definitions.length) {
+        return {
+            attributes: { ...nextPublic, ...incomingAttributes },
+            private_attributes: nextPrivate,
+        };
     }
 
     for (const definition of definitions) {
