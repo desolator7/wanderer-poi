@@ -184,8 +184,6 @@
     });
     let mapWaypointPopup: M.Popup | null = $state(null);
     let importedOriginalRoute: GPX | null = $state(null);
-    let waypointConnectionMode: "snap" | "straight" | "original-kml" =
-        $state("snap");
 
     let savedAtLeastOnce = $state(false);
 
@@ -530,18 +528,6 @@
     async function recalculateRouteFromWaypoints(options?: { showSuccessToast?: boolean }) {
         const waypoints = $formData.expand!.waypoints_via_trail ?? [];
         if (waypoints.length < 2) {
-            return;
-        }
-
-        if (waypointConnectionMode === "original-kml" && importedOriginalRoute) {
-            clearAnchors();
-            clearUndoRedoStack();
-            const clonedOriginalRoute = GPX.parse(importedOriginalRoute.toString());
-            if (clonedOriginalRoute instanceof Error) {
-                return;
-            }
-            setRoute(clonedOriginalRoute);
-            updateTrailWithRouteData();
             return;
         }
 
@@ -1681,30 +1667,48 @@
         <h3 class="text-xl font-semibold">
             {$_("waypoints", { values: { n: 2 } })}
         </h3>
-        <Select
-            name="waypoint-connection-mode"
-            label="Waypoint-Verbindung"
-            bind:value={waypointConnectionMode}
-            items={[
-                { text: "An Straßennetz snappen", value: "snap" },
-                { text: "Luftlinie", value: "straight" },
-                {
-                    text: importedOriginalRoute
-                        ? "Ursprüngliche KML-Wege behalten"
-                        : "Ursprüngliche KML-Wege behalten (kein KML aktiv)",
-                    value: "original-kml",
-                },
-            ]}
-            onchange={() => {
-                void recalculateRouteFromWaypoints({ showSuccessToast: false });
-            }}
-        ></Select>
         <ul>
             {#each $formData.expand?.waypoints_via_trail ?? [] as waypoint, i}
                 <li
                     onmouseenter={() => openMarkerPopup(waypoint)}
                     onmouseleave={() => openMarkerPopup(waypoint)}
                 >
+                    <div class="flex items-center justify-between gap-2 mb-1">
+                        <span class="text-xs font-medium text-gray-500">
+                            Wegpunkt #{i + 1}
+                        </span>
+                        {#if i > 0}
+                            <div class="w-56 max-w-full">
+                                <Select
+                                    name={`waypoint-connection-mode-${waypoint.id ?? i}`}
+                                    label={`Verbindung ${i} → ${i + 1}`}
+                                    value={waypoint.connectionMode ?? "snap"}
+                                    items={[
+                                        { text: "An Straßennetz snappen", value: "snap" },
+                                        { text: "Luftlinie", value: "straight" },
+                                        {
+                                            text: importedOriginalRoute
+                                                ? "Ursprüngliche KML-Geometrie"
+                                                : "Ursprüngliche KML-Geometrie (nicht verfügbar)",
+                                            value: "original-kml",
+                                        },
+                                    ]}
+                                    onchange={(value) => {
+                                        if (value === "original-kml" && !importedOriginalRoute) {
+                                            return;
+                                        }
+                                        waypoint.connectionMode = value;
+                                        $formData.expand!.waypoints_via_trail = [
+                                            ...($formData.expand!.waypoints_via_trail ?? []),
+                                        ];
+                                        void recalculateRouteFromWaypoints({
+                                            showSuccessToast: false,
+                                        });
+                                    }}
+                                ></Select>
+                            </div>
+                        {/if}
+                    </div>
                     <div class="flex justify-end gap-2 mb-1">
                         <button
                             class="btn-icon"
@@ -1737,35 +1741,6 @@
                             ></i>
                         </button>
                     </div>
-                    {#if i > 0}
-                        <Select
-                            name={`waypoint-connection-mode-${waypoint.id ?? i}`}
-                            label={`Verbindung ab Wegpunkt #${i}`}
-                            value={waypoint.connectionMode ?? "snap"}
-                            items={[
-                                { text: "An Straßennetz snappen", value: "snap" },
-                                { text: "Luftlinie", value: "straight" },
-                                {
-                                    text: importedOriginalRoute
-                                        ? "Ursprüngliche KML-Geometrie"
-                                        : "Ursprüngliche KML-Geometrie (nicht verfügbar)",
-                                    value: "original-kml",
-                                },
-                            ]}
-                            onchange={(value) => {
-                                if (value === "original-kml" && !importedOriginalRoute) {
-                                    return;
-                                }
-                                waypoint.connectionMode = value;
-                                $formData.expand!.waypoints_via_trail = [
-                                    ...($formData.expand!.waypoints_via_trail ?? []),
-                                ];
-                                void recalculateRouteFromWaypoints({
-                                    showSuccessToast: false,
-                                });
-                            }}
-                        ></Select>
-                    {/if}
                     <WaypointCard
                         {waypoint}
                         routingRole={getRoutingRoleByIndex(
