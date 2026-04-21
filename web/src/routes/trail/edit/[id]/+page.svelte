@@ -101,8 +101,9 @@
     import cryptoRandomString from "crypto-random-string";
     import { createForm } from "felte";
     import * as M from "maplibre-gl";
-    import { onMount, tick, untrack } from "svelte";
+    import { onDestroy, onMount, tick, untrack } from "svelte";
     import { _ } from "svelte-i18n";
+    import { get } from "svelte/store";
     import { backInOut } from "svelte/easing";
     import { fly, slide } from "svelte/transition";
     import { z } from "zod";
@@ -181,6 +182,9 @@
         autoRouting: true,
         modeOfTransport: "pedestrian",
     });
+    let waypointConnectionMode = $state<"snap" | "straight" | "original-kml">("snap");
+    let mapWaypointPopup: M.Popup | null = $state(null);
+    let importedOriginalRoute: GPX | null = $state(null);
 
     let savedAtLeastOnce = $state(false);
 
@@ -393,7 +397,19 @@
             }
             setRoute(parseResult.gpx);
             initRouteAnchors(parseResult.gpx);
+            if (/\.(kml|kmz)$/i.test(selectedFile.name)) {
+                const parsedOriginalRoute = GPX.parse(parseResult.gpx.toString());
+                importedOriginalRoute =
+                    parsedOriginalRoute instanceof Error
+                        ? null
+                        : parsedOriginalRoute;
+            } else {
+                importedOriginalRoute = null;
+            }
 
+            $formData.expand!.waypoints_via_trail =
+                parseResult.trail.expand?.waypoints_via_trail ?? [];
+            syncWaypointIconsWithRoutingRole();
             updateTrailOnMap();
         } catch (e) {
             console.error(e);
@@ -502,6 +518,18 @@
             return;
         }
 
+        if (waypointConnectionMode === "original-kml" && importedOriginalRoute) {
+            clearAnchors();
+            clearUndoRedoStack();
+            const clonedOriginalRoute = GPX.parse(importedOriginalRoute.toString());
+            if (clonedOriginalRoute instanceof Error) {
+                return;
+            }
+            setRoute(clonedOriginalRoute);
+            updateTrailWithRouteData();
+            return;
+        }
+
         clearRoute();
         clearAnchors();
         clearUndoRedoStack();
@@ -512,6 +540,10 @@
         }
 
         try {
+            const effectiveRoutingOptions: RoutingOptions = {
+                ...routingOptions,
+                autoRouting: waypointConnectionMode === "snap",
+            };
             for (let i = 1; i < waypoints.length; i++) {
                 const previousWaypoint = waypoints[i - 1];
                 const currentWaypoint = waypoints[i];
@@ -520,7 +552,7 @@
                     previousWaypoint.lon,
                     currentWaypoint.lat,
                     currentWaypoint.lon,
-                    routingOptions,
+                    effectiveRoutingOptions,
                 );
                 insertIntoRoute(routeWaypoints);
             }
@@ -541,6 +573,87 @@
                 type: "error",
             });
         }
+    }
+
+    async function getWaypointNamingInfo(lat: number, lon: number) {
+        try {
+            const feature = await searchLocationReverseFeature(lat, lon);
+            const address = feature?.properties?.address;
+            const streetName =
+                address?.road ||
+                address?.footway ||
+                address?.path ||
+                address?.track ||
+                address?.pedestrian ||
+                address?.cycleway ||
+                address?.bridleway ||
+                "";
+            const fallback =
+                feature?.properties?.display_name ||
+                (await searchLocationReverse(lat, lon)) ||
+                getWaypointCoordinateName(lat, lon);
+
+            return { streetName, fallback };
+        } catch (e) {
+            return {
+                streetName: "",
+                fallback: getWaypointCoordinateName(lat, lon),
+            };
+        }
+    }
+
+    function closeWaypointActionPopup() {
+        mapWaypointPopup?.remove();
+        mapWaypointPopup = null;
+    }
+
+    function showWaypointActionPopup(
+        lnglat: M.LngLat,
+        options?: { presetName?: string },
+    ) {
+        if (!map) {
+            return;
+        }
+        closeWaypointActionPopup();
+
+        const content = document.createElement("div");
+        content.className = "p-3 flex flex-col gap-2 min-w-48";
+
+        const addButton = document.createElement("button");
+        addButton.className = "btn-secondary text-sm";
+        addButton.textContent = get(_)("add");
+        addButton.addEventListener("click", async () => {
+            await addWaypointFromTap(lnglat.lat, lnglat.lng, {
+                openEditor: false,
+                presetName: options?.presetName,
+            });
+            closeWaypointActionPopup();
+        });
+
+        const advancedButton = document.createElement("button");
+        advancedButton.className = "btn-primary text-sm";
+        advancedButton.textContent = get(_)("add-waypoint");
+        advancedButton.addEventListener("click", async () => {
+            await addWaypointFromTap(lnglat.lat, lnglat.lng, {
+                openEditor: true,
+                presetName: options?.presetName,
+            });
+            closeWaypointActionPopup();
+        });
+
+        const cancelButton = document.createElement("button");
+        cancelButton.className = "btn-secondary text-sm";
+        cancelButton.textContent = get(_)("cancel");
+        cancelButton.addEventListener("click", () => closeWaypointActionPopup());
+
+        content.appendChild(addButton);
+        content.appendChild(advancedButton);
+        content.appendChild(cancelButton);
+
+        mapWaypointPopup = new M.Popup({ closeOnClick: true, offset: 20 })
+            .setLngLat(lnglat)
+            .setDOMContent(content)
+            .addTo(map);
     }
 
     function getWaypointCoordinateName(lat: number, lon: number): string {
@@ -582,6 +695,15 @@
             getWaypointCoordinateName(position.lat, position.lng);
         $formData.expand!.waypoints_via_trail = [...($formData.expand!.waypoints_via_trail ?? [])];
         void recalculateRouteFromWaypoints({ showSuccessToast: false });
+    }
+
+    function syncWaypointIconsWithRoutingRole() {
+        const waypoints = $formData.expand!.waypoints_via_trail ?? [];
+        for (let i = 0; i < waypoints.length; i++) {
+            const role = getRoutingRoleByIndex(i, waypoints.length);
+            waypoints[i].icon = role === "start" ? "play" : role === "goal" ? "flag-checkered" : "circle";
+        }
+        $formData.expand!.waypoints_via_trail = [...waypoints];
     }
 
     function beforeSummitLogModalOpen() {
@@ -698,10 +820,12 @@
                 ) {
                 return;
             }
-            await addWaypointFromTap(e.lngLat.lat, e.lngLat.lng);
+            showWaypointActionPopup(e.lngLat);
         } else {
             const anchorCount = valhallaStore.anchors.length;
-            await addWaypointFromTap(e.lngLat.lat, e.lngLat.lng);
+            await addWaypointFromTap(e.lngLat.lat, e.lngLat.lng, {
+                openEditor: false,
+            });
             if (anchorCount == 0) {
                 addAnchor(
                     e.lngLat.lat,
@@ -714,9 +838,25 @@
         }
     }
 
-    async function addWaypointFromTap(lat: number, lon: number) {
+    async function addWaypointFromTap(
+        lat: number,
+        lon: number,
+        options?: { openEditor?: boolean; presetName?: string },
+    ) {
         const existingWaypoints = $formData.expand!.waypoints_via_trail ?? [];
-        const insertedWaypoint = createWaypointFromTap(lat, lon);
+        const namingInfo = await getWaypointNamingInfo(lat, lon);
+        const waypointName =
+            options?.presetName?.trim() ||
+            namingInfo.streetName ||
+            namingInfo.fallback ||
+            getWaypointCoordinateName(lat, lon);
+        const insertedWaypoint = createWaypointFromTap(lat, lon, {
+            name: waypointName,
+            description:
+                namingInfo.streetName && namingInfo.fallback
+                    ? namingInfo.fallback
+                    : "",
+        });
         insertedWaypoint.id = cryptoRandomString({ length: 15 });
 
         const insertIndex = getWaypointInsertIndexByNearestSegment(
@@ -731,8 +871,10 @@
         updatedWaypoints.splice(insertIndex, 0, insertedWaypoint);
         $formData.expand!.waypoints_via_trail = updatedWaypoints;
 
-        waypoint.set(insertedWaypoint);
-        waypointModal.openModal();
+        if (options?.openEditor) {
+            waypoint.set(insertedWaypoint);
+            waypointModal.openModal();
+        }
 
         if (updatedWaypoints.length > 1) {
             await recalculateRouteFromWaypoints();
@@ -768,20 +910,9 @@
     }
 
     async function addPoiAsRoutePoint(poi: Poi) {
-        if (!drawingActive) {
-            startDrawing();
-        }
-
-        await addWaypointFromTap(poi.lat, poi.lon, {
-            preset: { name: poi.name },
+        showWaypointActionPopup(new M.LngLat(poi.lon, poi.lat), {
+            presetName: poi.name,
         });
-
-        if (!valhallaStore.anchors.length) {
-            addAnchor(poi.lat, poi.lon, valhallaStore.anchors.length);
-            return;
-        }
-
-        await addAnchorAndRecalculate(poi.lat, poi.lon);
     }
 
     function addAnchor(
@@ -1298,6 +1429,10 @@
         updateTrailWithRouteData();
     }
 
+    onDestroy(() => {
+        closeWaypointActionPopup();
+    });
+
 </script>
 
 <svelte:head>
@@ -1500,6 +1635,24 @@
         <h3 class="text-xl font-semibold">
             {$_("waypoints", { values: { n: 2 } })}
         </h3>
+        <Select
+            name="waypoint-connection-mode"
+            label="Waypoint-Verbindung"
+            bind:value={waypointConnectionMode}
+            items={[
+                { text: "An Straßennetz snappen", value: "snap" },
+                { text: "Luftlinie", value: "straight" },
+                {
+                    text: importedOriginalRoute
+                        ? "Ursprüngliche KML-Wege behalten"
+                        : "Ursprüngliche KML-Wege behalten (kein KML aktiv)",
+                    value: "original-kml",
+                },
+            ]}
+            onchange={() => {
+                void recalculateRouteFromWaypoints({ showSuccessToast: false });
+            }}
+        ></Select>
         <ul>
             {#each $formData.expand?.waypoints_via_trail ?? [] as waypoint, i}
                 <li

@@ -132,6 +132,7 @@
     let hoveringTrail: boolean = false;
 
     let mapLoaded: boolean = false;
+    let suppressClickUntil = 0;
 
     const trailColors = [
         "#3549bb", // blue
@@ -494,6 +495,10 @@
             onsegmentdragend?.({ segment: draggingSegment!, event: end });
         }
         draggingSegment = null;
+    }
+
+    function suppressNextClick(durationMs: number = 450) {
+        suppressClickUntil = Date.now() + durationMs;
     }
 
     function addCaretLayer(geojson: GeoJSON) {
@@ -1041,7 +1046,16 @@
             onzoom?.(e.target);
         });
 
+        map.on("dragstart", () => suppressNextClick());
+        map.on("zoomstart", () => suppressNextClick(550));
+        map.on("rotatestart", () => suppressNextClick(550));
+        map.on("pitchstart", () => suppressNextClick(550));
+        map.on("touchstart", () => suppressNextClick(550));
+
         map.on("click", (e) => {
+            if (Date.now() < suppressClickUntil) {
+                return;
+            }
             if (hoveringTrail && drawing) {
                 return;
             }
