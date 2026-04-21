@@ -463,14 +463,14 @@
     }
 
     function deleteWaypoint(index: number) {
-        const wp = $formData.expand!.waypoints_via_trail?.splice(index, 1);
+        $formData.expand!.waypoints_via_trail?.splice(index, 1);
 
         if (!$formData.expand!.waypoints_via_trail?.length) {
             $formData.expand!.waypoints_via_trail = [];
         }
         $formData.expand!.waypoints_via_trail = $formData.expand!.waypoints_via_trail;
 
-        // updateTrailOnMap();
+        void recalculateRouteFromWaypoints({ showSuccessToast: false });
     }
 
     async function moveWaypoint(fromIndex: number, toIndex: number) {
@@ -493,14 +493,9 @@
         }
     }
 
-    async function recalculateRouteFromWaypoints() {
+    async function recalculateRouteFromWaypoints(options?: { showSuccessToast?: boolean }) {
         const waypoints = $formData.expand!.waypoints_via_trail ?? [];
         if (waypoints.length < 2) {
-            show_toast({
-                text: "Please add at least two waypoints",
-                icon: "warning",
-                type: "warning",
-            });
             return;
         }
 
@@ -528,11 +523,13 @@
             }
             normalizeRouteTime();
             updateTrailWithRouteData();
-            show_toast({
-                text: "Route recalculated from waypoint order",
-                icon: "check",
-                type: "success",
-            });
+            if (options?.showSuccessToast !== false) {
+                show_toast({
+                    text: "Route recalculated from waypoint order",
+                    icon: "check",
+                    type: "success",
+                });
+            }
         } catch (e) {
             console.error(e);
             show_toast({
@@ -541,6 +538,10 @@
                 type: "error",
             });
         }
+    }
+
+    function getWaypointCoordinateName(lat: number, lon: number): string {
+        return `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
     }
 
     function saveWaypoint(savedWaypoint: Waypoint) {
@@ -558,8 +559,8 @@
                 savedWaypoint,
             ];
 
-            // updateTrailOnMap();
         }
+        void recalculateRouteFromWaypoints({ showSuccessToast: false });
     }
 
     function moveMarker(marker: M.Marker, wpId?: string) {
@@ -573,8 +574,11 @@
         }
         editableWaypoint.lat = position.lat;
         editableWaypoint.lon = position.lng;
+        editableWaypoint.name =
+            editableWaypoint.name?.trim() ||
+            getWaypointCoordinateName(position.lat, position.lng);
         $formData.expand!.waypoints_via_trail = [...($formData.expand!.waypoints_via_trail ?? [])];
-        // updateTrailOnMap();
+        void recalculateRouteFromWaypoints({ showSuccessToast: false });
     }
 
     function beforeSummitLogModalOpen() {
@@ -694,6 +698,7 @@
             await addWaypointFromTap(e.lngLat.lat, e.lngLat.lng);
         } else {
             const anchorCount = valhallaStore.anchors.length;
+            await addWaypointFromTap(e.lngLat.lat, e.lngLat.lng);
             if (anchorCount == 0) {
                 addAnchor(
                     e.lngLat.lat,
@@ -763,6 +768,10 @@
         if (!drawingActive) {
             startDrawing();
         }
+
+        await addWaypointFromTap(poi.lat, poi.lon, {
+            preset: { name: poi.name },
+        });
 
         if (!valhallaStore.anchors.length) {
             addAnchor(poi.lat, poi.lon, valhallaStore.anchors.length);
@@ -1545,12 +1554,6 @@
             onclick={() => openPhotoBrowser()}
             ><i class="fa fa-image mr-2"></i>{$_("from-photos")}</button
         >
-        <button
-            class="btn-secondary"
-            type="button"
-            onclick={() => recalculateRouteFromWaypoints()}
-            ><i class="fa fa-route mr-2"></i>Recalculate route from waypoints</button
-        >
         <PoiFilterPanel
             categories={data.poiCategories}
             bind:selectedCategoryIds={selectedPoiCategoryIds}
@@ -1558,9 +1561,7 @@
             bind:includeOwn={includeOwnPois}
             title={$_("poi-routing-panel-title")}
         ></PoiFilterPanel>
-        <p class="text-sm text-gray-500">
-            While editing the route, click any visible POI on the map to use it as a via point.
-        </p>
+        <p class="text-sm text-gray-500">{$_("poi-routing-panel-hint")}</p>
         <input
             type="file"
             id="waypoint-photo-input"
