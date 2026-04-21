@@ -479,6 +479,72 @@
         // updateTrailOnMap();
     }
 
+    function moveWaypoint(fromIndex: number, toIndex: number) {
+        const waypoints = $formData.expand!.waypoints_via_trail ?? [];
+        if (
+            toIndex < 0 ||
+            toIndex >= waypoints.length ||
+            fromIndex < 0 ||
+            fromIndex >= waypoints.length
+        ) {
+            return;
+        }
+
+        const [movedWaypoint] = waypoints.splice(fromIndex, 1);
+        waypoints.splice(toIndex, 0, movedWaypoint);
+        $formData.expand!.waypoints_via_trail = [...waypoints];
+    }
+
+    async function recalculateRouteFromWaypoints() {
+        const waypoints = $formData.expand!.waypoints_via_trail ?? [];
+        if (waypoints.length < 2) {
+            show_toast({
+                text: "Please add at least two waypoints",
+                icon: "warning",
+                type: "warning",
+            });
+            return;
+        }
+
+        clearRoute();
+        clearAnchors();
+        clearUndoRedoStack();
+
+        for (let i = 0; i < waypoints.length; i++) {
+            const waypoint = waypoints[i];
+            addAnchor(waypoint.lat, waypoint.lon, i);
+        }
+
+        try {
+            for (let i = 1; i < waypoints.length; i++) {
+                const previousWaypoint = waypoints[i - 1];
+                const currentWaypoint = waypoints[i];
+                const routeWaypoints = await calculateRouteBetween(
+                    previousWaypoint.lat,
+                    previousWaypoint.lon,
+                    currentWaypoint.lat,
+                    currentWaypoint.lon,
+                    routingOptions,
+                );
+                insertIntoRoute(routeWaypoints);
+            }
+            normalizeRouteTime();
+            updateTrailWithRouteData();
+            show_toast({
+                text: "Route recalculated from waypoint order",
+                icon: "check",
+                type: "success",
+            });
+        } catch (e) {
+            console.error(e);
+            show_toast({
+                text: "Error calculating route",
+                icon: "close",
+                type: "error",
+            });
+        }
+    }
+
     function saveWaypoint(savedWaypoint: Waypoint) {
         let editedWaypointIndex =
             $formData.expand!.waypoints_via_trail?.findIndex(
@@ -1411,6 +1477,38 @@
                     onmouseenter={() => openMarkerPopup(waypoint)}
                     onmouseleave={() => openMarkerPopup(waypoint)}
                 >
+                    <div class="flex justify-end gap-2 mb-1">
+                        <button
+                            class="btn-icon"
+                            type="button"
+                            aria-label="Move waypoint up"
+                            disabled={i === 0}
+                            onclick={() => moveWaypoint(i, i - 1)}
+                        >
+                            <i
+                                class="fa fa-arrow-up"
+                                class:text-gray-500={i === 0}
+                            ></i>
+                        </button>
+                        <button
+                            class="btn-icon"
+                            type="button"
+                            aria-label="Move waypoint down"
+                            disabled={i ===
+                                ($formData.expand?.waypoints_via_trail?.length ??
+                                    0) -
+                                    1}
+                            onclick={() => moveWaypoint(i, i + 1)}
+                        >
+                            <i
+                                class="fa fa-arrow-down"
+                                class:text-gray-500={i ===
+                                    ($formData.expand?.waypoints_via_trail
+                                        ?.length ?? 0) -
+                                        1}
+                            ></i>
+                        </button>
+                    </div>
                     <WaypointCard
                         {waypoint}
                         mode="edit"
@@ -1431,6 +1529,12 @@
             type="button"
             onclick={() => openPhotoBrowser()}
             ><i class="fa fa-image mr-2"></i>{$_("from-photos")}</button
+        >
+        <button
+            class="btn-secondary"
+            type="button"
+            onclick={() => recalculateRouteFromWaypoints()}
+            ><i class="fa fa-route mr-2"></i>Recalculate route from waypoints</button
         >
         <PoiFilterPanel
             categories={data.poiCategories}
