@@ -511,8 +511,7 @@
   "overwrite": "Überschreiben",
   "yes": "Ja",
   "you-can": "Du kannst",
-  "poi-routing-panel-title": "POIs für Karte & Routing",
-  "poi-routing-panel-hint": "Während der Routenbearbeitung kannst du sichtbare POIs auf der Karte anklicken, um sie als Via-Punkt hinzuzufügen.",
+  "poi-routing-panel-title": "POIs für Karte und Routing",
   "via": "Via",
   "goal": "Ziel"
 }

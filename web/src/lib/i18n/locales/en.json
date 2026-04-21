@@ -510,8 +510,7 @@
   "overwrite": "Overwrite",
   "yes": "Yes",
   "you-can": "You can",
-  "poi-routing-panel-title": "POIs for map & routing",
-  "poi-routing-panel-hint": "While editing the route, click any visible POI on the map to add it as a via point.",
+  "poi-routing-panel-title": "POIs for map and routing",
   "via": "Via",
   "goal": "Goal"
 }

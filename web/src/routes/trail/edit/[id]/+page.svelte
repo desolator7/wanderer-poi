@@ -111,7 +111,6 @@
     let { data } = $props();
 
     let map: M.Map | undefined = $state();
-    let waypointQuickEditPopup: M.Popup | undefined;
     let mapTrail: Trail[] = $state([]);
     let lists = $state(untrack(() => data.lists));
 
@@ -490,7 +489,7 @@
         $formData.expand!.waypoints_via_trail = [...waypoints];
 
         if (waypoints.length > 1) {
-            await recalculateRouteFromWaypoints({ showSuccessToast: false });
+            await recalculateRouteFromWaypoints();
         }
     }
 
@@ -696,9 +695,7 @@
             ) {
                 return;
             }
-            await addWaypointFromTap(e.lngLat.lat, e.lngLat.lng, {
-                openOptionalPopup: true,
-            });
+            await addWaypointFromTap(e.lngLat.lat, e.lngLat.lng);
         } else {
             const anchorCount = valhallaStore.anchors.length;
             await addWaypointFromTap(e.lngLat.lat, e.lngLat.lng);
@@ -714,74 +711,10 @@
         }
     }
 
-    function openOptionalWaypointQuickEditPopup(waypoint: Waypoint) {
-        waypointQuickEditPopup?.remove();
-
-        const popupContent = document.createElement("div");
-        popupContent.className = "space-y-2 text-sm min-w-56";
-
-        const nameInput = document.createElement("input");
-        nameInput.className = "input w-full";
-        nameInput.placeholder = $_("name");
-        nameInput.value = waypoint.name ?? "";
-        popupContent.appendChild(nameInput);
-
-        const descriptionInput = document.createElement("textarea");
-        descriptionInput.className = "input w-full min-h-16";
-        descriptionInput.placeholder = $_("description");
-        descriptionInput.value = waypoint.description ?? "";
-        popupContent.appendChild(descriptionInput);
-
-        const saveButton = document.createElement("button");
-        saveButton.className = "btn-secondary w-full";
-        saveButton.textContent = $_("save");
-        saveButton.addEventListener("click", () => {
-            const editableWaypointIndex =
-                $formData.expand!.waypoints_via_trail?.findIndex(
-                    (existingWaypoint) => existingWaypoint.id == waypoint.id,
-                ) ?? -1;
-            if (editableWaypointIndex < 0) {
-                return;
-            }
-
-            const updatedWaypoint =
-                $formData.expand!.waypoints_via_trail![editableWaypointIndex];
-            const trimmedName = nameInput.value.trim();
-            updatedWaypoint.name =
-                trimmedName ||
-                getWaypointCoordinateName(updatedWaypoint.lat, updatedWaypoint.lon);
-            updatedWaypoint.description = descriptionInput.value.trim();
-            $formData.expand!.waypoints_via_trail = [
-                ...($formData.expand!.waypoints_via_trail ?? []),
-            ];
-            waypointQuickEditPopup?.remove();
-            void recalculateRouteFromWaypoints({ showSuccessToast: false });
-        });
-        popupContent.appendChild(saveButton);
-
-        waypointQuickEditPopup = new M.Popup({
-            closeOnClick: true,
-            closeButton: false,
-        })
-            .setLngLat([waypoint.lon, waypoint.lat])
-            .setDOMContent(popupContent)
-            .addTo(map!);
-    }
-
-    async function addWaypointFromTap(
-        lat: number,
-        lon: number,
-        options: { openOptionalPopup?: boolean; preset?: Partial<Waypoint> } = {},
-    ) {
+    async function addWaypointFromTap(lat: number, lon: number) {
         const existingWaypoints = $formData.expand!.waypoints_via_trail ?? [];
-        const insertedWaypoint = createWaypointFromTap(lat, lon, {
-            name: options.preset?.name,
-            description: options.preset?.description,
-            icon: options.preset?.icon,
-        });
+        const insertedWaypoint = createWaypointFromTap(lat, lon);
         insertedWaypoint.id = cryptoRandomString({ length: 15 });
-        insertedWaypoint.name =
-            insertedWaypoint.name?.trim() || getWaypointCoordinateName(lat, lon);
 
         const insertIndex = getWaypointInsertIndexByNearestSegment(
             existingWaypoints.map((waypoint) => ({
@@ -795,12 +728,11 @@
         updatedWaypoints.splice(insertIndex, 0, insertedWaypoint);
         $formData.expand!.waypoints_via_trail = updatedWaypoints;
 
-        if (options.openOptionalPopup) {
-            openOptionalWaypointQuickEditPopup(insertedWaypoint);
-        }
+        waypoint.set(insertedWaypoint);
+        waypointModal.openModal();
 
         if (updatedWaypoints.length > 1) {
-            await recalculateRouteFromWaypoints({ showSuccessToast: false });
+            await recalculateRouteFromWaypoints();
         }
     }
 
