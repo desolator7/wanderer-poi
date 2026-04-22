@@ -112,7 +112,7 @@ export async function insertIntoRoute(waypoints: Waypoint[], index?: number) {
     const snapshot = new GPX({ ...valhallaStore.route })
     const segment = new TrackSegment({ trkpt: waypoints })
 
-    if (index) {
+    if (index !== undefined) {
         snapshot.trk?.at(0)?.trkseg?.splice(index, 0, segment);
     } else {
         snapshot.trk?.at(0)?.trkseg?.push(segment);
