@@ -601,7 +601,7 @@
         $formData.expand!.waypoints_via_trail = [...waypoints];
 
         if (waypoints.length > 1) {
-            await recalculateRouteFromWaypoints();
+            await moveWaypointWithSegmentMerge(fromIndex, toIndex);
         }
     }
 
@@ -887,6 +887,47 @@
                 editRoute(deletedIndex - 1, mergedSegment);
                 deleteFromRoute(deletedIndex);
             }
+            normalizeRouteTime();
+            updateTrailWithRouteData();
+        } catch (e) {
+            console.error(e);
+            scheduleRouteRecalculationFromWaypoints({ showSuccessToast: false });
+        }
+    }
+
+    async function moveWaypointWithSegmentMerge(
+        fromIndex: number,
+        toIndex: number,
+    ) {
+        const waypoints = $formData.expand!.waypoints_via_trail ?? [];
+        if (waypoints.length < 2) {
+            updateTrailWithRouteData();
+            return;
+        }
+
+        const minIndex = Math.min(fromIndex, toIndex);
+        const maxIndex = Math.max(fromIndex, toIndex);
+        const startSegment = Math.max(0, minIndex - 1);
+        const endSegment = Math.min(waypoints.length - 2, maxIndex);
+
+        try {
+            const segmentUpdates = await Promise.all(
+                Array.from(
+                    { length: endSegment - startSegment + 1 },
+                    (_, offset) => startSegment + offset,
+                ).map(async (segmentIndex) => ({
+                    segmentIndex,
+                    routeWaypoints: await calculateRouteSegmentForWaypointPair(
+                        waypoints,
+                        segmentIndex + 1,
+                    ),
+                })),
+            );
+
+            for (const update of segmentUpdates) {
+                editRoute(update.segmentIndex, update.routeWaypoints);
+            }
+
             normalizeRouteTime();
             updateTrailWithRouteData();
         } catch (e) {
