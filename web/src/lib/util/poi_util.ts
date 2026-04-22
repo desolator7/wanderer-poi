@@ -233,7 +233,11 @@ export async function parsePoisFromKmlFile(
     if (isKmz) {
         const zip = new JSZip();
         const zipContents = await zip.loadAsync(fileBuffer);
-        kmlData = (await zipContents.file("doc.kml")?.async("string")) ?? "";
+        const fileNames = Object.keys(zipContents.files);
+        const docKmlPath = fileNames.find((fileName) => /(^|\/)doc\.kml$/i.test(fileName));
+        const fallbackKmlPath = fileNames.find((fileName) => fileName.toLowerCase().endsWith(".kml"));
+        const kmlPath = docKmlPath ?? fallbackKmlPath;
+        kmlData = (await zipContents.file(kmlPath ?? "")?.async("string")) ?? "";
     }
 
     const parser = browser ? new DOMParser() : new XMLDOMParser();
