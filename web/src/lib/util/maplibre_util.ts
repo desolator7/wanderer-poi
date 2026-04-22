@@ -458,6 +458,14 @@ export function createPopupFromPoi(
         divider.className = "border-input-border";
         content.appendChild(divider);
 
+        if (attributeDefinitions.some((definition) => definition.value_storage === "private")) {
+            const privateHint = document.createElement("p");
+            privateHint.className = "text-xs text-gray-500";
+            privateHint.textContent =
+                "Hinweis: Von Admins als privat definierte Attribute werden privat gespeichert.";
+            content.appendChild(privateHint);
+        }
+
         const attributesWrapper = document.createElement("div");
         attributesWrapper.className = "space-y-3";
 

@@ -199,6 +199,12 @@
             {#if selectedDefinitions.length}
                 <div class="space-y-3">
                     <h4 class="text-lg font-semibold">{$_("attributes")}</h4>
+                    {#if hasPrivateDefinitions}
+                        <p class="text-xs text-gray-500">
+                            Hinweis: Von Admins als privat definierte Attribute
+                            werden privat gespeichert.
+                        </p>
+                    {/if}
                     {#each selectedDefinitions as definition}
                         {#if definition.type === "boolean"}
                             <Toggle
