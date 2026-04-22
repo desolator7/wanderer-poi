@@ -11,7 +11,10 @@
     import { Poi } from "$lib/models/poi";
     import { defaultPoiIcon, poiIconOptions } from "$lib/util/icon_util";
     import { currentUser } from "$lib/stores/user_store";
-    import { canEditPoiAttributeValue } from "$lib/util/poi_util";
+    import {
+        canEditPoiAttributeValue,
+        normalizePoiAttributesForSave,
+    } from "$lib/util/poi_util";
 
     interface Props {
         poi?: Poi;
@@ -70,6 +73,11 @@
             (definition) => definition.category === draft.category,
         ),
     );
+    let hasPrivateDefinitions = $derived(
+        selectedDefinitions.some(
+            (definition) => definition.value_storage === "private",
+        ),
+    );
 
     $effect(() => {
         const nextAttributes = { ...(draft.attributes ?? {}) };
@@ -112,7 +120,10 @@
                     public: draft.public,
                     category: draft.category,
                     author: draft.author,
-                    attributes: { ...(draft.attributes ?? {}) },
+                    attributes: normalizePoiAttributesForSave(
+                        selectedDefinitions,
+                        draft.attributes ?? {},
+                    ),
                     created: draft.created,
                     updated: draft.updated,
                     expand: draft.expand,
@@ -194,6 +205,12 @@
             {#if selectedDefinitions.length}
                 <div class="space-y-3">
                     <h4 class="text-lg font-semibold">{$_("attributes")}</h4>
+                    {#if hasPrivateDefinitions}
+                        <p class="text-xs text-gray-500">
+                            Hinweis: Von Admins als privat definierte Attribute
+                            werden privat gespeichert.
+                        </p>
+                    {/if}
                     {#each selectedDefinitions as definition}
                         {#if definition.type === "boolean"}
                             <Toggle

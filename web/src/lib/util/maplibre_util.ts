@@ -13,7 +13,11 @@ import { handleFromRecordWithIRI } from "./activitypub_util";
 import { getFileURL } from "./file_util";
 import { formatDistance, formatElevation, formatTimeHHMM } from "./format_util";
 import { icons, normalizePoiIcon } from "./icon_util";
-import { canEditPoiAttributeValue, getPoiDisplayColor } from "./poi_util";
+import {
+    canEditPoiAttributeValue,
+    getPoiDisplayColor,
+    normalizePoiAttributesForSave,
+} from "./poi_util";
 
 export class FontawesomeMarker extends M.Marker {
     constructor(options: { icon: string, fontSize?: string, width?: number, backgroundColor?: string, fontColor?: string, style?: string, id?: string }, markerOptions?: M.MarkerOptions) {
@@ -454,6 +458,14 @@ export function createPopupFromPoi(
         divider.className = "border-input-border";
         content.appendChild(divider);
 
+        if (attributeDefinitions.some((definition) => definition.value_storage === "private")) {
+            const privateHint = document.createElement("p");
+            privateHint.className = "text-xs text-gray-500";
+            privateHint.textContent =
+                "Hinweis: Von Admins als privat definierte Attribute werden privat gespeichert.";
+            content.appendChild(privateHint);
+        }
+
         const attributesWrapper = document.createElement("div");
         attributesWrapper.className = "space-y-3";
 
@@ -519,7 +531,7 @@ export function createPopupFromPoi(
             saveButton.className = "btn-primary w-full";
             saveButton.textContent = get(_)("save");
             saveButton.addEventListener("click", async () => {
-                const values: Record<string, string | boolean | null> = {};
+                const rawValues: Record<string, string | boolean | null> = {};
                 for (const definition of attributeDefinitions) {
                     if (!canEditPoiAttributeValue(definition, {
                         currentUserId: options?.currentUserId,
@@ -531,17 +543,26 @@ export function createPopupFromPoi(
                         `[name="${definition.key}"]`,
                     ) as HTMLInputElement | null;
                     if (!field) {
-                        values[definition.key] = null;
+                        rawValues[definition.key] = null;
                         continue;
                     }
                     if (definition.type === "boolean") {
-                        values[definition.key] = field.checked;
+                        rawValues[definition.key] = field.checked;
                     } else {
-                        values[definition.key] = field.value.trim().length
+                        rawValues[definition.key] = field.value.trim().length
                             ? field.value
                             : null;
                     }
                 }
+                const values = normalizePoiAttributesForSave(
+                    attributeDefinitions.filter((definition) =>
+                        canEditPoiAttributeValue(definition, {
+                            currentUserId: options?.currentUserId,
+                            isAdmin: options?.isAdmin,
+                        }),
+                    ),
+                    rawValues,
+                );
 
                 saveButton.setAttribute("disabled", "true");
                 try {
