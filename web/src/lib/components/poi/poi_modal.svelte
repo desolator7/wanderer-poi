@@ -11,7 +11,10 @@
     import { Poi } from "$lib/models/poi";
     import { defaultPoiIcon, poiIconOptions } from "$lib/util/icon_util";
     import { currentUser } from "$lib/stores/user_store";
-    import { canEditPoiAttributeValue } from "$lib/util/poi_util";
+    import {
+        canEditPoiAttributeValue,
+        normalizePoiAttributesForSave,
+    } from "$lib/util/poi_util";
 
     interface Props {
         poi?: Poi;
@@ -70,7 +73,6 @@
             (definition) => definition.category === draft.category,
         ),
     );
-
     $effect(() => {
         const nextAttributes = { ...(draft.attributes ?? {}) };
         for (const definition of selectedDefinitions) {
@@ -112,7 +114,10 @@
                     public: draft.public,
                     category: draft.category,
                     author: draft.author,
-                    attributes: { ...(draft.attributes ?? {}) },
+                    attributes: normalizePoiAttributesForSave(
+                        selectedDefinitions,
+                        draft.attributes ?? {},
+                    ),
                     created: draft.created,
                     updated: draft.updated,
                     expand: draft.expand,
@@ -198,7 +203,9 @@
                         {#if definition.type === "boolean"}
                             <Toggle
                                 value={draft.attributes?.[definition.key] === true}
-                                label={definition.name}
+                                label={definition.value_storage === "private"
+                                    ? `${definition.name} (privat)`
+                                    : definition.name}
                                 disabled={!isAttributeEditable(definition)}
                                 onchange={(value) =>
                                     (draft.attributes = {
@@ -212,7 +219,9 @@
                                     ? draft.attributes?.[definition.key]
                                     : ""}
                                 disabled={!isAttributeEditable(definition)}
-                                label={definition.name}
+                                label={definition.value_storage === "private"
+                                    ? `${definition.name} (privat)`
+                                    : definition.name}
                                 onchange={(event) =>
                                     (draft.attributes = {
                                         ...(draft.attributes ?? {}),
@@ -226,7 +235,9 @@
                                     ? draft.attributes?.[definition.key]
                                     : ""}
                                 disabled={!isAttributeEditable(definition)}
-                                label={definition.name}
+                                label={definition.value_storage === "private"
+                                    ? `${definition.name} (privat)`
+                                    : definition.name}
                                 onchange={(event) =>
                                     (draft.attributes = {
                                         ...(draft.attributes ?? {}),

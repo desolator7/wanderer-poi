@@ -119,6 +119,32 @@ export function coercePoiAttributes(
     return result;
 }
 
+export function normalizePoiAttributesForSave(
+    attributeDefinitions: PoiAttribute[],
+    values: Record<string, unknown>,
+) {
+    const result: Record<string, string | boolean | null> = {};
+
+    for (const definition of attributeDefinitions) {
+        const value = values[definition.key];
+        if (value === undefined) {
+            result[definition.key] = null;
+            continue;
+        }
+
+        if (definition.type === "boolean") {
+            result[definition.key] = Boolean(value);
+        } else if (definition.type === "date") {
+            result[definition.key] = value ? String(value) : null;
+        } else {
+            const normalized = String(value).trim();
+            result[definition.key] = normalized.length ? normalized : null;
+        }
+    }
+
+    return result;
+}
+
 
 export function canEditPoiAttributeValue(
     definition: Pick<PoiAttribute, "value_storage" | "public_write_access">,
