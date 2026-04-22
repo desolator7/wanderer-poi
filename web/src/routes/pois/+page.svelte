@@ -49,6 +49,16 @@
     let bulkDeleteBusy = $state(false);
     let bulkAttributeKeys = $state<string[]>([]);
     let bulkAttributeValues = $state<Record<string, string | boolean>>({});
+    let bulkBaseAttributeKeys = $state<string[]>([]);
+    let bulkBaseAttributeValues = $state<{
+        color: string;
+        icon: string;
+        public: boolean;
+    }>({
+        color: "#6B7280",
+        icon: defaultPoiIcon,
+        public: false,
+    });
 
     let filteredPois = $derived(
         allPois.filter((poi) => {
@@ -221,10 +231,29 @@
         selectedPoiIds = [];
         bulkAttributeKeys = [];
         bulkAttributeValues = {};
+        bulkBaseAttributeKeys = [];
+        bulkBaseAttributeValues = {
+            color: "#6B7280",
+            icon: defaultPoiIcon,
+            public: false,
+        };
     }
 
     function isBulkAttributeSelected(definition: PoiAttribute) {
         return bulkAttributeKeys.includes(definition.key);
+    }
+
+    function isBulkBaseAttributeSelected(key: "color" | "icon" | "public") {
+        return bulkBaseAttributeKeys.includes(key);
+    }
+
+    function toggleBulkBaseAttribute(
+        key: "color" | "icon" | "public",
+        selected: boolean,
+    ) {
+        bulkBaseAttributeKeys = selected
+            ? Array.from(new Set([...bulkBaseAttributeKeys, key]))
+            : bulkBaseAttributeKeys.filter((item) => item !== key);
     }
 
     function toggleBulkAttribute(definition: PoiAttribute, selected: boolean) {
@@ -342,8 +371,8 @@
     async function saveBulkAttributes() {
         if (
             !selectedPois.length ||
-            selectedPoiCategoryIds.length !== 1 ||
-            !bulkAttributeKeys.length
+            (!bulkAttributeKeys.length && !bulkBaseAttributeKeys.length) ||
+            (bulkAttributeKeys.length && selectedPoiCategoryIds.length !== 1)
         ) {
             return;
         }
@@ -359,8 +388,31 @@
                             normalizeBulkAttributeValue(definition);
                     }
                 }
+                const color = isBulkBaseAttributeSelected("color")
+                    ? bulkBaseAttributeValues.color
+                    : poi.color;
+                const icon = isBulkBaseAttributeSelected("icon")
+                    ? bulkBaseAttributeValues.icon
+                    : poi.icon;
+                const isPublic = isBulkBaseAttributeSelected("public")
+                    ? bulkBaseAttributeValues.public
+                    : poi.public;
                 const savedPoi = await pois_update(
-                    clonePoiWithAttributes(poi, attributes),
+                    new Poi(poi.lat, poi.lon, {
+                        id: poi.id,
+                        name: poi.name,
+                        description: poi.description,
+                        location: poi.location,
+                        icon,
+                        color,
+                        public: isPublic,
+                        author: poi.author,
+                        category: poi.category,
+                        attributes,
+                        expand: poi.expand,
+                        created: poi.created,
+                        updated: poi.updated,
+                    }),
                 );
                 savedPoi.expand = {
                     category:
@@ -577,6 +629,56 @@
                     </div>
 
                     {#if selectedPois.length}
+                        <div class="space-y-3">
+                            <h3 class="font-semibold">{$_("edit-poi")}</h3>
+
+                            <div
+                                class="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-3 md:items-center"
+                            >
+                                <label class="inline-flex items-center gap-2 text-sm">
+                                    <input
+                                        type="checkbox"
+                                        checked={isBulkBaseAttributeSelected(
+                                            "color",
+                                        )}
+                                        onchange={(event) =>
+                                            toggleBulkBaseAttribute(
+                                                "color",
+                                                (
+                                                    event.currentTarget as HTMLInputElement
+                                                ).checked,
+                                            )}
+                                    />
+                                    {$_("overwrite")}
+                                </label>
+                                <label class="text-sm font-medium">
+                                    {$_("color")}
+                                    <div
+                                        class="flex items-center gap-3 mt-1"
+                                    >
+                                        <input
+                                            type="color"
+                                            value={bulkBaseAttributeValues.color}
+                                            disabled={!isBulkBaseAttributeSelected(
+                                                "color",
+                                            )}
+                                            oninput={(event) =>
+                                                (bulkBaseAttributeValues = {
+                                                    ...bulkBaseAttributeValues,
+                                                    color: (
+                                                        event.currentTarget as HTMLInputElement
+                                                    ).value,
+                                                })}
+                                            class="h-10 w-16 rounded border border-input-border bg-input-background disabled:opacity-60"
+                                        />
+                                        <span class="text-sm font-mono">
+                                            {bulkBaseAttributeValues.color}
+                                        </span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
                         {#if selectedPoiCategoryIds.length === 1 && bulkAttributeDefinitions.length}
                             <div class="space-y-3">
                                 <h3 class="font-semibold">
@@ -660,20 +762,42 @@
                                 <Button
                                     primary={true}
                                     onclick={saveBulkAttributes}
-                                    disabled={!bulkAttributeKeys.length || bulkBusy}
+                                    disabled={(!bulkAttributeKeys.length && !bulkBaseAttributeKeys.length) || bulkBusy}
                                     loading={bulkSaveBusy}
                                 >
                                     {$_("apply-to-selection")}
                                 </Button>
                             </div>
+                        {:else if selectedPoiCategoryIds.length === 1}
+                            <Button
+                                primary={true}
+                                onclick={saveBulkAttributes}
+                                disabled={(!bulkAttributeKeys.length && !bulkBaseAttributeKeys.length) || bulkBusy}
+                                loading={bulkSaveBusy}
+                            >
+                                {$_("apply-to-selection")}
+                            </Button>
                         {:else if selectedPoiCategoryIds.length > 1}
                             <p class="text-sm text-gray-500">
                                 {$_("poi-bulk-one-category-only")}
                             </p>
+                            <Button
+                                primary={true}
+                                onclick={saveBulkAttributes}
+                                disabled={(!bulkAttributeKeys.length && !bulkBaseAttributeKeys.length) || bulkBusy}
+                                loading={bulkSaveBusy}
+                            >
+                                {$_("apply-to-selection")}
+                            </Button>
                         {:else}
-                            <p class="text-sm text-gray-500">
-                                {$_("poi-bulk-no-attributes")}
-                            </p>
+                            <Button
+                                primary={true}
+                                onclick={saveBulkAttributes}
+                                disabled={(!bulkAttributeKeys.length && !bulkBaseAttributeKeys.length) || bulkBusy}
+                                loading={bulkSaveBusy}
+                            >
+                                {$_("apply-to-selection")}
+                            </Button>
                         {/if}
                     {/if}
                 </div>
