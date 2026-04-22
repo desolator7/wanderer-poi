@@ -475,7 +475,9 @@ export function createPopupFromPoi(
 
             const labelText = document.createElement("span");
             labelText.className = "text-sm font-medium block mb-1";
-            labelText.textContent = definition.name;
+            labelText.textContent = definition.value_storage === "private"
+                ? `${definition.name} (privat)`
+                : definition.name;
             label.appendChild(labelText);
 
             const currentValue = poi.attributes?.[definition.key];

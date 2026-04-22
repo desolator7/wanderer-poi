@@ -73,12 +73,6 @@
             (definition) => definition.category === draft.category,
         ),
     );
-    let hasPrivateDefinitions = $derived(
-        selectedDefinitions.some(
-            (definition) => definition.value_storage === "private",
-        ),
-    );
-
     $effect(() => {
         const nextAttributes = { ...(draft.attributes ?? {}) };
         for (const definition of selectedDefinitions) {
@@ -215,7 +209,9 @@
                         {#if definition.type === "boolean"}
                             <Toggle
                                 value={draft.attributes?.[definition.key] === true}
-                                label={definition.name}
+                                label={definition.value_storage === "private"
+                                    ? `${definition.name} (privat)`
+                                    : definition.name}
                                 disabled={!isAttributeEditable(definition)}
                                 onchange={(value) =>
                                     (draft.attributes = {
@@ -229,7 +225,9 @@
                                     ? draft.attributes?.[definition.key]
                                     : ""}
                                 disabled={!isAttributeEditable(definition)}
-                                label={definition.name}
+                                label={definition.value_storage === "private"
+                                    ? `${definition.name} (privat)`
+                                    : definition.name}
                                 onchange={(event) =>
                                     (draft.attributes = {
                                         ...(draft.attributes ?? {}),
@@ -243,7 +241,9 @@
                                     ? draft.attributes?.[definition.key]
                                     : ""}
                                 disabled={!isAttributeEditable(definition)}
-                                label={definition.name}
+                                label={definition.value_storage === "private"
+                                    ? `${definition.name} (privat)`
+                                    : definition.name}
                                 onchange={(event) =>
                                     (draft.attributes = {
                                         ...(draft.attributes ?? {}),
