@@ -5,6 +5,7 @@ import {
     createWaypointFromTap,
     getRoutingRoleByIndex,
     getWaypointInsertIndexByNearestSegment,
+    simplifyPolylinePoints,
 } from "./waypoint_routing";
 
 describe("getWaypointInsertIndexByNearestSegment", () => {
@@ -57,6 +58,43 @@ describe("tap waypoint creation", () => {
         const withoutMetadata = createWaypointFromTap(10, 20);
         expect(withoutMetadata.name).toBe("");
         expect(withoutMetadata.description).toBe("");
+    });
+});
+
+describe("polyline simplification", () => {
+    it("keeps endpoints and reduces near-linear points", () => {
+        const points = Array.from({ length: 21 }, (_, idx) => ({
+            lat: 47 + idx * 0.0001,
+            lon: 11 + idx * 0.0001,
+        }));
+
+        const simplified = simplifyPolylinePoints(points, {
+            toleranceMeters: 5,
+            maxPoints: 10,
+        });
+
+        expect(simplified[0]).toEqual(points[0]);
+        expect(simplified.at(-1)).toEqual(points.at(-1));
+        expect(simplified.length).toBeLessThan(points.length);
+    });
+
+    it("preserves significant bends", () => {
+        const points = [
+            { lat: 47.0, lon: 11.0 },
+            { lat: 47.0001, lon: 11.0001 },
+            { lat: 47.0002, lon: 11.0002 },
+            { lat: 47.0003, lon: 11.0008 },
+            { lat: 47.0004, lon: 11.0014 },
+            { lat: 47.0005, lon: 11.0020 },
+        ];
+
+        const simplified = simplifyPolylinePoints(points, {
+            toleranceMeters: 4,
+            maxPoints: 6,
+        });
+
+        expect(simplified.length).toBeGreaterThanOrEqual(3);
+        expect(simplified).toContainEqual(points[3]);
     });
 });
 
