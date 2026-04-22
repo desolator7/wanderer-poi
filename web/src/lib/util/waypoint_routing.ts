@@ -6,6 +6,10 @@ export interface GeoPoint {
 }
 
 export type RoutingRole = "start" | "via" | "goal";
+export interface SimplifyPolylineOptions {
+    toleranceMeters?: number;
+    maxPoints?: number;
+}
 
 function toMeters(point: GeoPoint, originLat: number): { x: number; y: number } {
     const metersPerDegreeLat = 111_320;
@@ -95,4 +99,100 @@ export function createWaypointFromTap(
         description: optionalData?.description ?? "",
         icon: optionalData?.icon,
     });
+}
+
+function squaredDistanceMeters(a: GeoPoint, b: GeoPoint): number {
+    const originLat = (a.lat + b.lat) / 2;
+    const aMeters = toMeters(a, originLat);
+    const bMeters = toMeters(b, originLat);
+    const dx = aMeters.x - bMeters.x;
+    const dy = aMeters.y - bMeters.y;
+    return dx * dx + dy * dy;
+}
+
+function simplifyWithRdp(points: GeoPoint[], toleranceMeters: number): GeoPoint[] {
+    if (points.length <= 2) {
+        return [...points];
+    }
+
+    const toleranceSquared = toleranceMeters * toleranceMeters;
+    const keep = new Array(points.length).fill(false);
+    keep[0] = true;
+    keep[points.length - 1] = true;
+
+    const stack: Array<{ start: number; end: number }> = [
+        { start: 0, end: points.length - 1 },
+    ];
+
+    while (stack.length > 0) {
+        const segment = stack.pop();
+        if (!segment) {
+            continue;
+        }
+        const { start, end } = segment;
+        let bestIndex = -1;
+        let maxDistanceSquared = 0;
+
+        for (let i = start + 1; i < end; i++) {
+            const distanceSquared = squaredDistanceToSegment(
+                points[i],
+                points[start],
+                points[end],
+            );
+            if (distanceSquared > maxDistanceSquared) {
+                maxDistanceSquared = distanceSquared;
+                bestIndex = i;
+            }
+        }
+
+        if (bestIndex !== -1 && maxDistanceSquared > toleranceSquared) {
+            keep[bestIndex] = true;
+            stack.push({ start, end: bestIndex });
+            stack.push({ start: bestIndex, end });
+        }
+    }
+
+    return points.filter((_, index) => keep[index]);
+}
+
+export function simplifyPolylinePoints(
+    points: GeoPoint[],
+    options?: SimplifyPolylineOptions,
+): GeoPoint[] {
+    if (points.length <= 2) {
+        return [...points];
+    }
+
+    const maxPoints = Math.max(2, options?.maxPoints ?? 120);
+    let toleranceMeters = Math.max(0.5, options?.toleranceMeters ?? 6);
+    let simplified = simplifyWithRdp(points, toleranceMeters);
+
+    while (simplified.length > maxPoints && toleranceMeters < 250) {
+        toleranceMeters *= 1.6;
+        simplified = simplifyWithRdp(points, toleranceMeters);
+    }
+
+    if (simplified.length <= maxPoints) {
+        return simplified;
+    }
+
+    const sampled: GeoPoint[] = [];
+    const step = (simplified.length - 1) / (maxPoints - 1);
+    for (let i = 0; i < maxPoints; i++) {
+        sampled.push(simplified[Math.round(i * step)]);
+    }
+
+    const deduplicated: GeoPoint[] = [];
+    for (const point of sampled) {
+        const prev = deduplicated.at(-1);
+        if (!prev || squaredDistanceMeters(prev, point) > 0) {
+            deduplicated.push(point);
+        }
+    }
+
+    if (deduplicated.length === 1) {
+        deduplicated.push(points[points.length - 1]);
+    }
+
+    return deduplicated;
 }
