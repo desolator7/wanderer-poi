@@ -561,6 +561,7 @@
 
     function deleteWaypoint(index: number) {
         const waypoints = [...($formData.expand!.waypoints_via_trail ?? [])];
+        const previousWaypointCount = waypoints.length;
         waypoints.splice(index, 1);
 
         for (let i = 0; i < waypoints.length; i++) {
@@ -570,7 +571,7 @@
         $formData.expand!.waypoints_via_trail = waypoints;
         syncWaypointIconsWithRoutingRole();
 
-        scheduleRouteRecalculationFromWaypoints({ showSuccessToast: false });
+        void deleteWaypointWithSegmentMerge(index, previousWaypointCount);
     }
 
     async function moveWaypoint(fromIndex: number, toIndex: number) {
@@ -711,6 +712,183 @@
         }, waypointRecalcDebounceMs);
     }
 
+    async function calculateRouteSegmentForWaypointPair(
+        waypoints: Waypoint[],
+        toIndex: number,
+    ): Promise<GPXWaypoint[]> {
+        const previousWaypoint = waypoints[toIndex - 1];
+        const currentWaypoint = waypoints[toIndex] as Waypoint & {
+            connectionMode?: "snap" | "straight" | "original-kml";
+        };
+        const connectionMode = currentWaypoint.connectionMode ?? "snap";
+
+        if (
+            connectionMode === "original-kml" &&
+            importedOriginalSegments[toIndex - 1]?.length
+        ) {
+            return importedOriginalSegments[toIndex - 1].map(
+                (point) =>
+                    new GPXWaypoint({
+                        ...point,
+                        $: {
+                            lat: point.$.lat,
+                            lon: point.$.lon,
+                        },
+                    }),
+            );
+        }
+
+        return calculateRouteBetween(
+            previousWaypoint.lat,
+            previousWaypoint.lon,
+            currentWaypoint.lat,
+            currentWaypoint.lon,
+            {
+                ...routingOptions,
+                autoRouting: connectionMode === "snap",
+            },
+        );
+    }
+
+    async function recalculateAdjacentWaypointSegments(waypointIndex: number) {
+        const waypoints = $formData.expand!.waypoints_via_trail ?? [];
+        if (waypointIndex < 0 || waypointIndex >= waypoints.length) {
+            return;
+        }
+
+        const segmentsToRecalculate = new Set<number>();
+        if (waypointIndex > 0) {
+            segmentsToRecalculate.add(waypointIndex);
+        }
+        if (waypointIndex < waypoints.length - 1) {
+            segmentsToRecalculate.add(waypointIndex + 1);
+        }
+
+        if (!segmentsToRecalculate.size) {
+            return;
+        }
+
+        try {
+            const segmentResults = await Promise.all(
+                [...segmentsToRecalculate].map(async (segmentToIndex) => ({
+                    segmentToIndex,
+                    routeWaypoints: await calculateRouteSegmentForWaypointPair(
+                        waypoints,
+                        segmentToIndex,
+                    ),
+                })),
+            );
+
+            for (const result of segmentResults) {
+                editRoute(result.segmentToIndex - 1, result.routeWaypoints);
+            }
+
+            normalizeRouteTime();
+            updateTrailWithRouteData();
+        } catch (e) {
+            console.error(e);
+            scheduleRouteRecalculationFromWaypoints({ showSuccessToast: false });
+        }
+    }
+
+    async function recalculateSingleWaypointSegment(toIndex: number) {
+        const waypoints = $formData.expand!.waypoints_via_trail ?? [];
+        if (toIndex <= 0 || toIndex >= waypoints.length) {
+            return;
+        }
+
+        try {
+            const routeWaypoints = await calculateRouteSegmentForWaypointPair(
+                waypoints,
+                toIndex,
+            );
+            editRoute(toIndex - 1, routeWaypoints);
+            normalizeRouteTime();
+            updateTrailWithRouteData();
+        } catch (e) {
+            console.error(e);
+            scheduleRouteRecalculationFromWaypoints({ showSuccessToast: false });
+        }
+    }
+
+    async function insertWaypointWithSegmentMerge(insertIndex: number) {
+        const waypoints = $formData.expand!.waypoints_via_trail ?? [];
+        if (waypoints.length < 2) {
+            updateTrailWithRouteData();
+            return;
+        }
+
+        try {
+            if (insertIndex <= 0) {
+                const firstSegment = await calculateRouteSegmentForWaypointPair(
+                    waypoints,
+                    1,
+                );
+                insertIntoRoute(firstSegment, 0);
+            } else if (insertIndex >= waypoints.length - 1) {
+                const lastSegment = await calculateRouteSegmentForWaypointPair(
+                    waypoints,
+                    insertIndex,
+                );
+                insertIntoRoute(lastSegment);
+            } else {
+                const [previousSegment, nextSegment] = await Promise.all([
+                    calculateRouteSegmentForWaypointPair(waypoints, insertIndex),
+                    calculateRouteSegmentForWaypointPair(
+                        waypoints,
+                        insertIndex + 1,
+                    ),
+                ]);
+                editRoute(insertIndex - 1, previousSegment);
+                insertIntoRoute(nextSegment, insertIndex);
+            }
+            normalizeRouteTime();
+            updateTrailWithRouteData();
+        } catch (e) {
+            console.error(e);
+            scheduleRouteRecalculationFromWaypoints({ showSuccessToast: false });
+        }
+    }
+
+    async function deleteWaypointWithSegmentMerge(
+        deletedIndex: number,
+        previousWaypointCount: number,
+    ) {
+        const waypoints = $formData.expand!.waypoints_via_trail ?? [];
+
+        if (waypoints.length === 0) {
+            clearRoute();
+            updateTrailWithRouteData();
+            return;
+        }
+
+        if (waypoints.length === 1) {
+            deleteFromRoute(0);
+            updateTrailWithRouteData();
+            return;
+        }
+
+        try {
+            if (deletedIndex <= 0) {
+                deleteFromRoute(0);
+            } else if (deletedIndex >= previousWaypointCount - 1) {
+                deleteFromRoute(previousWaypointCount - 2);
+            } else {
+                const mergedSegment = await calculateRouteSegmentForWaypointPair(
+                    waypoints,
+                    deletedIndex,
+                );
+                editRoute(deletedIndex - 1, mergedSegment);
+                deleteFromRoute(deletedIndex);
+            }
+            normalizeRouteTime();
+            updateTrailWithRouteData();
+        } catch (e) {
+            console.error(e);
+            scheduleRouteRecalculationFromWaypoints({ showSuccessToast: false });
+        }
+    }
+
     async function getWaypointNamingInfo(lat: number, lon: number) {
         try {
             const feature = await searchLocationReverseFeature(lat, lon);
@@ -804,6 +982,7 @@
 
         if (editedWaypointIndex >= 0) {
             $formData.expand!.waypoints_via_trail![editedWaypointIndex] = savedWaypoint;
+            void recalculateAdjacentWaypointSegments(editedWaypointIndex);
         } else {
             savedWaypoint.id = cryptoRandomString({ length: 15 });
             const updatedWaypoints = [...($formData.expand!.waypoints_via_trail ?? [])];
@@ -813,10 +992,10 @@
                     : Math.max(0, Math.min(updatedWaypoints.length, pendingWaypointInsertIndex));
             updatedWaypoints.splice(insertIndex, 0, savedWaypoint);
             $formData.expand!.waypoints_via_trail = updatedWaypoints;
+            void insertWaypointWithSegmentMerge(insertIndex);
         }
 
         pendingWaypointInsertIndex = null;
-        scheduleRouteRecalculationFromWaypoints({ showSuccessToast: false });
     }
 
     function moveMarker(marker: M.Marker, wpId?: string) {
@@ -834,7 +1013,7 @@
             editableWaypoint.name?.trim() ||
             getWaypointCoordinateName(position.lat, position.lng);
         $formData.expand!.waypoints_via_trail = [...($formData.expand!.waypoints_via_trail ?? [])];
-        scheduleRouteRecalculationFromWaypoints({ showSuccessToast: false });
+        void recalculateAdjacentWaypointSegments(editableWaypointIndex);
     }
 
     function syncWaypointIconsWithRoutingRole() {
@@ -1861,9 +2040,7 @@
                                         $formData.expand!.waypoints_via_trail = [
                                             ...($formData.expand!.waypoints_via_trail ?? []),
                                         ];
-                                        scheduleRouteRecalculationFromWaypoints({
-                                            showSuccessToast: false,
-                                        });
+                                        void recalculateSingleWaypointSegment(i);
                                     }}
                                 ></Select>
                             </div>
