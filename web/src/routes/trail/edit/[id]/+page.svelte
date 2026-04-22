@@ -1212,7 +1212,7 @@
         $formData.expand!.waypoints_via_trail = updatedWaypoints;
 
         if (updatedWaypoints.length > 1) {
-            await recalculateRouteFromWaypoints();
+            await insertWaypointWithSegmentMerge(insertIndex);
         }
     }
 
