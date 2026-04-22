@@ -95,6 +95,7 @@
         createWaypointFromTap,
         getRoutingRoleByIndex,
         getWaypointInsertIndexByNearestSegment,
+        simplifyPolylinePoints,
     } from "$lib/util/waypoint_routing";
     import EXIF from "$lib/vendor/exif-js/exif.js";
     import { validator } from "@felte/validator-zod";
@@ -467,17 +468,22 @@
         for (const track of gpx.trk ?? []) {
             for (const trkseg of track.trkseg ?? []) {
                 const points = trkseg.trkpt ?? [];
-                for (let i = 1; i < points.length; i++) {
-                    const start = points[i - 1];
-                    const end = points[i];
+                const simplifiedPoints = simplifyPolylinePoints(
+                    points.map((point) => ({ lat: point.$.lat, lon: point.$.lon })),
+                    {
+                        toleranceMeters: 8,
+                        maxPoints: 150,
+                    },
+                );
+                for (let i = 1; i < simplifiedPoints.length; i++) {
+                    const start = simplifiedPoints[i - 1];
+                    const end = simplifiedPoints[i];
                     segments.push([
                         new GPXWaypoint({
-                            ...start,
-                            $: { lat: start.$.lat, lon: start.$.lon },
+                            $: { lat: start.lat, lon: start.lon },
                         }),
                         new GPXWaypoint({
-                            ...end,
-                            $: { lat: end.$.lat, lon: end.$.lon },
+                            $: { lat: end.lat, lon: end.lon },
                         }),
                     ]);
                 }
