@@ -382,6 +382,7 @@
     }
 
     function removeTrailLayer(id: string) {
+        removeStartEndMarkers(id);
         layerManager.removeLayer(id);
     }
 
@@ -394,6 +395,8 @@
         if (!geojson || !map) {
             return;
         }
+        removeStartEndMarkers(id);
+
         const trailLayer = new TrailLayer(
             id,
             geojson,
@@ -685,6 +688,8 @@
             return;
         }
 
+        removeStartEndMarkers(id);
+
         const startMarker = new FontawesomeMarker(
             { icon: "fa fa-bullseye" },
             {},
@@ -728,7 +733,7 @@
     }
 
     function removeStartEndMarkers(id: string | undefined) {
-        if (!id) {
+        if (!id || !layerManager.layers[id]) {
             return;
         }
         layerManager.layers[id].markers?.start?.remove();
@@ -883,6 +888,190 @@
     }
 
     let geolocateControl: M.GeolocateControl;
+    let userHeadingIcon: SVGSVGElement | null = null;
+    let deviceCompassHeading: number | null = null;
+    let removeDeviceCompassPermissionClickListener: (() => void) | null = null;
+    type DeviceOrientationEventWithCompass = DeviceOrientationEvent & {
+        webkitCompassHeading?: number;
+    };
+    type DeviceOrientationEventConstructorWithPermission =
+        typeof DeviceOrientationEvent & {
+            requestPermission?: () => Promise<PermissionState>;
+        };
+
+    function createUserHeadingIcon() {
+        const svg = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "svg",
+        );
+        svg.setAttribute("viewBox", "0 0 40 40");
+        svg.setAttribute("aria-hidden", "true");
+        svg.classList.add("user-location-heading-icon");
+        svg.style.position = "absolute";
+        svg.style.left = "50%";
+        svg.style.top = "50%";
+        svg.style.width = "40px";
+        svg.style.height = "40px";
+        svg.style.pointerEvents = "none";
+        svg.style.transformOrigin = "center";
+        svg.style.filter = "drop-shadow(0 2px 4px rgb(0 0 0 / 0.35))";
+        svg.style.transition = "transform 150ms linear";
+
+        const arrow = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "path",
+        );
+        arrow.setAttribute("d", "M20 2 31 29 20 23 9 29 20 2Z");
+        arrow.setAttribute("fill", "rgb(var(--primary))");
+        arrow.setAttribute("stroke", "white");
+        arrow.setAttribute("stroke-width", "3");
+        arrow.setAttribute("stroke-linejoin", "round");
+
+        const dot = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "circle",
+        );
+        dot.setAttribute("cx", "20");
+        dot.setAttribute("cy", "20");
+        dot.setAttribute("r", "5.5");
+        dot.setAttribute("fill", "rgb(var(--primary))");
+        dot.setAttribute("stroke", "white");
+        dot.setAttribute("stroke-width", "3");
+
+        svg.appendChild(arrow);
+        svg.appendChild(dot);
+
+        return svg;
+    }
+
+    function updateUserHeadingMarkerRotation() {
+        if (deviceCompassHeading === null) {
+            return;
+        }
+
+        userHeadingIcon?.style.setProperty(
+            "transform",
+            `translate(-50%, -50%) rotate(${deviceCompassHeading - (map?.getBearing() ?? 0)}deg)`,
+        );
+    }
+
+    function hideUserHeadingMarker() {
+        userHeadingIcon?.remove();
+        userHeadingIcon = null;
+    }
+
+    function syncUserHeadingMarker(attempt: number = 0) {
+        if (deviceCompassHeading === null) {
+            hideUserHeadingMarker();
+            return;
+        }
+
+        if (!map) {
+            return;
+        }
+
+        const locationDot = map
+            .getContainer()
+            .querySelector(".maplibregl-user-location-dot") as HTMLElement | null;
+        if (!locationDot) {
+            if (attempt < 10) {
+                requestAnimationFrame(() => syncUserHeadingMarker(attempt + 1));
+            }
+            return;
+        }
+
+        locationDot.style.overflow = "visible";
+        if (!userHeadingIcon || userHeadingIcon.parentElement !== locationDot) {
+            userHeadingIcon?.remove();
+            userHeadingIcon = createUserHeadingIcon();
+            locationDot.appendChild(userHeadingIcon);
+        }
+        updateUserHeadingMarkerRotation();
+    }
+
+    function getCompassHeading(event: DeviceOrientationEventWithCompass) {
+        if (
+            typeof event.webkitCompassHeading === "number" &&
+            Number.isFinite(event.webkitCompassHeading)
+        ) {
+            return event.webkitCompassHeading;
+        }
+
+        if (event.absolute && typeof event.alpha === "number") {
+            return (360 - event.alpha) % 360;
+        }
+
+        return null;
+    }
+
+    function handleDeviceOrientation(event: DeviceOrientationEvent) {
+        const heading = getCompassHeading(
+            event as DeviceOrientationEventWithCompass,
+        );
+        if (heading === null) {
+            return;
+        }
+
+        deviceCompassHeading = heading;
+        syncUserHeadingMarker();
+    }
+
+    function handleDeviceOrientationEvent(event: Event) {
+        handleDeviceOrientation(event as DeviceOrientationEvent);
+    }
+
+    function startDeviceCompass() {
+        if (typeof DeviceOrientationEvent === "undefined") {
+            return;
+        }
+
+        window.addEventListener(
+            "deviceorientationabsolute",
+            handleDeviceOrientationEvent,
+        );
+        window.addEventListener(
+            "deviceorientation",
+            handleDeviceOrientationEvent,
+        );
+    }
+
+    async function requestDeviceCompassPermission() {
+        if (typeof DeviceOrientationEvent === "undefined") {
+            return;
+        }
+
+        const OrientationEvent =
+            DeviceOrientationEvent as DeviceOrientationEventConstructorWithPermission;
+        if (!OrientationEvent.requestPermission) {
+            return;
+        }
+
+        try {
+            const permission = await OrientationEvent.requestPermission();
+            if (permission === "granted") {
+                startDeviceCompass();
+            }
+        } catch (error) {
+            console.warn("Error requesting device orientation permission", error);
+        }
+    }
+
+    function watchGeolocateButtonForCompassPermission() {
+        const button = map
+            ?.getContainer()
+            .querySelector(".maplibregl-ctrl-geolocate") as HTMLButtonElement | null;
+        if (!button) {
+            return;
+        }
+
+        const onClick = () => {
+            void requestDeviceCompassPermission();
+        };
+        button.addEventListener("click", onClick);
+        removeDeviceCompassPermissionClickListener = () => {
+            button.removeEventListener("click", onClick);
+        };
+    }
 
     onMount(async () => {
         const initialState = {
@@ -962,7 +1151,12 @@
             },
             trackUserLocation: true,
         });
+        geolocateControl.on("geolocate", () => syncUserHeadingMarker());
+        geolocateControl.on("trackuserlocationend", hideUserHeadingMarker);
+        geolocateControl.on("error", hideUserHeadingMarker);
         map.addControl(geolocateControl);
+        startDeviceCompass();
+        watchGeolocateButtonForCompassPermission();
 
         if (showStyleSwitcher) {
             map.addControl(switcherControl);
@@ -1038,6 +1232,7 @@
             updatePoiLabelVisibility();
             onzoom?.(e.target);
         });
+        map.on("rotate", updateUserHeadingMarkerRotation);
 
         map.on("dragstart", () => suppressNextClick());
         map.on("zoomstart", () => suppressNextClick(550));
@@ -1079,6 +1274,18 @@
 
     onDestroy(() => {
         hidePois();
+        hideUserHeadingMarker();
+        removeDeviceCompassPermissionClickListener?.();
+        if (typeof window !== "undefined") {
+            window.removeEventListener(
+                "deviceorientationabsolute",
+                handleDeviceOrientationEvent,
+            );
+            window.removeEventListener(
+                "deviceorientation",
+                handleDeviceOrientationEvent,
+            );
+        }
         map?.remove();
     });
 
@@ -1167,4 +1374,5 @@
         ) {
         pointer-events: none;
     }
+
 </style>

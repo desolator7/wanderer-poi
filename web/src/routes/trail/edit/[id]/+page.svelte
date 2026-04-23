@@ -75,7 +75,7 @@
     import PoiFilterPanel from "$lib/components/poi/poi_filter_panel.svelte";
     import RouteEditor from "$lib/components/trail/route_editor.svelte";
     import { TagCreateSchema } from "$lib/models/api/tag_schema.js";
-    import { convertDMSToDD } from "$lib/models/gpx/utils.js";
+    import { convertDMSToDD, haversineDistance } from "$lib/models/gpx/utils.js";
     import { Tag } from "$lib/models/tag.js";
     import { Poi } from "$lib/models/poi";
     import {
@@ -132,6 +132,7 @@
     let drawingActive = $state(false);
     let overwriteGPX = false;
     let draggingMarker = false;
+    let snapImportedRouteToValhalla = $state(false);
 
     let searchDropdownItems: SearchItem[] = $state([]);
 
@@ -171,6 +172,9 @@
                     .array(
                         WaypointCreateSchema.extend({
                             marker: z.any().optional(),
+                            connectionMode: z
+                                .enum(["snap", "straight", "original-kml"])
+                                .optional(),
                         }),
                     )
                     .optional(),
@@ -182,6 +186,23 @@
     let routingOptions: RoutingOptions = $state({
         autoRouting: true,
         modeOfTransport: "pedestrian",
+        pedestrianOptions: {
+            max_hiking_difficulty: 3,
+            walking_speed: 5.1,
+            use_hills: 1,
+            use_tracks: 1,
+            walkway_factor: 0.7,
+            sidewalk_factor: 1,
+            shortest: true,
+        },
+        bicycleOptions: {
+            bicycle_type: "Mountain",
+            cycling_speed: 16,
+            use_roads: 0,
+            use_hills: 0.8,
+            avoid_bad_surfaces: 0,
+            shortest: true,
+        },
     });
     let mapWaypointPopup: M.Popup | null = $state(null);
     let pendingWaypointInsertIndex: number | null = null;
@@ -193,10 +214,22 @@
     let queuedWaypointRecalcOptions: { showSuccessToast?: boolean } | null =
         null;
     const waypointRecalcDebounceMs = 250;
+    const originalKmlImportSimplifyOptions = {
+        toleranceMeters: 8,
+        maxPoints: 150,
+    };
+    const valhallaSnapImportSimplifyOptions = {
+        toleranceMeters: 90,
+        maxPoints: 35,
+        minDistanceMeters: 120,
+    };
 
     let savedAtLeastOnce = $state(false);
 
     let tagItems: ComboboxItem[] = $state([]);
+    type RouteSegmentEndpoint = { lat: number; lon: number };
+    type WaypointConnectionMode = "snap" | "straight" | "original-kml";
+    type LoopConnectionMode = "none" | "snap" | "straight";
 
     const getInitialFormValues = () => ({
         ...data.trail,
@@ -208,6 +241,8 @@
             page.data.settings?.category ||
             $categories[0].id,
     });
+
+    let loopConnectionMode: LoopConnectionMode = $state("none");
 
     const {
         form,
@@ -327,7 +362,17 @@
                 }
 
                 setRoute(gpx);
-                initRouteAnchors(gpx);
+                loopConnectionMode = inferLoopConnectionModeFromRoute(
+                    gpx,
+                    $formData.expand!.waypoints_via_trail ?? [],
+                );
+                if (isLoopRouteActive()) {
+                    addAnchorsForWaypoints(
+                        $formData.expand!.waypoints_via_trail ?? [],
+                    );
+                } else {
+                    initRouteAnchors(gpx);
+                }
 
                 updateTrailOnMap();
             }
@@ -354,6 +399,7 @@
         mapTrail = [];
         drawingActive = false;
         overwriteGPX = false;
+        loopConnectionMode = "none";
 
         const { gpxData, gpxFile: file } = await fromFile(selectedFile);
         gpxFile = file;
@@ -414,7 +460,10 @@
                 importedOriginalSegments =
                     parsedOriginalRoute instanceof Error
                         ? []
-                        : buildOriginalSegmentsFromGPX(parsedOriginalRoute);
+                        : buildOriginalSegmentsFromGPX(
+                              parsedOriginalRoute,
+                              snapImportedRouteToValhalla,
+                          );
             } else {
                 importedOriginalRoute = null;
                 importedOriginalSegments = [];
@@ -422,6 +471,7 @@
 
             const importedRouteWaypoints = buildRouteWaypointsFromOriginalSegments(
                 importedOriginalSegments,
+                snapImportedRouteToValhalla,
             );
             $formData.expand!.waypoints_via_trail = importedRouteWaypoints.length
                 ? importedRouteWaypoints
@@ -435,7 +485,23 @@
                       }),
                   );
             syncWaypointIconsWithRoutingRole();
-            updateTrailOnMap();
+            if (
+                snapImportedRouteToValhalla &&
+                env.PUBLIC_VALHALLA_URL &&
+                ($formData.expand!.waypoints_via_trail?.length ?? 0) > 1
+            ) {
+                const recalculated = await recalculateRouteFromWaypoints({
+                    showSuccessToast: false,
+                });
+                if (!recalculated) {
+                    setRoute(parseResult.gpx);
+                    clearAnchors();
+                    initRouteAnchors(parseResult.gpx);
+                    updateTrailOnMap();
+                }
+            } else {
+                updateTrailOnMap();
+            }
         } catch (e) {
             console.error(e);
 
@@ -458,23 +524,35 @@
             waypoint.marker?.remove();
         }
         $formData.expand!.waypoints_via_trail = [];
+        loopConnectionMode = "none";
     }
 
-    function buildOriginalSegmentsFromGPX(gpx: GPX | null): GPXWaypoint[][] {
+    function buildOriginalSegmentsFromGPX(
+        gpx: GPX | null,
+        snapToValhalla: boolean,
+    ): GPXWaypoint[][] {
         if (!gpx) {
             return [];
         }
         const segments: GPXWaypoint[][] = [];
+        const simplifyOptions = snapToValhalla
+            ? valhallaSnapImportSimplifyOptions
+            : originalKmlImportSimplifyOptions;
+
         for (const track of gpx.trk ?? []) {
             for (const trkseg of track.trkseg ?? []) {
                 const points = trkseg.trkpt ?? [];
-                const simplifiedPoints = simplifyPolylinePoints(
-                    points.map((point) => ({ lat: point.$.lat, lon: point.$.lon })),
-                    {
-                        toleranceMeters: 8,
-                        maxPoints: 150,
-                    },
+                const segmentPoints = points.flatMap((point) =>
+                    typeof point.$.lat === "number" &&
+                    typeof point.$.lon === "number"
+                        ? [{ lat: point.$.lat, lon: point.$.lon }]
+                        : [],
                 );
+                const simplifiedPoints = pruneImportedRouteControlPoints(
+                    simplifyPolylinePoints(segmentPoints, simplifyOptions),
+                    simplifyOptions,
+                );
+
                 for (let i = 1; i < simplifiedPoints.length; i++) {
                     const start = simplifiedPoints[i - 1];
                     const end = simplifiedPoints[i];
@@ -492,33 +570,206 @@
         return segments;
     }
 
+    function pruneImportedRouteControlPoints(
+        points: { lat: number; lon: number }[],
+        options: {
+            maxPoints: number;
+            minDistanceMeters?: number;
+        },
+    ) {
+        if (points.length <= 2 || !options.minDistanceMeters) {
+            return points;
+        }
+
+        const pruned = [points[0]];
+        for (let i = 1; i < points.length - 1; i++) {
+            const previous = pruned[pruned.length - 1];
+            const current = points[i];
+            const distance = haversineDistance(
+                previous.lat,
+                previous.lon,
+                current.lat,
+                current.lon,
+            );
+
+            if (distance >= options.minDistanceMeters) {
+                pruned.push(current);
+            }
+        }
+        pruned.push(points[points.length - 1]);
+
+        if (pruned.length <= options.maxPoints) {
+            return pruned;
+        }
+
+        const sampled: { lat: number; lon: number }[] = [];
+        const step = (pruned.length - 1) / (options.maxPoints - 1);
+        for (let i = 0; i < options.maxPoints; i++) {
+            sampled.push(pruned[Math.round(i * step)]);
+        }
+
+        return sampled.filter(
+            (point, index) =>
+                index === 0 ||
+                point.lat !== sampled[index - 1].lat ||
+                point.lon !== sampled[index - 1].lon,
+        );
+    }
+
     function buildRouteWaypointsFromOriginalSegments(
         segments: GPXWaypoint[][],
+        snapToValhalla: boolean,
     ): Waypoint[] {
         if (!segments.length) {
             return [];
         }
         const routeWaypoints: Waypoint[] = [];
         const firstPoint = segments[0][0];
+        const firstLat = firstPoint.$.lat!;
+        const firstLon = firstPoint.$.lon!;
         routeWaypoints.push(
-            new Waypoint(firstPoint.$.lat, firstPoint.$.lon, {
+            new Waypoint(firstLat, firstLon, {
                 id: cryptoRandomString({ length: 15 }),
-                name: getWaypointCoordinateName(firstPoint.$.lat, firstPoint.$.lon),
+                name: getWaypointCoordinateName(firstLat, firstLon),
                 icon: "play",
             }),
         );
         for (let i = 0; i < segments.length; i++) {
             const endPoint = segments[i][segments[i].length - 1];
+            const endLat = endPoint.$.lat!;
+            const endLon = endPoint.$.lon!;
             routeWaypoints.push(
-                new Waypoint(endPoint.$.lat, endPoint.$.lon, {
+                new Waypoint(endLat, endLon, {
                     id: cryptoRandomString({ length: 15 }),
-                    name: getWaypointCoordinateName(endPoint.$.lat, endPoint.$.lon),
+                    name: getWaypointCoordinateName(endLat, endLon),
                     icon: i === segments.length - 1 ? "flag-checkered" : "circle",
-                    connectionMode: "original-kml",
+                    connectionMode: snapToValhalla ? "snap" : "original-kml",
                 }),
             );
         }
         return routeWaypoints;
+    }
+
+    function normalizeWaypointConnectionModes(waypoints: Waypoint[]) {
+        for (let i = 0; i < waypoints.length; i++) {
+            waypoints[i].connectionMode =
+                i === 0 ? undefined : waypoints[i].connectionMode ?? "snap";
+        }
+    }
+
+    function isLoopRouteActive() {
+        return (
+            loopConnectionMode !== "none" &&
+            ($formData.expand!.waypoints_via_trail?.length ?? 0) > 1
+        );
+    }
+
+    function waypointModeToLoopMode(
+        mode?: WaypointConnectionMode,
+    ): LoopConnectionMode {
+        if (mode === "straight") {
+            return "straight";
+        }
+
+        return "snap";
+    }
+
+    function normalizeLoopConnectionMode() {
+        if (($formData.expand!.waypoints_via_trail?.length ?? 0) < 2) {
+            loopConnectionMode = "none";
+        }
+    }
+
+    function inferLoopConnectionModeFromRoute(
+        gpx: GPX,
+        waypoints: Waypoint[],
+    ): LoopConnectionMode {
+        const segments = gpx.trk?.at(0)?.trkseg ?? [];
+        if (waypoints.length < 2 || segments.length < waypoints.length) {
+            return "none";
+        }
+
+        const firstSegmentPoints = segments[0]?.trkpt ?? [];
+        const closingSegmentPoints = segments.at(-1)?.trkpt ?? [];
+        const routeStart = firstSegmentPoints[0];
+        const routeEnd = closingSegmentPoints.at(-1);
+        const startWaypoint = waypoints[0];
+
+        if (!routeStart || !routeEnd) {
+            return "none";
+        }
+
+        const routeStartsAtFirstWaypoint =
+            haversineDistance(
+                routeStart.$.lat!,
+                routeStart.$.lon!,
+                startWaypoint.lat,
+                startWaypoint.lon,
+            ) < 5;
+        const routeClosesAtFirstWaypoint =
+            haversineDistance(
+                routeEnd.$.lat!,
+                routeEnd.$.lon!,
+                startWaypoint.lat,
+                startWaypoint.lon,
+            ) < 5;
+
+        if (!routeStartsAtFirstWaypoint || !routeClosesAtFirstWaypoint) {
+            return "none";
+        }
+
+        return closingSegmentPoints.length <= 2 ? "straight" : "snap";
+    }
+
+    async function updateLoopConnectionMode(value: LoopConnectionMode) {
+        loopConnectionMode = value;
+        await recalculateRouteFromWaypoints({ showSuccessToast: false });
+    }
+
+    function addAnchorsForWaypoints(
+        waypoints: Waypoint[],
+        addToMap: boolean = false,
+    ) {
+        for (let i = 0; i < waypoints.length; i++) {
+            const waypoint = waypoints[i];
+            addAnchor(waypoint.lat, waypoint.lon, i, addToMap);
+        }
+    }
+
+    function snapSegmentToWaypoint(waypoints: Waypoint[], toIndex: number) {
+        if (toIndex > 0 && toIndex < waypoints.length) {
+            waypoints[toIndex].connectionMode = "snap";
+        }
+    }
+
+    function snapSegmentsAroundWaypoint(
+        waypoints: Waypoint[],
+        waypointIndex: number,
+    ) {
+        snapSegmentToWaypoint(waypoints, waypointIndex);
+        snapSegmentToWaypoint(waypoints, waypointIndex + 1);
+    }
+
+    function snapSegmentsForInsertedWaypoint(
+        waypoints: Waypoint[],
+        insertIndex: number,
+    ) {
+        snapSegmentToWaypoint(waypoints, insertIndex);
+        snapSegmentToWaypoint(waypoints, insertIndex + 1);
+    }
+
+    function snapSegmentRange(
+        waypoints: Waypoint[],
+        startSegment: number,
+        endSegment: number,
+    ) {
+        for (
+            let segmentIndex = startSegment;
+            segmentIndex <= endSegment;
+            segmentIndex++
+        ) {
+            snapSegmentToWaypoint(waypoints, segmentIndex + 1);
+        }
     }
 
     function initRouteAnchors(gpx: GPX, addToMap: boolean = false) {
@@ -551,6 +802,60 @@
         waypoint.marker?.togglePopup();
     }
 
+    async function setWaypointAsLoopStart(index: number) {
+        const waypoints = $formData.expand!.waypoints_via_trail ?? [];
+        if (!isLoopRouteActive() || index < 0 || index >= waypoints.length) {
+            return;
+        }
+
+        if (index === 0) {
+            syncWaypointIconsWithRoutingRole();
+            return;
+        }
+
+        const previousWaypoints = [...waypoints];
+        const previousLoopConnectionMode = loopConnectionMode;
+        const rotatedWaypoints = [
+            ...previousWaypoints.slice(index),
+            ...previousWaypoints.slice(0, index),
+        ];
+
+        for (let i = 0; i < rotatedWaypoints.length; i++) {
+            const originalIndex = (index + i) % previousWaypoints.length;
+            if (i === 0) {
+                rotatedWaypoints[i].connectionMode = undefined;
+            } else if (originalIndex === 0) {
+                rotatedWaypoints[i].connectionMode =
+                    previousLoopConnectionMode === "straight"
+                        ? "straight"
+                        : "snap";
+            } else {
+                rotatedWaypoints[i].connectionMode =
+                    previousWaypoints[originalIndex].connectionMode ?? "snap";
+            }
+        }
+
+        loopConnectionMode = waypointModeToLoopMode(
+            previousWaypoints[index].connectionMode,
+        );
+        importedOriginalSegments = Array.from(
+            { length: rotatedWaypoints.length - 1 },
+            (_, offset) => {
+                const originalIndex =
+                    (index + offset + 1) % previousWaypoints.length;
+                return originalIndex === 0
+                    ? []
+                    : cloneRouteSegment(
+                          importedOriginalSegments[originalIndex - 1] ?? [],
+                      );
+            },
+        );
+
+        $formData.expand!.waypoints_via_trail = rotatedWaypoints;
+        syncWaypointIconsWithRoutingRole();
+        await recalculateRouteFromWaypoints({ showSuccessToast: false });
+    }
+
     function handleWaypointMenuClick(
         currentWaypoint: Waypoint,
         index: number,
@@ -562,20 +867,26 @@
         } else if (item.value === "delete") {
             currentWaypoint.marker?.remove();
             deleteWaypoint(index);
+        } else if (item.value === "set-as-start") {
+            void setWaypointAsLoopStart(index);
         }
     }
 
     function deleteWaypoint(index: number) {
         const waypoints = [...($formData.expand!.waypoints_via_trail ?? [])];
+        const wasLoopRouteActive = isLoopRouteActive();
         const previousWaypointCount = waypoints.length;
         waypoints.splice(index, 1);
 
-        for (let i = 0; i < waypoints.length; i++) {
-            waypoints[i].connectionMode =
-                i === 0 ? undefined : waypoints[i].connectionMode ?? "snap";
-        }
+        normalizeWaypointConnectionModes(waypoints);
         $formData.expand!.waypoints_via_trail = waypoints;
         syncWaypointIconsWithRoutingRole();
+        normalizeLoopConnectionMode();
+
+        if (wasLoopRouteActive) {
+            void recalculateRouteFromWaypoints({ showSuccessToast: false });
+            return;
+        }
 
         void deleteWaypointWithSegmentMerge(index, previousWaypointCount);
     }
@@ -593,40 +904,42 @@
 
         const [movedWaypoint] = waypoints.splice(fromIndex, 1);
         waypoints.splice(toIndex, 0, movedWaypoint);
-        for (let i = 0; i < waypoints.length; i++) {
-            waypoints[i].connectionMode =
-                i === 0 ? undefined : waypoints[i].connectionMode ?? "snap";
-        }
+        normalizeWaypointConnectionModes(waypoints);
         syncWaypointIconsWithRoutingRole();
         $formData.expand!.waypoints_via_trail = [...waypoints];
 
         if (waypoints.length > 1) {
+            if (isLoopRouteActive()) {
+                await recalculateRouteFromWaypoints({ showSuccessToast: false });
+                return;
+            }
             await moveWaypointWithSegmentMerge(fromIndex, toIndex);
         }
     }
 
-    async function recalculateRouteFromWaypoints(options?: { showSuccessToast?: boolean }) {
+    async function recalculateRouteFromWaypoints(options?: {
+        showSuccessToast?: boolean;
+    }): Promise<boolean> {
         const waypoints = $formData.expand!.waypoints_via_trail ?? [];
+        normalizeLoopConnectionMode();
 
-        clearRoute();
         clearAnchors();
         clearUndoRedoStack();
 
-        for (let i = 0; i < waypoints.length; i++) {
-            const waypoint = waypoints[i];
-            addAnchor(waypoint.lat, waypoint.lon, i);
-        }
+        addAnchorsForWaypoints(waypoints, drawingActive);
 
         if (waypoints.length < 2) {
+            replaceRouteWithOrderedSegments([]);
             updateTrailWithRouteData();
-            return;
+            return true;
         }
 
         try {
+            const routeSegments: GPXWaypoint[][] = [];
             for (let i = 1; i < waypoints.length; i++) {
                 const previousWaypoint = waypoints[i - 1];
                 const currentWaypoint = waypoints[i] as Waypoint & {
-                    connectionMode?: "snap" | "straight" | "original-kml";
+                    connectionMode?: WaypointConnectionMode;
                 };
                 const connectionMode = currentWaypoint.connectionMode ?? "snap";
 
@@ -635,22 +948,15 @@
                     connectionMode === "original-kml" &&
                     importedOriginalSegments[i - 1]?.length
                 ) {
-                    routeWaypoints = importedOriginalSegments[i - 1].map(
-                        (point) =>
-                            new GPXWaypoint({
-                                ...point,
-                                $: {
-                                    lat: point.$.lat,
-                                    lon: point.$.lon,
-                                },
-                            }),
+                    routeWaypoints = ensureRouteSegmentEndpoints(
+                        importedOriginalSegments[i - 1],
+                        previousWaypoint,
+                        currentWaypoint,
                     );
                 } else {
-                    routeWaypoints = await calculateRouteBetween(
-                        previousWaypoint.lat,
-                        previousWaypoint.lon,
-                        currentWaypoint.lat,
-                        currentWaypoint.lon,
+                    routeWaypoints = await calculateRouteSegmentBetweenEndpoints(
+                        previousWaypoint,
+                        currentWaypoint,
                         {
                             ...routingOptions,
                             autoRouting: connectionMode === "snap",
@@ -658,8 +964,21 @@
                     );
                 }
 
-                insertIntoRoute(routeWaypoints);
+                routeSegments.push(routeWaypoints);
             }
+            if (isLoopRouteActive()) {
+                routeSegments.push(
+                    await calculateRouteSegmentBetweenEndpoints(
+                        waypoints[waypoints.length - 1],
+                        waypoints[0],
+                        {
+                            ...routingOptions,
+                            autoRouting: loopConnectionMode === "snap",
+                        },
+                    ),
+                );
+            }
+            replaceRouteWithOrderedSegments(routeSegments);
             normalizeRouteTime();
             updateTrailWithRouteData();
             if (options?.showSuccessToast !== false) {
@@ -669,6 +988,7 @@
                     type: "success",
                 });
             }
+            return true;
         } catch (e) {
             console.error(e);
             show_toast({
@@ -676,6 +996,7 @@
                 icon: "close",
                 type: "error",
             });
+            return false;
         }
     }
 
@@ -724,7 +1045,7 @@
     ): Promise<GPXWaypoint[]> {
         const previousWaypoint = waypoints[toIndex - 1];
         const currentWaypoint = waypoints[toIndex] as Waypoint & {
-            connectionMode?: "snap" | "straight" | "original-kml";
+            connectionMode?: WaypointConnectionMode;
         };
         const connectionMode = currentWaypoint.connectionMode ?? "snap";
 
@@ -732,33 +1053,175 @@
             connectionMode === "original-kml" &&
             importedOriginalSegments[toIndex - 1]?.length
         ) {
-            return importedOriginalSegments[toIndex - 1].map(
-                (point) =>
-                    new GPXWaypoint({
-                        ...point,
-                        $: {
-                            lat: point.$.lat,
-                            lon: point.$.lon,
-                        },
-                    }),
+            return ensureRouteSegmentEndpoints(
+                cloneRouteSegment(importedOriginalSegments[toIndex - 1]),
+                previousWaypoint,
+                currentWaypoint,
             );
         }
 
-        return calculateRouteBetween(
-            previousWaypoint.lat,
-            previousWaypoint.lon,
-            currentWaypoint.lat,
-            currentWaypoint.lon,
-            {
-                ...routingOptions,
-                autoRouting: connectionMode === "snap",
-            },
+        try {
+            return await calculateRouteSegmentBetweenEndpoints(
+                previousWaypoint,
+                currentWaypoint,
+                {
+                    ...routingOptions,
+                    autoRouting: connectionMode === "snap",
+                },
+            );
+        } catch (e) {
+            console.error(e);
+            return buildStraightFallbackSegment(previousWaypoint, currentWaypoint);
+        }
+    }
+
+    function replaceRouteWithOrderedSegments(routeSegments: GPXWaypoint[][]) {
+        valhallaStore.route = new GPX({
+            trk: [
+                new Track({
+                    trkseg: routeSegments.map(
+                        (routeWaypoints) =>
+                            new TrackSegment({ trkpt: routeWaypoints }),
+                    ),
+                }),
+            ],
+        });
+    }
+
+    async function calculateRouteSegmentBetweenEndpoints(
+        previousWaypoint: RouteSegmentEndpoint,
+        currentWaypoint: RouteSegmentEndpoint,
+        options: RoutingOptions = routingOptions,
+    ) {
+        try {
+            return ensureRouteSegmentEndpoints(
+                await calculateRouteBetween(
+                    previousWaypoint.lat,
+                    previousWaypoint.lon,
+                    currentWaypoint.lat,
+                    currentWaypoint.lon,
+                    options,
+                ),
+                previousWaypoint,
+                currentWaypoint,
+            );
+        } catch (e) {
+            console.error(e);
+            return buildStraightFallbackSegment(previousWaypoint, currentWaypoint);
+        }
+    }
+
+    function cloneRouteSegment(routeWaypoints: GPXWaypoint[]) {
+        return routeWaypoints.map(
+            (point) =>
+                new GPXWaypoint({
+                    ...point,
+                    $: {
+                        lat: point.$.lat,
+                        lon: point.$.lon,
+                    },
+                }),
         );
     }
 
-    async function recalculateAdjacentWaypointSegments(waypointIndex: number) {
+    function findEndpointReference(
+        routeWaypoints: GPXWaypoint[],
+        fromStart: boolean,
+    ) {
+        const points = fromStart ? routeWaypoints : [...routeWaypoints].reverse();
+        return (
+            points.find((point) => Number.isFinite(point.ele)) ??
+            points.find((point) => point.time) ??
+            points[0]
+        );
+    }
+
+    function createRouteEndpointFromReference(
+        lat: number,
+        lon: number,
+        reference: GPXWaypoint | undefined,
+    ) {
+        return new GPXWaypoint({
+            ...(reference ?? {}),
+            $: { lat, lon },
+            ele: Number.isFinite(reference?.ele) ? reference?.ele : undefined,
+            time: reference?.time ? new Date(reference.time) : undefined,
+        });
+    }
+
+    function ensureRouteSegmentEndpoints(
+        routeWaypoints: GPXWaypoint[],
+        previousWaypoint: RouteSegmentEndpoint,
+        currentWaypoint: RouteSegmentEndpoint,
+    ) {
+        const segment = cloneRouteSegment(routeWaypoints);
+
+        if (!segment.length) {
+            return buildStraightFallbackSegment(previousWaypoint, currentWaypoint);
+        }
+
+        const first = segment[0];
+        const last = segment[segment.length - 1];
+
+        if (
+            first.$.lat !== previousWaypoint.lat ||
+            first.$.lon !== previousWaypoint.lon
+        ) {
+            segment.unshift(
+                createRouteEndpointFromReference(
+                    previousWaypoint.lat,
+                    previousWaypoint.lon,
+                    findEndpointReference(segment, true),
+                ),
+            );
+        }
+
+        if (
+            last.$.lat !== currentWaypoint.lat ||
+            last.$.lon !== currentWaypoint.lon
+        ) {
+            segment.push(
+                createRouteEndpointFromReference(
+                    currentWaypoint.lat,
+                    currentWaypoint.lon,
+                    findEndpointReference(segment, false),
+                ),
+            );
+        }
+
+        return segment;
+    }
+
+    function buildStraightFallbackSegment(
+        previousWaypoint: RouteSegmentEndpoint,
+        currentWaypoint: RouteSegmentEndpoint,
+    ) {
+        return [
+            new GPXWaypoint({
+                $: { lat: previousWaypoint.lat, lon: previousWaypoint.lon },
+            }),
+            new GPXWaypoint({
+                $: { lat: currentWaypoint.lat, lon: currentWaypoint.lon },
+            }),
+        ];
+    }
+
+    async function recalculateAdjacentWaypointSegments(
+        waypointIndex: number,
+        options?: { snapAffectedSegments?: boolean },
+    ) {
         const waypoints = $formData.expand!.waypoints_via_trail ?? [];
         if (waypointIndex < 0 || waypointIndex >= waypoints.length) {
+            return;
+        }
+
+        if (options?.snapAffectedSegments) {
+            snapSegmentsAroundWaypoint(waypoints, waypointIndex);
+            $formData.expand!.waypoints_via_trail = [...waypoints];
+        }
+
+        if (isLoopRouteActive()) {
+            await recalculateRouteFromWaypoints({ showSuccessToast: false });
             return;
         }
 
@@ -786,7 +1249,7 @@
             );
 
             for (const result of segmentResults) {
-                editRoute(result.segmentToIndex - 1, result.routeWaypoints);
+                await editRoute(result.segmentToIndex - 1, result.routeWaypoints);
             }
 
             normalizeRouteTime();
@@ -808,7 +1271,7 @@
                 waypoints,
                 toIndex,
             );
-            editRoute(toIndex - 1, routeWaypoints);
+            await editRoute(toIndex - 1, routeWaypoints);
             normalizeRouteTime();
             updateTrailWithRouteData();
         } catch (e) {
@@ -819,6 +1282,14 @@
 
     async function insertWaypointWithSegmentMerge(insertIndex: number) {
         const waypoints = $formData.expand!.waypoints_via_trail ?? [];
+        snapSegmentsForInsertedWaypoint(waypoints, insertIndex);
+        $formData.expand!.waypoints_via_trail = [...waypoints];
+
+        if (isLoopRouteActive()) {
+            await recalculateRouteFromWaypoints({ showSuccessToast: false });
+            return;
+        }
+
         if (waypoints.length < 2) {
             updateTrailWithRouteData();
             return;
@@ -830,13 +1301,13 @@
                     waypoints,
                     1,
                 );
-                insertIntoRoute(firstSegment, 0);
+                await insertIntoRoute(firstSegment, 0);
             } else if (insertIndex >= waypoints.length - 1) {
                 const lastSegment = await calculateRouteSegmentForWaypointPair(
                     waypoints,
                     insertIndex,
                 );
-                insertIntoRoute(lastSegment);
+                await insertIntoRoute(lastSegment);
             } else {
                 const [previousSegment, nextSegment] = await Promise.all([
                     calculateRouteSegmentForWaypointPair(waypoints, insertIndex),
@@ -845,8 +1316,8 @@
                         insertIndex + 1,
                     ),
                 ]);
-                editRoute(insertIndex - 1, previousSegment);
-                insertIntoRoute(nextSegment, insertIndex);
+                await editRoute(insertIndex - 1, previousSegment);
+                await insertIntoRoute(nextSegment, insertIndex);
             }
             normalizeRouteTime();
             updateTrailWithRouteData();
@@ -880,11 +1351,13 @@
             } else if (deletedIndex >= previousWaypointCount - 1) {
                 deleteFromRoute(previousWaypointCount - 2);
             } else {
+                snapSegmentToWaypoint(waypoints, deletedIndex);
+                $formData.expand!.waypoints_via_trail = [...waypoints];
                 const mergedSegment = await calculateRouteSegmentForWaypointPair(
                     waypoints,
                     deletedIndex,
                 );
-                editRoute(deletedIndex - 1, mergedSegment);
+                await editRoute(deletedIndex - 1, mergedSegment);
                 deleteFromRoute(deletedIndex);
             }
             normalizeRouteTime();
@@ -909,6 +1382,8 @@
         const maxIndex = Math.max(fromIndex, toIndex);
         const startSegment = Math.max(0, minIndex - 1);
         const endSegment = Math.min(waypoints.length - 2, maxIndex);
+        snapSegmentRange(waypoints, startSegment, endSegment);
+        $formData.expand!.waypoints_via_trail = [...waypoints];
 
         try {
             const segmentUpdates = await Promise.all(
@@ -925,7 +1400,7 @@
             );
 
             for (const update of segmentUpdates) {
-                editRoute(update.segmentIndex, update.routeWaypoints);
+                await editRoute(update.segmentIndex, update.routeWaypoints);
             }
 
             normalizeRouteTime();
@@ -982,21 +1457,10 @@
 
         const addButton = document.createElement("button");
         addButton.className = "btn-secondary text-sm";
-        addButton.textContent = get(_)("quick-add-waypoint");
+        addButton.textContent = get(_)("add-waypoint");
         addButton.addEventListener("click", async () => {
             await addWaypointFromTap(lnglat.lat, lnglat.lng, {
                 openEditor: false,
-                presetName: options?.presetName,
-            });
-            closeWaypointActionPopup();
-        });
-
-        const advancedButton = document.createElement("button");
-        advancedButton.className = "btn-primary text-sm";
-        advancedButton.textContent = get(_)("add-waypoint");
-        advancedButton.addEventListener("click", async () => {
-            await addWaypointFromTap(lnglat.lat, lnglat.lng, {
-                openEditor: true,
                 presetName: options?.presetName,
             });
             closeWaypointActionPopup();
@@ -1008,7 +1472,6 @@
         cancelButton.addEventListener("click", () => closeWaypointActionPopup());
 
         content.appendChild(addButton);
-        content.appendChild(advancedButton);
         content.appendChild(cancelButton);
 
         mapWaypointPopup = new M.Popup({ closeOnClick: true, offset: 20 })
@@ -1028,10 +1491,18 @@
             ) ?? -1;
 
         if (editedWaypointIndex >= 0) {
+            const previousWaypoint =
+                $formData.expand!.waypoints_via_trail![editedWaypointIndex];
+            const positionChanged =
+                previousWaypoint.lat !== savedWaypoint.lat ||
+                previousWaypoint.lon !== savedWaypoint.lon;
             $formData.expand!.waypoints_via_trail![editedWaypointIndex] = savedWaypoint;
-            void recalculateAdjacentWaypointSegments(editedWaypointIndex);
+            void recalculateAdjacentWaypointSegments(editedWaypointIndex, {
+                snapAffectedSegments: positionChanged,
+            });
         } else {
             savedWaypoint.id = cryptoRandomString({ length: 15 });
+            savedWaypoint.connectionMode = "snap";
             const updatedWaypoints = [...($formData.expand!.waypoints_via_trail ?? [])];
             const insertIndex =
                 pendingWaypointInsertIndex === null
@@ -1060,7 +1531,9 @@
             editableWaypoint.name?.trim() ||
             getWaypointCoordinateName(position.lat, position.lng);
         $formData.expand!.waypoints_via_trail = [...($formData.expand!.waypoints_via_trail ?? [])];
-        void recalculateAdjacentWaypointSegments(editableWaypointIndex);
+        void recalculateAdjacentWaypointSegments(editableWaypointIndex, {
+            snapAffectedSegments: true,
+        });
     }
 
     function syncWaypointIconsWithRoutingRole() {
@@ -1192,6 +1665,9 @@
             await addWaypointFromTap(e.lngLat.lat, e.lngLat.lng, {
                 openEditor: false,
             });
+            if (isLoopRouteActive()) {
+                return;
+            }
             if (anchorCount == 0) {
                 addAnchor(
                     e.lngLat.lat,
@@ -1236,10 +1712,7 @@
 
         const updatedWaypoints = [...existingWaypoints];
         updatedWaypoints.splice(insertIndex, 0, insertedWaypoint);
-        for (let i = 0; i < updatedWaypoints.length; i++) {
-            updatedWaypoints[i].connectionMode =
-                i === 0 ? undefined : updatedWaypoints[i].connectionMode ?? "snap";
-        }
+        normalizeWaypointConnectionModes(updatedWaypoints);
 
         if (options?.openEditor) {
             pendingWaypointInsertIndex = insertIndex;
@@ -1263,14 +1736,11 @@
         const anchor = addAnchor(lat, lon, valhallaStore.anchors.length);
         const markerText = startAnchorLoading(anchor);
         try {
-            const routeWaypoints = await calculateRouteBetween(
-                previousAnchor.lat,
-                previousAnchor.lon,
-                lat,
-                lon,
-                routingOptions,
+            const routeWaypoints = await calculateRouteSegmentBetweenEndpoints(
+                previousAnchor,
+                { lat, lon },
             );
-            insertIntoRoute(routeWaypoints);
+            await insertIntoRoute(routeWaypoints);
             updateTrailWithRouteData();
             normalizeRouteTime();
         } catch (e) {
@@ -1389,15 +1859,13 @@
         if (!drawingActive) {
             return;
         }
+        const wasLoopRouteActive = isLoopRouteActive();
         valhallaStore.anchors[anchorIndex]?.marker?.remove();
         valhallaStore.anchors.splice(anchorIndex, 1);
 
         const waypoints = [...($formData.expand!.waypoints_via_trail ?? [])];
         waypoints.splice(anchorIndex, 1);
-        for (let i = 0; i < waypoints.length; i++) {
-            waypoints[i].connectionMode =
-                i === 0 ? undefined : waypoints[i].connectionMode ?? "snap";
-        }
+        normalizeWaypointConnectionModes(waypoints);
         $formData.expand!.waypoints_via_trail = waypoints;
         syncWaypointIconsWithRoutingRole();
         for (let i = anchorIndex; i < valhallaStore.anchors.length; i++) {
@@ -1414,6 +1882,11 @@
                     $_("route-point") + " #" + newIndex;
             }
         }
+        normalizeLoopConnectionMode();
+        if (wasLoopRouteActive) {
+            await recalculateRouteFromWaypoints({ showSuccessToast: false });
+            return;
+        }
         if (anchorIndex == 0) {
             deleteFromRoute(anchorIndex);
             if ($formData.expand?.gpx_data) {
@@ -1429,6 +1902,12 @@
     }
 
     async function recalculateRoute(anchorIndex: number) {
+        if (isLoopRouteActive()) {
+            await recalculateRouteFromWaypoints({ showSuccessToast: false });
+            draggingMarker = false;
+            return;
+        }
+
         const markerText = startAnchorLoading(
             valhallaStore.anchors[anchorIndex],
         );
@@ -1443,22 +1922,16 @@
             if (anchorIndex < valhallaStore.anchors.length - 1) {
                 const nextAnchor = valhallaStore.anchors[anchorIndex + 1];
 
-                nextRouteSegment = calculateRouteBetween(
-                    anchor.lat,
-                    anchor.lon,
-                    nextAnchor.lat,
-                    nextAnchor.lon,
-                    routingOptions,
+                nextRouteSegment = calculateRouteSegmentBetweenEndpoints(
+                    anchor,
+                    nextAnchor,
                 );
             }
             if (anchorIndex > 0) {
                 const previousAnchor = valhallaStore.anchors[anchorIndex - 1];
-                previousRouteSegment = calculateRouteBetween(
-                    previousAnchor.lat,
-                    previousAnchor.lon,
-                    anchor.lat,
-                    anchor.lon,
-                    routingOptions,
+                previousRouteSegment = calculateRouteSegmentBetweenEndpoints(
+                    previousAnchor,
+                    anchor,
                 );
             }
 
@@ -1468,10 +1941,10 @@
             ]);
 
             if (nextRouteSegment) {
-                editRoute(anchorIndex, nextRouteSegment);
+                await editRoute(anchorIndex, nextRouteSegment);
             }
             if (previousRouteSegment) {
-                editRoute(anchorIndex - 1, previousRouteSegment);
+                await editRoute(anchorIndex - 1, previousRouteSegment);
             }
             updateTrailWithRouteData();
             normalizeRouteTime();
@@ -1499,19 +1972,28 @@
             data.event.lngLat.lng,
             data.segment + 1,
         );
-        const insertedWaypoint = createWaypointFromTap(data.event.lngLat.lat, data.event.lngLat.lng, {
-            name: getWaypointCoordinateName(data.event.lngLat.lat, data.event.lngLat.lng),
-        });
+        const insertedWaypoint = createWaypointFromTap(
+            data.event.lngLat.lat,
+            data.event.lngLat.lng,
+            {
+                name: getWaypointCoordinateName(
+                    data.event.lngLat.lat,
+                    data.event.lngLat.lng,
+                ),
+            },
+        );
         insertedWaypoint.id = cryptoRandomString({ length: 15 });
 
         const waypoints = [...($formData.expand!.waypoints_via_trail ?? [])];
         waypoints.splice(data.segment + 1, 0, insertedWaypoint);
-        for (let i = 0; i < waypoints.length; i++) {
-            waypoints[i].connectionMode =
-                i === 0 ? undefined : waypoints[i].connectionMode ?? "snap";
-        }
+        normalizeWaypointConnectionModes(waypoints);
+        snapSegmentsForInsertedWaypoint(waypoints, data.segment + 1);
         $formData.expand!.waypoints_via_trail = waypoints;
         syncWaypointIconsWithRoutingRole();
+        if (isLoopRouteActive()) {
+            await recalculateRouteFromWaypoints({ showSuccessToast: false });
+            return;
+        }
         const markerText = startAnchorLoading(anchor);
         updateFollowingAnchors(data.segment);
 
@@ -1520,24 +2002,12 @@
 
         try {
             const [previousRouteSegment, nextRouteSegment] = await Promise.all([
-                calculateRouteBetween(
-                    previousAnchor.lat,
-                    previousAnchor.lon,
-                    anchor.lat,
-                    anchor.lon,
-                    routingOptions,
-                ),
-                calculateRouteBetween(
-                    anchor.lat,
-                    anchor.lon,
-                    nextAnchor.lat,
-                    nextAnchor.lon,
-                    routingOptions,
-                ),
+                calculateRouteSegmentBetweenEndpoints(previousAnchor, anchor),
+                calculateRouteSegmentBetweenEndpoints(anchor, nextAnchor),
             ]);
 
-            editRoute(data.segment, previousRouteSegment);
-            insertIntoRoute(nextRouteSegment, data.segment + 1);
+            await editRoute(data.segment, previousRouteSegment);
+            await insertIntoRoute(nextRouteSegment, data.segment + 1);
             normalizeRouteTime();
             updateTrailWithRouteData();
         } catch (e) {
@@ -1573,6 +2043,35 @@
         segment: number;
         event: M.MapMouseEvent;
     }) {
+        if (isLoopRouteActive()) {
+            const insertIndex = data.segment + 1;
+            addAnchor(
+                data.event.lngLat.lat,
+                data.event.lngLat.lng,
+                insertIndex,
+            );
+            const insertedWaypoint = createWaypointFromTap(
+                data.event.lngLat.lat,
+                data.event.lngLat.lng,
+                {
+                    name: getWaypointCoordinateName(
+                        data.event.lngLat.lat,
+                        data.event.lngLat.lng,
+                    ),
+                },
+            );
+            insertedWaypoint.id = cryptoRandomString({ length: 15 });
+
+            const waypoints = [...($formData.expand!.waypoints_via_trail ?? [])];
+            waypoints.splice(insertIndex, 0, insertedWaypoint);
+            normalizeWaypointConnectionModes(waypoints);
+            snapSegmentsForInsertedWaypoint(waypoints, insertIndex);
+            $formData.expand!.waypoints_via_trail = waypoints;
+            syncWaypointIconsWithRoutingRole();
+            await recalculateRouteFromWaypoints({ showSuccessToast: false });
+            return;
+        }
+
         addAnchor(
             data.event.lngLat.lat,
             data.event.lngLat.lng,
@@ -1885,6 +2384,17 @@
                 : $_("upload-file")}</Button
         >
         {#if env.PUBLIC_VALHALLA_URL}
+            <label class="flex items-start gap-2 text-sm font-medium">
+                <input
+                    type="checkbox"
+                    class="mt-1"
+                    bind:checked={snapImportedRouteToValhalla}
+                    disabled={drawingActive}
+                />
+                <span>{$_("snap-imported-route-to-valhalla")}</span>
+            </label>
+        {/if}
+        {#if env.PUBLIC_VALHALLA_URL && !$formData.expand?.gpx_data}
             <div class="flex gap-4 items-center w-full">
                 <hr class="basis-full border-input-border" />
                 <span class="text-gray-500 uppercase">{$_("or")}</span>
@@ -1901,13 +2411,7 @@
                     }
                 }}
             >
-                {$formData.expand?.gpx_data
-                    ? drawingActive
-                        ? $_("stop-editing")
-                        : $_("edit-route")
-                    : drawingActive
-                      ? $_("stop-drawing")
-                      : $_("draw-a-route")}</button
+                {drawingActive ? $_("stop-drawing") : $_("draw-a-route")}</button
             >
         {/if}
         <input
@@ -2059,74 +2563,57 @@
                     onmouseenter={() => openMarkerPopup(waypoint)}
                     onmouseleave={() => openMarkerPopup(waypoint)}
                 >
-                    <div class="flex items-center justify-between gap-2 mb-1">
-                        <span class="text-xs font-medium text-gray-500">
-                            Wegpunkt #{i + 1}
-                        </span>
-                        {#if i > 0}
-                            <div class="w-56 max-w-full">
-                                <Select
-                                    name={`waypoint-connection-mode-${waypoint.id ?? i}`}
-                                    label={`Verbindung ${i} → ${i + 1}`}
-                                    value={waypoint.connectionMode ?? "snap"}
-                                    items={[
-                                        { text: "An Straßennetz snappen", value: "snap" },
-                                        { text: "Luftlinie", value: "straight" },
-                                        {
-                                            text: importedOriginalRoute
-                                                ? "Ursprüngliche KML-Geometrie"
-                                                : "Ursprüngliche KML-Geometrie (nicht verfügbar)",
-                                            value: "original-kml",
-                                        },
-                                    ]}
-                                    onchange={(value) => {
-                                        if (value === "original-kml" && !importedOriginalRoute) {
-                                            return;
-                                        }
-                                        waypoint.connectionMode = value;
-                                        $formData.expand!.waypoints_via_trail = [
-                                            ...($formData.expand!.waypoints_via_trail ?? []),
-                                        ];
-                                        void recalculateSingleWaypointSegment(i);
-                                    }}
-                                ></Select>
-                            </div>
-                        {/if}
-                    </div>
-                    <div class="flex justify-end gap-2 mb-1">
-                        <button
-                            class="btn-icon"
-                            type="button"
-                            aria-label="Move waypoint up"
-                            disabled={i === 0}
-                            onclick={() => moveWaypoint(i, i - 1)}
+                    {#if i > 0}
+                        <div
+                            class="mx-2 flex items-center gap-2 py-1 text-xs text-gray-500"
                         >
-                            <i
-                                class="fa fa-arrow-up"
-                                class:text-gray-500={i === 0}
-                            ></i>
-                        </button>
-                        <button
-                            class="btn-icon"
-                            type="button"
-                            aria-label="Move waypoint down"
-                            disabled={i ===
-                                ($formData.expand?.waypoints_via_trail?.length ??
-                                    0) -
-                                    1}
-                            onclick={() => moveWaypoint(i, i + 1)}
-                        >
-                            <i
-                                class="fa fa-arrow-down"
-                                class:text-gray-500={i ===
-                                    ($formData.expand?.waypoints_via_trail
-                                        ?.length ?? 0) -
-                                        1}
-                            ></i>
-                        </button>
-                    </div>
+                            <span class="shrink-0 font-medium">
+                                Verbindung {i} → {i + 1}
+                            </span>
+                            <span class="h-px flex-1 bg-input-border"></span>
+                            <select
+                                name={`waypoint-connection-mode-${waypoint.id ?? i}`}
+                                class="h-8 max-w-40 rounded-md bg-input-background px-2 text-xs outline outline-1 outline-input-border focus:outline-input-border-focus"
+                                value={waypoint.connectionMode ?? "snap"}
+                                onchange={(event) => {
+                                    const value = (
+                                        event.currentTarget as HTMLSelectElement
+                                    ).value as WaypointConnectionMode;
+                                    if (
+                                        value === "original-kml" &&
+                                        !importedOriginalRoute
+                                    ) {
+                                        return;
+                                    }
+                                    waypoint.connectionMode = value;
+                                    $formData.expand!.waypoints_via_trail = [
+                                        ...($formData.expand!.waypoints_via_trail ??
+                                            []),
+                                    ];
+                                    void recalculateSingleWaypointSegment(i);
+                                }}
+                            >
+                                <option value="snap">Valhalla-Snap</option>
+                                <option value="straight">Luftlinie</option>
+                                <option
+                                    value="original-kml"
+                                    disabled={!importedOriginalRoute}
+                                    >KML-Original</option
+                                >
+                            </select>
+                        </div>
+                    {/if}
                     <WaypointCard
                         {waypoint}
+                        waypointNumber={i + 1}
+                        canMoveUp={i > 0}
+                        canMoveDown={i <
+                            ($formData.expand?.waypoints_via_trail?.length ??
+                                0) -
+                                1}
+                        onMoveUp={() => moveWaypoint(i, i - 1)}
+                        onMoveDown={() => moveWaypoint(i, i + 1)}
+                        canSetAsStart={isLoopRouteActive()}
                         routingRole={getRoutingRoleByIndex(
                             i,
                             $formData.expand?.waypoints_via_trail?.length ?? 0,
@@ -2135,6 +2622,43 @@
                         onchange={(item) =>
                             handleWaypointMenuClick(waypoint, i, item)}
                     ></WaypointCard>
+                    {#if i === ($formData.expand?.waypoints_via_trail?.length ?? 0) - 1 && ($formData.expand?.waypoints_via_trail?.length ?? 0) > 1}
+                        <div
+                            class="mx-2 flex items-center gap-2 py-1 text-xs text-gray-500"
+                        >
+                            <span class="shrink-0 font-medium">
+                                {$_("roundtrip-connection-label", {
+                                    values: {
+                                        from: i + 1,
+                                        to: 1,
+                                    },
+                                })}
+                            </span>
+                            <span class="h-px flex-1 bg-input-border"></span>
+                            <select
+                                name="loop-connection-mode"
+                                class="h-8 max-w-56 rounded-md bg-input-background px-2 text-xs outline outline-1 outline-input-border focus:outline-input-border-focus"
+                                value={loopConnectionMode}
+                                onchange={(event) => {
+                                    void updateLoopConnectionMode(
+                                        (
+                                            event.currentTarget as HTMLSelectElement
+                                        ).value as LoopConnectionMode,
+                                    );
+                                }}
+                            >
+                                <option value="none"
+                                    >{$_("roundtrip-mode-none")}</option
+                                >
+                                <option value="snap"
+                                    >{$_("roundtrip-mode-snap")}</option
+                                >
+                                <option value="straight"
+                                    >{$_("roundtrip-mode-straight")}</option
+                                >
+                            </select>
+                        </div>
+                    {/if}
                 </li>
             {/each}
         </ul>

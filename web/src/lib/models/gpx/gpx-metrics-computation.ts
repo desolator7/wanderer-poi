@@ -20,13 +20,18 @@ class GpxMetricsComputation {
     this.thresholdZ_m = thresholdZ_m;
   }
 
+  private getElevation(point: any): number | null {
+    return Number.isFinite(point.ele) ? point.ele : null;
+  }
+
   addAndFilter(point: any) {
     if (!this.lastPointXY || !this.lastFilteredPointXY) {
       // Initialize raw and smoothed anchors with the first point.
       this.lastPointXY = point;
       this.lastFilteredPointXY = point;
-      this.lastFilteredZ = point.ele ?? 0;
-      this.lastZ = point.ele ?? 0;
+      const elevation = this.getElevation(point);
+      this.lastFilteredZ = elevation;
+      this.lastZ = elevation;
       return;
     }
 
@@ -49,15 +54,18 @@ class GpxMetricsComputation {
 
     this.lastPointXY = point;
 
-    const elevation = point.ele ?? 0;
-    // @ts-ignore I know this.lastZ is not null
-    const elevationDiff = elevation - this.lastZ;
-    this.lastZ = elevation;
-    if (elevationDiff > 0) {
-      this.totalElevationGain += elevationDiff;
+    const elevation = this.getElevation(point);
+    if (elevation !== null && this.lastZ !== null) {
+      const elevationDiff = elevation - this.lastZ;
+      if (elevationDiff > 0) {
+        this.totalElevationGain += elevationDiff;
+      }
+      if (elevationDiff < 0) {
+        this.totalElevationLoss -= elevationDiff;
+      }
     }
-    if (elevationDiff < 0) {
-      this.totalElevationLoss -= elevationDiff;
+    if (elevation !== null) {
+      this.lastZ = elevation;
     }
 
     if (smoothedDistance < this.thresholdXY_m) {
@@ -67,7 +75,15 @@ class GpxMetricsComputation {
     this.totalDistanceSmoothed += smoothedDistance;
     this.lastFilteredPointXY = point;
 
-    // @ts-ignore: I know this.lastFilteredZ is not null
+    if (elevation === null) {
+      return;
+    }
+
+    if (this.lastFilteredZ === null) {
+      this.lastFilteredZ = elevation;
+      return;
+    }
+
     const elevationDiffSmoothed = elevation - this.lastFilteredZ;
 
     if (Math.abs(elevationDiffSmoothed) < this.thresholdZ_m) {

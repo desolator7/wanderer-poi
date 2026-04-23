@@ -52,21 +52,24 @@
 
     if (!options.pedestrianOptions) {
         options.pedestrianOptions = {
-            max_hiking_difficulty: 6,
+            max_hiking_difficulty: 3,
             walking_speed: 5.1,
             use_hills: 1,
-            shortest: false,
+            use_tracks: 1,
+            walkway_factor: 0.7,
+            sidewalk_factor: 1,
+            shortest: true,
         };
     }
 
     if (!options.bicycleOptions) {
         options.bicycleOptions = {
-            bicycle_type: "Hybrid",
-            cycling_speed: 20,
-            use_roads: 0.5,
-            use_hills: 0.5,
-            avoid_bad_surfaces: 0.25,
-            shortest: false,
+            bicycle_type: "Mountain",
+            cycling_speed: 16,
+            use_roads: 0,
+            use_hills: 0.8,
+            avoid_bad_surfaces: 0,
+            shortest: true,
         };
     }
 

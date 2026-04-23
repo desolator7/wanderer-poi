@@ -73,6 +73,12 @@
             (definition) => definition.category === draft.category,
         ),
     );
+    let hasPrivateDefinitions = $derived(
+        selectedDefinitions.some(
+            (definition) => definition.value_storage === "private",
+        ),
+    );
+
     $effect(() => {
         const nextAttributes = { ...(draft.attributes ?? {}) };
         for (const definition of selectedDefinitions) {

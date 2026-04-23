@@ -15,9 +15,26 @@
         mode?: "show" | "edit";
         onchange?: (item: DropdownItem) => void;
         routingRole?: "start" | "via" | "goal";
+        waypointNumber?: number;
+        canMoveUp?: boolean;
+        canMoveDown?: boolean;
+        onMoveUp?: () => void;
+        onMoveDown?: () => void;
+        canSetAsStart?: boolean;
     }
 
-    let { waypoint, mode = "show", onchange, routingRole }: Props = $props();
+    let {
+        waypoint,
+        mode = "show",
+        onchange,
+        routingRole,
+        waypointNumber,
+        canMoveUp = false,
+        canMoveDown = false,
+        onMoveUp,
+        onMoveDown,
+        canSetAsStart = false,
+    }: Props = $props();
 
     let gallery: PhotoGallery | undefined = $state();
 
@@ -43,15 +60,61 @@
         }
     });
 
-    const dropdownItems = [
+    let dropdownItems = $derived([
         { text: $_("edit"), value: "edit" },
+        ...(canSetAsStart
+            ? [
+                  {
+                      text: $_("set-as-start"),
+                      value: "set-as-start",
+                      icon: "play",
+                  },
+              ]
+            : []),
         { text: $_("delete"), value: "delete" },
-    ];
+    ]);
 </script>
 
 <div
     class="flex gap-4 p-4 outline outline-1 outline-input-border rounded-md my-2 hover:outline-2 items-start"
 >
+    {#if waypointNumber !== undefined}
+        <div class="flex shrink-0 flex-col items-center gap-1">
+            <span
+                class="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-sm font-semibold text-white shadow-md"
+            >
+                {waypointNumber}
+            </span>
+            {#if mode == "edit"}
+                <div class="flex gap-1">
+                    <button
+                        class="btn-icon"
+                        type="button"
+                        aria-label="Move waypoint up"
+                        disabled={!canMoveUp}
+                        onclick={onMoveUp}
+                    >
+                        <i
+                            class="fa fa-arrow-up text-xs"
+                            class:text-gray-500={!canMoveUp}
+                        ></i>
+                    </button>
+                    <button
+                        class="btn-icon"
+                        type="button"
+                        aria-label="Move waypoint down"
+                        disabled={!canMoveDown}
+                        onclick={onMoveDown}
+                    >
+                        <i
+                            class="fa fa-arrow-down text-xs"
+                            class:text-gray-500={!canMoveDown}
+                        ></i>
+                    </button>
+                </div>
+            {/if}
+        </div>
+    {/if}
     {#if imgSrc.length}
         {#if mode == "show"}
             <PhotoGallery

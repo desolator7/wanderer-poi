@@ -1,6 +1,10 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import GPX from "../models/gpx/gpx";
+import TrackSegment from "../models/gpx/track-segment";
+import Track from "../models/gpx/track";
+import GPXWaypoint from "../models/gpx/waypoint";
 import {
     createWaypointFromTap,
     getRoutingRoleByIndex,
@@ -98,17 +102,83 @@ describe("polyline simplification", () => {
     });
 });
 
+describe("gpx elevation gaps", () => {
+    it("draws missing segment endpoint elevations from neighboring route points", () => {
+        const segment = new TrackSegment({
+            trkpt: [
+                new GPXWaypoint({ $: { lat: 47.0, lon: 11.0 } }),
+                new GPXWaypoint({
+                    $: { lat: 47.001, lon: 11.001 },
+                    ele: 1234,
+                }),
+                new GPXWaypoint({ $: { lat: 47.002, lon: 11.002 } }),
+            ],
+        });
+
+        const geojson = segment.toGeoJSON(new Track({}), 0, 0);
+        const coordinates = (geojson.geometry as GeoJSON.LineString).coordinates;
+
+        expect(coordinates[0][2]).toBe(1234);
+        expect(coordinates[1][2]).toBe(1234);
+        expect(coordinates[2][2]).toBe(1234);
+    });
+
+    it("does not count missing waypoint endpoint elevations as drops to sea level", () => {
+        const gpx = new GPX({
+            trk: [
+                new Track({
+                    trkseg: [
+                        new TrackSegment({
+                            trkpt: [
+                                new GPXWaypoint({
+                                    $: { lat: 47.0, lon: 11.0 },
+                                    ele: 100,
+                                }),
+                                new GPXWaypoint({
+                                    $: { lat: 47.001, lon: 11.001 },
+                                    ele: 110,
+                                }),
+                                new GPXWaypoint({
+                                    $: { lat: 47.002, lon: 11.002 },
+                                }),
+                            ],
+                        }),
+                        new TrackSegment({
+                            trkpt: [
+                                new GPXWaypoint({
+                                    $: { lat: 47.002, lon: 11.002 },
+                                }),
+                                new GPXWaypoint({
+                                    $: { lat: 47.003, lon: 11.003 },
+                                    ele: 116,
+                                }),
+                                new GPXWaypoint({
+                                    $: { lat: 47.004, lon: 11.004 },
+                                    ele: 126,
+                                }),
+                            ],
+                        }),
+                    ],
+                }),
+            ],
+        });
+
+        expect(gpx.features.elevationLoss).toBe(0);
+        expect(gpx.features.elevationGain).toBe(16);
+    });
+});
+
 describe("trail editor integration", () => {
     const trailEditorPath = resolve("src/routes/trail/edit/[id]/+page.svelte");
 
-    it("removes the add-waypoint menu button from the UI", () => {
+    it("removes the advanced add-waypoint menu button from the UI", () => {
         const source = readFileSync(trailEditorPath, "utf8");
-        expect(source).not.toContain('>{$_("add-waypoint")}</button');
+        expect(source).not.toContain('get(_)("add-waypoint-advanced")');
     });
 
-    it("hooks map tap directly to waypoint creation", () => {
+    it("opens the waypoint action popup on map tap", () => {
         const source = readFileSync(trailEditorPath, "utf8");
-        expect(source).toContain("await addWaypointFromTap(e.lngLat.lat, e.lngLat.lng);");
+        expect(source).toContain("showWaypointActionPopup(e.lngLat);");
     });
 });
 
