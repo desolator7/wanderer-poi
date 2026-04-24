@@ -103,6 +103,24 @@ describe("polyline simplification", () => {
 });
 
 describe("gpx elevation gaps", () => {
+    it("keeps parsed GPX elevation strings as numeric GeoJSON elevations", () => {
+        const gpx = GPX.parse(`<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="wanderer">
+  <trk>
+    <trkseg>
+      <trkpt lat="47.0" lon="11.0"><ele>100.5</ele></trkpt>
+      <trkpt lat="47.001" lon="11.001"><ele>112.25</ele></trkpt>
+    </trkseg>
+  </trk>
+</gpx>`);
+
+        const feature = gpx.toGeoJSON().features[0];
+        const coordinates = (feature.geometry as GeoJSON.LineString).coordinates;
+
+        expect(coordinates[0][2]).toBe(100.5);
+        expect(coordinates[1][2]).toBe(112.25);
+    });
+
     it("draws missing segment endpoint elevations from neighboring route points", () => {
         const segment = new TrackSegment({
             trkpt: [

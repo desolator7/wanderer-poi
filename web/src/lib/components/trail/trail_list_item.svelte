@@ -15,6 +15,7 @@
     import ShareInfo from "../share_info.svelte";
     import { handleFromRecordWithIRI } from "$lib/util/activitypub_util";
     import Chip from "../base/chip.svelte";
+    import TrailMapEditButton from "./trail_map_edit_button.svelte";
 
     interface Props {
         trail: Trail;
@@ -190,11 +191,18 @@
             >
         </div>
         {#if showDescription}
-            <p
-                class="mt-3 text-sm whitespace-nowrap min-w-0 max-w-full overflow-hidden text-ellipsis basis-full"
-            >
-                {formatHTMLAsText(trail.description ?? "")}
-            </p>
+            <div class="mt-3 flex flex-wrap items-center gap-3 basis-full">
+                <p
+                    class="text-sm whitespace-nowrap min-w-0 max-w-full overflow-hidden text-ellipsis grow"
+                >
+                    {formatHTMLAsText(trail.description ?? "")}
+                </p>
+                <TrailMapEditButton trail={trail} compact={true} />
+            </div>
+        {:else}
+            <div class="mt-3">
+                <TrailMapEditButton trail={trail} compact={true} />
+            </div>
         {/if}
         {#if hovered || selected}
             <div

@@ -13,6 +13,7 @@
     import { _ } from "svelte-i18n";
     import type { MouseEventHandler } from "svelte/elements";
     import Chip from "../base/chip.svelte";
+    import TrailMapEditButton from "./trail_map_edit_button.svelte";
 
     interface Props {
         trail: Trail;
@@ -238,6 +239,9 @@
                     trail.elevation_loss,
                 )}</span
             >
+        </div>
+        <div class="mt-3">
+            <TrailMapEditButton trail={trail} compact={true} fullWidth={true} />
         </div>
     </div>
 </div>

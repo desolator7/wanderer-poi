@@ -1,5 +1,18 @@
 import Link from './link';
 
+function toFiniteNumber(value: unknown): number | undefined {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : undefined;
+  }
+
+  if (typeof value === "string" && value.trim() !== "") {
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue : undefined;
+  }
+
+  return undefined;
+}
+
 export default class Waypoint {
   $: {
     lat?: number;
@@ -52,7 +65,7 @@ export default class Waypoint {
     this.$ = {};
     this.$.lat = object.$.lat === 0 || object.lat === 0 ? 0 : object.$.lat || object.lat || -1;
     this.$.lon = object.$.lon === 0 || object.lon === 0 ? 0 : object.$.lon || object.lon || -1;
-    this.ele = object.ele;
+    this.ele = toFiniteNumber(object.ele);
     if (object.time) {
       this.time = new Date(object.time);
     }

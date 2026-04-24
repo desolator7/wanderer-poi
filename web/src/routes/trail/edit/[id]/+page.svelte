@@ -44,10 +44,8 @@
         insertIntoRoute,
         normalizeRouteTime,
         recalculateHeight,
-        resetRoute,
         reverseRoute,
         setRoute,
-        splitSegment,
         undo,
         redo,
         clearUndoRedoStack,
@@ -59,7 +57,7 @@
         formatElevation,
         formatTimeHHMM,
     } from "$lib/util/format_util";
-    import { cropGPX, fromFile, gpx2trail } from "$lib/util/gpx_util";
+    import { fromFile, gpx2trail } from "$lib/util/gpx_util";
 
     import { page } from "$app/state";
     import emptyStateTrailDark from "$lib/assets/svgs/empty_states/empty_state_trail_dark.svg";
@@ -89,7 +87,6 @@
     import { getIconForLocation } from "$lib/util/icon_util.js";
     import {
         createAnchorMarker,
-        FontawesomeMarker,
     } from "$lib/util/maplibre_util";
     import {
         createWaypointFromTap,
@@ -130,14 +127,11 @@
     let gpxFile: File | Blob | null = null;
 
     let drawingActive = $state(false);
-    let overwriteGPX = false;
     let draggingMarker = false;
     let snapImportedRouteToValhalla = $state(false);
 
     let searchDropdownItems: SearchItem[] = $state([]);
 
-    let cropStartMarker: FontawesomeMarker;
-    let cropEndMarker: FontawesomeMarker;
     let routePlannerPois: Poi[] = $state(untrack(() => data.pois));
     let includePublicPois = $state(true);
     let includeOwnPois = $state(true);
@@ -158,8 +152,6 @@
             return true;
         }),
     );
-
-    let croppedGPX: GPX | null = null;
 
     const ClientTrailCreateSchema = TrailCreateSchema.extend({
         expand: z
@@ -230,6 +222,110 @@
     type RouteSegmentEndpoint = { lat: number; lon: number };
     type WaypointConnectionMode = "snap" | "straight" | "original-kml";
     type LoopConnectionMode = "none" | "snap" | "straight";
+    type WaypointHistorySnapshot = {
+        waypoints: Waypoint[];
+        loopConnectionMode: LoopConnectionMode;
+    };
+
+    const supportedRouteCategoryModes = {
+        hiking: "pedestrian",
+        cycling: "bicycle",
+    } as const;
+
+    function getCategoryKey(categoryId?: string) {
+        const category = $categories.find((entry) => entry.id === categoryId);
+        return category?.name?.toLowerCase() ?? null;
+    }
+
+    function getRoutingModeForCategory(categoryId?: string) {
+        const categoryKey = getCategoryKey(categoryId);
+        if (
+            categoryKey &&
+            categoryKey in supportedRouteCategoryModes
+        ) {
+            return supportedRouteCategoryModes[
+                categoryKey as keyof typeof supportedRouteCategoryModes
+            ];
+        }
+
+        return null;
+    }
+
+    function getPreferredRouteCategoryId(preferredCategoryId?: string) {
+        if (getRoutingModeForCategory(preferredCategoryId)) {
+            return preferredCategoryId;
+        }
+
+        const hikingCategory = $categories.find(
+            (category) => getCategoryKey(category.id) === "hiking",
+        );
+        if (hikingCategory) {
+            return hikingCategory.id;
+        }
+
+        const cyclingCategory = $categories.find(
+            (category) => getCategoryKey(category.id) === "cycling",
+        );
+        if (cyclingCategory) {
+            return cyclingCategory.id;
+        }
+
+        return undefined;
+    }
+
+    function getDefaultWaypointConnectionMode(): WaypointConnectionMode {
+        return routingOptions.autoRouting ? "snap" : "straight";
+    }
+
+    function cloneWaypoint(waypoint: Waypoint) {
+        const clonedWaypoint = new Waypoint(waypoint.lat, waypoint.lon, {
+            id: waypoint.id,
+            name: waypoint.name,
+            description: waypoint.description,
+            icon: waypoint.icon,
+            photos: [...(waypoint.photos ?? [])],
+            trail: waypoint.trail,
+            connectionMode: waypoint.connectionMode,
+        });
+        clonedWaypoint._photos = [...(waypoint._photos ?? [])];
+        clonedWaypoint.author = waypoint.author;
+        clonedWaypoint.distance_from_start = waypoint.distance_from_start;
+        return clonedWaypoint;
+    }
+
+    function cloneWaypointHistorySnapshot(
+        snapshot: WaypointHistorySnapshot,
+    ): WaypointHistorySnapshot {
+        return {
+            waypoints: snapshot.waypoints.map(cloneWaypoint),
+            loopConnectionMode: snapshot.loopConnectionMode,
+        };
+    }
+
+    function captureWaypointHistorySnapshot(): WaypointHistorySnapshot {
+        return {
+            waypoints: ($formData.expand!.waypoints_via_trail ?? []).map(
+                cloneWaypoint,
+            ),
+            loopConnectionMode,
+        };
+    }
+
+    function applyWaypointHistorySnapshot(snapshot: WaypointHistorySnapshot) {
+        $formData.expand!.waypoints_via_trail = snapshot.waypoints.map(
+            cloneWaypoint,
+        );
+        loopConnectionMode = snapshot.loopConnectionMode;
+        syncWaypointIconsWithRoutingRole();
+    }
+
+    function resetWaypointHistoryTracking() {
+        waypointUndoStack = [];
+        waypointRedoStack = [];
+        lastWaypointHistoryState = captureWaypointHistorySnapshot();
+        observedUndoDepth = valhallaStore.undoStack.length;
+        observedRedoDepth = valhallaStore.redoStack.length;
+    }
 
     const getInitialFormValues = () => ({
         ...data.trail,
@@ -237,12 +333,23 @@
             ? data.trail.public
             : page.data.settings?.privacy?.trails === "public",
         category:
-            data.trail.category ||
-            page.data.settings?.category ||
-            $categories[0].id,
+            getPreferredRouteCategoryId(data.trail.category) ||
+            getPreferredRouteCategoryId(page.data.settings?.category) ||
+            $categories[0]?.id,
     });
 
     let loopConnectionMode: LoopConnectionMode = $state("none");
+    let editableRouteCategories = $derived(
+        $categories.filter((category) =>
+            Boolean(getRoutingModeForCategory(category.id)),
+        ),
+    );
+    let waypointUndoStack: WaypointHistorySnapshot[] = $state([]);
+    let waypointRedoStack: WaypointHistorySnapshot[] = $state([]);
+    let lastWaypointHistoryState: WaypointHistorySnapshot | null = $state(null);
+    let observedUndoDepth = $state(0);
+    let observedRedoDepth = $state(0);
+    let suppressWaypointHistorySync = false;
 
     const {
         form,
@@ -255,6 +362,9 @@
             schema: ClientTrailCreateSchema,
         }),
         onSubmit: async (form) => {
+            if (!canModifyTrail) {
+                return;
+            }
             loading = true;
             try {
                 const htmlForm = document.getElementById(
@@ -279,9 +389,17 @@
                     photoFiles = [new File([blob], "route")];
                 }
 
-                form.expand!.gpx_data = valhallaStore.route.toString();
-                if (form.expand!.gpx_data && overwriteGPX) {
-                    gpxFile = new Blob([form.expand!.gpx_data], {
+                const serializedRoute = valhallaStore.route.toString();
+                const hasRoutePoints = Boolean(
+                    valhallaStore.route.trk?.some((track) =>
+                        track.trkseg?.some(
+                            (segment) => (segment.trkpt?.length ?? 0) > 0,
+                        ),
+                    ),
+                );
+                form.expand!.gpx_data = serializedRoute;
+                if (hasRoutePoints) {
+                    gpxFile = new Blob([serializedRoute], {
                         type: "text/xml",
                     });
                 }
@@ -306,6 +424,8 @@
                         photoFiles,
                         gpxFile,
                     );
+                    createdTrail.expand ??= {};
+                    createdTrail.expand.gpx_data = serializedRoute;
                     setFields(createdTrail);
                     trail.set(createdTrail);
                 } else {
@@ -315,6 +435,8 @@
                         photoFiles,
                         gpxFile,
                     );
+                    updatedTrail.expand ??= {};
+                    updatedTrail.expand.gpx_data = serializedRoute;
                     setFields(updatedTrail);
                 }
                 photoFiles = [];
@@ -337,6 +459,95 @@
                 loading = false;
             }
         },
+    });
+
+    const isNewTrail = page.params.id === "new";
+
+    let trailCanBeEdited = $derived(
+        isNewTrail ||
+            (Boolean($currentUser) &&
+                ((data.trail.expand?.author?.id ?? data.trail.author) ===
+                    $currentUser?.actor ||
+                    Boolean(
+                        data.trail.expand?.trail_share_via_trail?.some(
+                            (share) => share.permission === "edit",
+                        ),
+                    ))),
+    );
+    let mapInteractionMode = $state(isNewTrail);
+    let canModifyTrail = $derived(trailCanBeEdited && mapInteractionMode);
+
+    $effect(() => {
+        if (!trailCanBeEdited && mapInteractionMode) {
+            mapInteractionMode = false;
+        }
+    });
+
+    $effect(() => {
+        const undoDepth = valhallaStore.undoStack.length;
+        const redoDepth = valhallaStore.redoStack.length;
+
+        if (suppressWaypointHistorySync) {
+            observedUndoDepth = undoDepth;
+            observedRedoDepth = redoDepth;
+            return;
+        }
+
+        if (undoDepth > observedUndoDepth) {
+            if (lastWaypointHistoryState) {
+                waypointUndoStack = [
+                    ...waypointUndoStack,
+                    cloneWaypointHistorySnapshot(lastWaypointHistoryState),
+                ];
+            }
+            waypointRedoStack = [];
+            lastWaypointHistoryState = captureWaypointHistorySnapshot();
+        } else if (
+            undoDepth === 0 &&
+            redoDepth === 0 &&
+            (observedUndoDepth !== 0 || observedRedoDepth !== 0)
+        ) {
+            resetWaypointHistoryTracking();
+            return;
+        }
+
+        observedUndoDepth = undoDepth;
+        observedRedoDepth = redoDepth;
+    });
+
+    $effect(() => {
+        editableRouteCategories;
+        const preferredCategoryId = getPreferredRouteCategoryId(
+            $formData.category,
+        );
+        if (preferredCategoryId && $formData.category !== preferredCategoryId) {
+            setFields("category", preferredCategoryId);
+            return;
+        }
+
+        const routingMode = getRoutingModeForCategory(preferredCategoryId);
+        if (routingMode && routingOptions.modeOfTransport !== routingMode) {
+            routingOptions.modeOfTransport = routingMode;
+        }
+    });
+
+    $effect(() => {
+        map;
+        if (canModifyTrail && map && !drawingActive) {
+            startDrawing();
+            return;
+        }
+
+        if (!canModifyTrail) {
+            editingBasicInfo = false;
+            closeWaypointActionPopup();
+
+            if (drawingActive) {
+                untrack(() => {
+                    void stopDrawing();
+                });
+            }
+        }
     });
 
     onMount(async () => {
@@ -366,24 +577,27 @@
                     gpx,
                     $formData.expand!.waypoints_via_trail ?? [],
                 );
-                if (isLoopRouteActive()) {
-                    addAnchorsForWaypoints(
-                        $formData.expand!.waypoints_via_trail ?? [],
-                    );
-                } else {
-                    initRouteAnchors(gpx);
-                }
+                syncVisibleRouteAnchors();
 
                 updateTrailOnMap();
+                resetWaypointHistoryTracking();
             }
         }
+
+        resetWaypointHistoryTracking();
     });
 
     function openFileBrowser() {
+        if (!canModifyTrail) {
+            return;
+        }
         document.getElementById("fileInput")!.click();
     }
 
     async function handleFileSelection() {
+        if (!canModifyTrail) {
+            return;
+        }
         const selectedFile = (
             document.getElementById("fileInput") as HTMLInputElement
         ).files?.[0];
@@ -398,7 +612,6 @@
         clearRoute();
         mapTrail = [];
         drawingActive = false;
-        overwriteGPX = false;
         loopConnectionMode = "none";
 
         const { gpxData, gpxFile: file } = await fromFile(selectedFile);
@@ -413,7 +626,9 @@
 
             setFields(
                 "category",
-                page.data.settings.category || $categories[0].id,
+                getPreferredRouteCategoryId(page.data.settings.category) ||
+                    getPreferredRouteCategoryId($formData.category) ||
+                    $categories[0]?.id,
             );
             setFields(
                 "public",
@@ -450,7 +665,6 @@
                 parseResult.gpx.rte = undefined;
             }
             setRoute(parseResult.gpx);
-            initRouteAnchors(parseResult.gpx);
             if (/\.(kml|kmz)$/i.test(selectedFile.name)) {
                 const parsedOriginalRoute = GPX.parse(parseResult.gpx.toString());
                 importedOriginalRoute =
@@ -495,13 +709,14 @@
                 });
                 if (!recalculated) {
                     setRoute(parseResult.gpx);
-                    clearAnchors();
-                    initRouteAnchors(parseResult.gpx);
+                    syncVisibleRouteAnchors();
                     updateTrailOnMap();
                 }
             } else {
+                syncVisibleRouteAnchors();
                 updateTrailOnMap();
             }
+            resetWaypointHistoryTracking();
         } catch (e) {
             console.error(e);
 
@@ -653,7 +868,10 @@
     function normalizeWaypointConnectionModes(waypoints: Waypoint[]) {
         for (let i = 0; i < waypoints.length; i++) {
             waypoints[i].connectionMode =
-                i === 0 ? undefined : waypoints[i].connectionMode ?? "snap";
+                i === 0
+                    ? undefined
+                    : waypoints[i].connectionMode ??
+                      getDefaultWaypointConnectionMode();
         }
     }
 
@@ -722,6 +940,9 @@
     }
 
     async function updateLoopConnectionMode(value: LoopConnectionMode) {
+        if (!canModifyTrail) {
+            return;
+        }
         loopConnectionMode = value;
         await recalculateRouteFromWaypoints({ showSuccessToast: false });
     }
@@ -736,9 +957,13 @@
         }
     }
 
-    function snapSegmentToWaypoint(waypoints: Waypoint[], toIndex: number) {
+    function setSegmentToDefaultConnectionMode(
+        waypoints: Waypoint[],
+        toIndex: number,
+    ) {
         if (toIndex > 0 && toIndex < waypoints.length) {
-            waypoints[toIndex].connectionMode = "snap";
+            waypoints[toIndex].connectionMode =
+                getDefaultWaypointConnectionMode();
         }
     }
 
@@ -746,16 +971,16 @@
         waypoints: Waypoint[],
         waypointIndex: number,
     ) {
-        snapSegmentToWaypoint(waypoints, waypointIndex);
-        snapSegmentToWaypoint(waypoints, waypointIndex + 1);
+        setSegmentToDefaultConnectionMode(waypoints, waypointIndex);
+        setSegmentToDefaultConnectionMode(waypoints, waypointIndex + 1);
     }
 
     function snapSegmentsForInsertedWaypoint(
         waypoints: Waypoint[],
         insertIndex: number,
     ) {
-        snapSegmentToWaypoint(waypoints, insertIndex);
-        snapSegmentToWaypoint(waypoints, insertIndex + 1);
+        setSegmentToDefaultConnectionMode(waypoints, insertIndex);
+        setSegmentToDefaultConnectionMode(waypoints, insertIndex + 1);
     }
 
     function snapSegmentRange(
@@ -768,8 +993,22 @@
             segmentIndex <= endSegment;
             segmentIndex++
         ) {
-            snapSegmentToWaypoint(waypoints, segmentIndex + 1);
+            setSegmentToDefaultConnectionMode(waypoints, segmentIndex + 1);
         }
+    }
+
+    function syncVisibleRouteAnchors() {
+        clearAnchors();
+
+        const addToMap = Boolean(map && drawingActive);
+        const waypoints = $formData.expand!.waypoints_via_trail ?? [];
+
+        if (waypoints.length > 0) {
+            addAnchorsForWaypoints(waypoints, addToMap);
+            return;
+        }
+
+        initRouteAnchors(valhallaStore.route, addToMap);
     }
 
     function initRouteAnchors(gpx: GPX, addToMap: boolean = false) {
@@ -831,7 +1070,8 @@
                         : "snap";
             } else {
                 rotatedWaypoints[i].connectionMode =
-                    previousWaypoints[originalIndex].connectionMode ?? "snap";
+                    previousWaypoints[originalIndex].connectionMode ??
+                    getDefaultWaypointConnectionMode();
             }
         }
 
@@ -861,6 +1101,9 @@
         index: number,
         item: DropdownItem,
     ) {
+        if (!canModifyTrail) {
+            return;
+        }
         if (item.value === "edit") {
             waypoint.set(currentWaypoint);
             waypointModal.openModal();
@@ -892,6 +1135,9 @@
     }
 
     async function moveWaypoint(fromIndex: number, toIndex: number) {
+        if (!canModifyTrail) {
+            return;
+        }
         const waypoints = $formData.expand!.waypoints_via_trail ?? [];
         if (
             toIndex < 0 ||
@@ -941,7 +1187,9 @@
                 const currentWaypoint = waypoints[i] as Waypoint & {
                     connectionMode?: WaypointConnectionMode;
                 };
-                const connectionMode = currentWaypoint.connectionMode ?? "snap";
+                const connectionMode =
+                    currentWaypoint.connectionMode ??
+                    getDefaultWaypointConnectionMode();
 
                 let routeWaypoints: GPXWaypoint[];
                 if (
@@ -1047,7 +1295,8 @@
         const currentWaypoint = waypoints[toIndex] as Waypoint & {
             connectionMode?: WaypointConnectionMode;
         };
-        const connectionMode = currentWaypoint.connectionMode ?? "snap";
+        const connectionMode =
+            currentWaypoint.connectionMode ?? getDefaultWaypointConnectionMode();
 
         if (
             connectionMode === "original-kml" &&
@@ -1351,7 +1600,7 @@
             } else if (deletedIndex >= previousWaypointCount - 1) {
                 deleteFromRoute(previousWaypointCount - 2);
             } else {
-                snapSegmentToWaypoint(waypoints, deletedIndex);
+                setSegmentToDefaultConnectionMode(waypoints, deletedIndex);
                 $formData.expand!.waypoints_via_trail = [...waypoints];
                 const mergedSegment = await calculateRouteSegmentForWaypointPair(
                     waypoints,
@@ -1445,9 +1694,9 @@
 
     function showWaypointActionPopup(
         lnglat: M.LngLat,
-        options?: { presetName?: string },
+        options?: { presetName?: string; insertIndex?: number | null },
     ) {
-        if (!map) {
+        if (!map || !canModifyTrail) {
             return;
         }
         closeWaypointActionPopup();
@@ -1461,6 +1710,7 @@
         addButton.addEventListener("click", async () => {
             await addWaypointFromTap(lnglat.lat, lnglat.lng, {
                 openEditor: false,
+                insertIndex: options?.insertIndex,
                 presetName: options?.presetName,
             });
             closeWaypointActionPopup();
@@ -1474,10 +1724,85 @@
         content.appendChild(addButton);
         content.appendChild(cancelButton);
 
-        mapWaypointPopup = new M.Popup({ closeOnClick: true, offset: 20 })
+        mapWaypointPopup = new M.Popup({
+            closeButton: false,
+            closeOnClick: false,
+            offset: 20,
+        })
             .setLngLat(lnglat)
             .setDOMContent(content)
             .addTo(map);
+    }
+
+    function showWaypointMovePopup(
+        marker: M.Marker,
+        waypointIndex: number,
+        originalPosition: RouteSegmentEndpoint,
+    ) {
+        if (!map || !canModifyTrail) {
+            marker.setLngLat([originalPosition.lon, originalPosition.lat]);
+            return;
+        }
+
+        closeWaypointActionPopup();
+
+        const movedPosition = marker.getLngLat();
+        const content = document.createElement("div");
+        content.className = "p-3 flex flex-col gap-2 min-w-48";
+
+        const confirmButton = document.createElement("button");
+        confirmButton.className = "btn-secondary text-sm";
+        confirmButton.textContent = "Verschieben";
+
+        let confirmed = false;
+
+        confirmButton.addEventListener("click", () => {
+            const editableWaypoint =
+                $formData.expand!.waypoints_via_trail?.[waypointIndex];
+            if (!editableWaypoint) {
+                marker.setLngLat([originalPosition.lon, originalPosition.lat]);
+                closeWaypointActionPopup();
+                return;
+            }
+
+            confirmed = true;
+            editableWaypoint.lat = movedPosition.lat;
+            editableWaypoint.lon = movedPosition.lng;
+            editableWaypoint.name =
+                editableWaypoint.name?.trim() ||
+                getWaypointCoordinateName(movedPosition.lat, movedPosition.lng);
+            $formData.expand!.waypoints_via_trail = [
+                ...($formData.expand!.waypoints_via_trail ?? []),
+            ];
+            syncVisibleRouteAnchors();
+            void recalculateAdjacentWaypointSegments(waypointIndex, {
+                snapAffectedSegments: true,
+            });
+            closeWaypointActionPopup();
+        });
+
+        const cancelButton = document.createElement("button");
+        cancelButton.className = "btn-secondary text-sm";
+        cancelButton.textContent = get(_)("cancel");
+        cancelButton.addEventListener("click", () => closeWaypointActionPopup());
+
+        content.appendChild(confirmButton);
+        content.appendChild(cancelButton);
+
+        mapWaypointPopup = new M.Popup({
+            closeButton: false,
+            closeOnClick: false,
+            offset: 20,
+        })
+            .setLngLat([movedPosition.lng, movedPosition.lat])
+            .setDOMContent(content)
+            .addTo(map);
+
+        mapWaypointPopup.on("close", () => {
+            if (!confirmed) {
+                marker.setLngLat([originalPosition.lon, originalPosition.lat]);
+            }
+        });
     }
 
     function getWaypointCoordinateName(lat: number, lon: number): string {
@@ -1485,6 +1810,9 @@
     }
 
     function saveWaypoint(savedWaypoint: Waypoint) {
+        if (!canModifyTrail) {
+            return;
+        }
         let editedWaypointIndex =
             $formData.expand!.waypoints_via_trail?.findIndex(
                 (s) => s.id == savedWaypoint.id,
@@ -1502,7 +1830,7 @@
             });
         } else {
             savedWaypoint.id = cryptoRandomString({ length: 15 });
-            savedWaypoint.connectionMode = "snap";
+            savedWaypoint.connectionMode = getDefaultWaypointConnectionMode();
             const updatedWaypoints = [...($formData.expand!.waypoints_via_trail ?? [])];
             const insertIndex =
                 pendingWaypointInsertIndex === null
@@ -1517,22 +1845,19 @@
     }
 
     function moveMarker(marker: M.Marker, wpId?: string) {
-        const position = marker.getLngLat();
-        const editableWaypointIndex =
-            $formData.expand!.waypoints_via_trail?.findIndex((w) => w.id == wpId) ?? -1;
-        const editableWaypoint =
-            $formData.expand!.waypoints_via_trail![editableWaypointIndex];
-        if (!editableWaypoint) {
+        if (!canModifyTrail) {
             return;
         }
-        editableWaypoint.lat = position.lat;
-        editableWaypoint.lon = position.lng;
-        editableWaypoint.name =
-            editableWaypoint.name?.trim() ||
-            getWaypointCoordinateName(position.lat, position.lng);
-        $formData.expand!.waypoints_via_trail = [...($formData.expand!.waypoints_via_trail ?? [])];
-        void recalculateAdjacentWaypointSegments(editableWaypointIndex, {
-            snapAffectedSegments: true,
+        const editableWaypointIndex =
+            $formData.expand!.waypoints_via_trail?.findIndex((w) => w.id == wpId) ?? -1;
+        if (editableWaypointIndex < 0) {
+            return;
+        }
+        const editableWaypoint =
+            $formData.expand!.waypoints_via_trail![editableWaypointIndex];
+        showWaypointMovePopup(marker, editableWaypointIndex, {
+            lat: editableWaypoint.lat,
+            lon: editableWaypoint.lon,
         });
     }
 
@@ -1546,6 +1871,9 @@
     }
 
     function beforeSummitLogModalOpen() {
+        if (!canModifyTrail) {
+            return;
+        }
         const newSummitLog = new SummitLog(
             new Date().toISOString().split("T")[0],
         );
@@ -1555,6 +1883,9 @@
     }
 
     function saveSummitLog(log: SummitLog) {
+        if (!canModifyTrail) {
+            return;
+        }
         let editedSummitLogIndex =
             $formData.expand!.summit_logs_via_trail?.findIndex(
                 (s) => s.id == log.id,
@@ -1576,6 +1907,9 @@
         index: number,
         item: DropdownItem,
     ) {
+        if (!canModifyTrail) {
+            return;
+        }
         if (item.value === "edit") {
             summitLog.set(currentSummitLog);
             summitLogModal.openModal();
@@ -1587,7 +1921,7 @@
     }
 
     async function handleListSelection(list: List) {
-        if (!$formData.id) {
+        if (!canModifyTrail || !$formData.id) {
             return;
         }
         try {
@@ -1612,7 +1946,7 @@
     }
 
     function startDrawing() {
-        if (!map) {
+        if (!map || !canModifyTrail) {
             return;
         }
         drawingActive = true;
@@ -1628,8 +1962,8 @@
         for (const anchor of valhallaStore.anchors) {
             anchor.marker?.remove();
         }
-        toggleCropMarkers(false);
         clearUndoRedoStack();
+        resetWaypointHistoryTracking();
 
         if (valhallaStore.route.trk?.at(0)?.trkseg?.at(0)?.trkpt?.at(0)) {
             $formData.lat = valhallaStore.route.trk
@@ -1651,40 +1985,31 @@
     }
 
     async function handleMapClick(e: M.MapMouseEvent) {
-        if (!drawingActive) {
-            if (
-                (
-                    e.originalEvent.target as HTMLElement
-                ).tagName.toLowerCase() !== "canvas"
-                ) {
-                return;
-            }
-            showWaypointActionPopup(e.lngLat);
-        } else {
-            const anchorCount = valhallaStore.anchors.length;
-            await addWaypointFromTap(e.lngLat.lat, e.lngLat.lng, {
-                openEditor: false,
-            });
-            if (isLoopRouteActive()) {
-                return;
-            }
-            if (anchorCount == 0) {
-                addAnchor(
-                    e.lngLat.lat,
-                    e.lngLat.lng,
-                    valhallaStore.anchors.length,
-                );
-            } else {
-                await addAnchorAndRecalculate(e.lngLat.lat, e.lngLat.lng);
-            }
+        if (!canModifyTrail) {
+            return;
         }
+        if (
+            (
+                e.originalEvent.target as HTMLElement
+            ).tagName.toLowerCase() !== "canvas"
+        ) {
+            return;
+        }
+        showWaypointActionPopup(e.lngLat);
     }
 
     async function addWaypointFromTap(
         lat: number,
         lon: number,
-        options?: { openEditor?: boolean; presetName?: string },
+        options?: {
+            openEditor?: boolean;
+            presetName?: string;
+            insertIndex?: number | null;
+        },
     ) {
+        if (!canModifyTrail) {
+            return;
+        }
         const existingWaypoints = $formData.expand!.waypoints_via_trail ?? [];
         const namingInfo = await getWaypointNamingInfo(lat, lon);
         const waypointName =
@@ -1699,16 +2024,18 @@
                     ? namingInfo.fallback
                     : "",
         });
-        insertedWaypoint.connectionMode = "snap";
+        insertedWaypoint.connectionMode = getDefaultWaypointConnectionMode();
         insertedWaypoint.id = cryptoRandomString({ length: 15 });
 
-        const insertIndex = getWaypointInsertIndexByNearestSegment(
-            existingWaypoints.map((waypoint) => ({
-                lat: waypoint.lat,
-                lon: waypoint.lon,
-            })),
-            { lat, lon },
-        );
+        const insertIndex =
+            options?.insertIndex ??
+            getWaypointInsertIndexByNearestSegment(
+                existingWaypoints.map((waypoint) => ({
+                    lat: waypoint.lat,
+                    lon: waypoint.lon,
+                })),
+                { lat, lon },
+            );
 
         const updatedWaypoints = [...existingWaypoints];
         updatedWaypoints.splice(insertIndex, 0, insertedWaypoint);
@@ -1724,6 +2051,7 @@
 
         pendingWaypointInsertIndex = null;
         $formData.expand!.waypoints_via_trail = updatedWaypoints;
+        syncVisibleRouteAnchors();
 
         if (updatedWaypoints.length > 1) {
             await insertWaypointWithSegmentMerge(insertIndex);
@@ -1756,7 +2084,11 @@
     }
 
     async function addPoiAsRoutePoint(poi: Poi) {
+        if (!canModifyTrail) {
+            return;
+        }
         showWaypointActionPopup(new M.LngLat(poi.lon, poi.lat), {
+            insertIndex: null,
             presetName: poi.name,
         });
     }
@@ -1856,7 +2188,7 @@
     }
 
     async function removeAnchor(anchorIndex: number) {
-        if (!drawingActive) {
+        if (!drawingActive || !canModifyTrail) {
             return;
         }
         const wasLoopRouteActive = isLoopRouteActive();
@@ -1964,7 +2296,7 @@
         segment: number;
         event: M.MapMouseEvent;
     }) {
-        if (draggingMarker) {
+        if (draggingMarker || !canModifyTrail) {
             return;
         }
         const anchor = addAnchor(
@@ -1983,6 +2315,7 @@
             },
         );
         insertedWaypoint.id = cryptoRandomString({ length: 15 });
+        insertedWaypoint.connectionMode = getDefaultWaypointConnectionMode();
 
         const waypoints = [...($formData.expand!.waypoints_via_trail ?? [])];
         waypoints.splice(data.segment + 1, 0, insertedWaypoint);
@@ -1997,13 +2330,10 @@
         const markerText = startAnchorLoading(anchor);
         updateFollowingAnchors(data.segment);
 
-        const previousAnchor = valhallaStore.anchors[data.segment];
-        const nextAnchor = valhallaStore.anchors[data.segment + 2];
-
         try {
             const [previousRouteSegment, nextRouteSegment] = await Promise.all([
-                calculateRouteSegmentBetweenEndpoints(previousAnchor, anchor),
-                calculateRouteSegmentBetweenEndpoints(anchor, nextAnchor),
+                calculateRouteSegmentForWaypointPair(waypoints, data.segment + 1),
+                calculateRouteSegmentForWaypointPair(waypoints, data.segment + 2),
             ]);
 
             await editRoute(data.segment, previousRouteSegment);
@@ -2039,188 +2369,63 @@
         }
     }
 
+    function reverseWaypointOrder() {
+        const waypoints = [...($formData.expand!.waypoints_via_trail ?? [])];
+        if (waypoints.length < 2) {
+            return;
+        }
+
+        const reversedWaypoints = [...waypoints].reverse();
+        for (let i = 0; i < reversedWaypoints.length; i++) {
+            reversedWaypoints[i].connectionMode =
+                i === 0
+                    ? undefined
+                    : waypoints[waypoints.length - i].connectionMode ??
+                      getDefaultWaypointConnectionMode();
+        }
+
+        $formData.expand!.waypoints_via_trail = reversedWaypoints;
+        syncWaypointIconsWithRoutingRole();
+    }
+
     async function handleSegmentClick(data: {
         segment: number;
         event: M.MapMouseEvent;
     }) {
-        if (isLoopRouteActive()) {
-            const insertIndex = data.segment + 1;
-            addAnchor(
-                data.event.lngLat.lat,
-                data.event.lngLat.lng,
-                insertIndex,
-            );
-            const insertedWaypoint = createWaypointFromTap(
-                data.event.lngLat.lat,
-                data.event.lngLat.lng,
-                {
-                    name: getWaypointCoordinateName(
-                        data.event.lngLat.lat,
-                        data.event.lngLat.lng,
-                    ),
-                },
-            );
-            insertedWaypoint.id = cryptoRandomString({ length: 15 });
-
-            const waypoints = [...($formData.expand!.waypoints_via_trail ?? [])];
-            waypoints.splice(insertIndex, 0, insertedWaypoint);
-            normalizeWaypointConnectionModes(waypoints);
-            snapSegmentsForInsertedWaypoint(waypoints, insertIndex);
-            $formData.expand!.waypoints_via_trail = waypoints;
-            syncWaypointIconsWithRoutingRole();
-            await recalculateRouteFromWaypoints({ showSuccessToast: false });
+        if (!canModifyTrail) {
             return;
         }
-
-        addAnchor(
-            data.event.lngLat.lat,
-            data.event.lngLat.lng,
-            data.segment + 1,
-        );
-
-        splitSegment(data.segment, data.event.lngLat);
-        updateFollowingAnchors(data.segment);
-        updateTrailWithRouteData();
+        showWaypointActionPopup(data.event.lngLat, {
+            insertIndex: data.segment + 1,
+        });
     }
 
     function reverseTrail() {
+        if (!canModifyTrail) {
+            return;
+        }
+        reverseWaypointOrder();
         reverseRoute();
 
         updateTrailWithRouteData();
     }
 
-    function resetTrail() {
-        resetRoute();
-
-        updateTrailWithRouteData();
-    }
-
     async function recalculateElevationData() {
+        if (!canModifyTrail) {
+            return;
+        }
         await recalculateHeight();
 
         updateTrailWithRouteData();
     }
 
-    function toggleCropMarkers(active: boolean) {
-        if (active) {
-            cropStartMarker?.setOpacity("1");
-            cropEndMarker?.setOpacity("1");
-        } else {
-            cropStartMarker?.setOpacity("0");
-            cropEndMarker?.setOpacity("0");
-
-            updateTotals(valhallaStore.route);
-        }
-    }
-
-    function updateCropMarkers(range: [start: number, end: number]) {
-        if (!cropStartMarker || !cropEndMarker) {
-            cropStartMarker = new FontawesomeMarker(
-                {
-                    id: "crop-start-marker",
-                    icon: "fa-regular fa-circle",
-                    fontSize: "xs",
-                    style: "w-6",
-                    width: 4,
-                    backgroundColor: "bg-primary",
-                    fontColor: "white",
-                },
-                {},
-            );
-            cropEndMarker = new FontawesomeMarker(
-                {
-                    id: "crop-end-marker",
-                    icon: "fa fa-flag-checkered",
-                    fontSize: "xs",
-                    style: "w-6",
-                    width: 4,
-                    backgroundColor: "bg-primary",
-                    fontColor: "white",
-                },
-                {},
-            );
-
-            cropStartMarker.setLngLat([0, 0]).addTo(map!);
-            cropEndMarker.setLngLat([0, 0]).addTo(map!);
-        }
-        const [start, end] = range;
-
-        const flatRoute = valhallaStore.route.flatten();
-
-        const targetStartDistance =
-            valhallaStore.route.features.distance * (start / 100);
-        const [startLon, startLat, startIndex] = getCoordinateAtDistance(
-            flatRoute,
-            valhallaStore.route.features.cumulativeDistance,
-            targetStartDistance,
-        );
-
-        const targetEndDistance =
-            valhallaStore.route.features.distance * (end / 100);
-        const [endLon, endLat, endIndex] = getCoordinateAtDistance(
-            flatRoute,
-            valhallaStore.route.features.cumulativeDistance,
-            targetEndDistance,
-        );
-
-        cropStartMarker.setLngLat([startLon, startLat]);
-        cropEndMarker.setLngLat([endLon, endLat]);
-
-        croppedGPX = cropGPX(
-            flatRoute[startIndex],
-            flatRoute[endIndex],
-            valhallaStore.route,
-        );
-
-        updateTotals(croppedGPX);
-    }
-
-    function confirmCrop() {
-        if (!croppedGPX) {
-            return;
-        }
-        setRoute(croppedGPX, true);
-        updateTrailWithRouteData();
-        clearAnchors();
-        initRouteAnchors(croppedGPX, true);
-    }
-
-    function getCoordinateAtDistance(
-        points: GPXWaypoint[],
-        cumulative: number[],
-        target: number,
-    ) {
-        let low = 0,
-            high = cumulative.length - 1;
-
-        while (low < high) {
-            const mid = Math.floor((low + high) / 2);
-            if (cumulative[mid] < target) low = mid + 1;
-            else high = mid;
-        }
-
-        const i = Math.max(1, low);
-        const prevDist = cumulative[i - 1];
-        const nextDist = cumulative[i];
-        const ratio = (target - prevDist) / (nextDist - prevDist);
-
-        const prev = points[i - 1];
-        const next = points[i];
-
-        return [
-            prev.$.lon! + (next.$.lon! - prev.$.lon!) * ratio,
-            prev.$.lat! + (next.$.lat! - prev.$.lat!) * ratio,
-            i,
-        ];
-    }
-
     function updateTrailWithRouteData() {
-        overwriteGPX = true;
         updateTotals(valhallaStore.route);
 
         if (!$formData.id) {
             $formData.id = cryptoRandomString({ length: 15 });
         }
+        syncVisibleRouteAnchors();
         updateTrailOnMap();
     }
 
@@ -2269,6 +2474,9 @@
     }
 
     function setTrailTags(items: ComboboxItem[]) {
+        if (!canModifyTrail) {
+            return;
+        }
         $formData.expand!.tags = items.map((i) =>
             i.value ? i.value : new Tag(i.text),
         );
@@ -2280,10 +2488,16 @@
     }
 
     function openPhotoBrowser() {
+        if (!canModifyTrail) {
+            return;
+        }
         document.getElementById("waypoint-photo-input")!.click();
     }
 
     async function handleWaypointPhotoSelection() {
+        if (!canModifyTrail) {
+            return;
+        }
         const files = (
             document.getElementById("waypoint-photo-input") as HTMLInputElement
         ).files;
@@ -2330,16 +2544,54 @@
     }
 
     function undoRouteEdit() {
+        if (!canModifyTrail) {
+            return;
+        }
+        const snapshot = waypointUndoStack.at(-1);
+        const currentSnapshot = captureWaypointHistorySnapshot();
+        suppressWaypointHistorySync = true;
         undo();
-        clearAnchors();
-        initRouteAnchors(valhallaStore.route, true);
+        if (snapshot) {
+            waypointUndoStack = waypointUndoStack.slice(0, -1);
+            waypointRedoStack = [
+                ...waypointRedoStack,
+                cloneWaypointHistorySnapshot(currentSnapshot),
+            ];
+            applyWaypointHistorySnapshot(snapshot);
+            lastWaypointHistoryState = cloneWaypointHistorySnapshot(snapshot);
+        } else {
+            lastWaypointHistoryState = captureWaypointHistorySnapshot();
+        }
+        observedUndoDepth = valhallaStore.undoStack.length;
+        observedRedoDepth = valhallaStore.redoStack.length;
+        suppressWaypointHistorySync = false;
+        syncVisibleRouteAnchors();
         updateTrailWithRouteData();
     }
 
     function redoRouteEdit() {
+        if (!canModifyTrail) {
+            return;
+        }
+        const snapshot = waypointRedoStack.at(-1);
+        const currentSnapshot = captureWaypointHistorySnapshot();
+        suppressWaypointHistorySync = true;
         redo();
-        clearAnchors();
-        initRouteAnchors(valhallaStore.route, true);
+        if (snapshot) {
+            waypointRedoStack = waypointRedoStack.slice(0, -1);
+            waypointUndoStack = [
+                ...waypointUndoStack,
+                cloneWaypointHistorySnapshot(currentSnapshot),
+            ];
+            applyWaypointHistorySnapshot(snapshot);
+            lastWaypointHistoryState = cloneWaypointHistorySnapshot(snapshot);
+        } else {
+            lastWaypointHistoryState = captureWaypointHistorySnapshot();
+        }
+        observedUndoDepth = valhallaStore.undoStack.length;
+        observedRedoDepth = valhallaStore.redoStack.length;
+        suppressWaypointHistorySync = false;
+        syncVisibleRouteAnchors();
         updateTrailWithRouteData();
     }
 
@@ -2366,6 +2618,47 @@
         class="overflow-y-auto overflow-x-hidden flex flex-col gap-4 px-8 order-1 md:order-none mt-8 md:mt-0"
         use:form
     >
+        <div class="sticky top-0 z-20 -mx-8 border-b border-input-border bg-background/95 px-8 py-4 backdrop-blur">
+            <div class="flex items-center justify-between gap-4">
+                <div>
+                    <p class="text-xs font-medium uppercase tracking-[0.18em] text-gray-500">
+                        {$_("map")} / {$_("edit")}
+                    </p>
+                    <p class="text-sm text-gray-500">
+                        {#if mapInteractionMode}
+                            {$_("edit")}
+                        {:else}
+                            <i class="fa fa-lock mr-2"></i>Ansicht gesperrt
+                        {/if}
+                    </p>
+                </div>
+                <div class="inline-flex items-center gap-1 rounded-full border border-input-border bg-input-background p-1">
+                    <button
+                        type="button"
+                        class="flex h-10 w-10 items-center justify-center rounded-full transition-colors"
+                        class:bg-primary={!mapInteractionMode}
+                        class:text-white={!mapInteractionMode}
+                        aria-label="Locked view"
+                        title="Locked view"
+                        onclick={() => (mapInteractionMode = false)}
+                    >
+                        <i class="fa fa-lock"></i>
+                    </button>
+                    <button
+                        type="button"
+                        class="flex h-10 w-10 items-center justify-center rounded-full transition-colors"
+                        class:bg-primary={mapInteractionMode}
+                        class:text-white={mapInteractionMode}
+                        aria-label={$_("edit")}
+                        title={$_("edit")}
+                        disabled={!trailCanBeEdited}
+                        onclick={() => (mapInteractionMode = true)}
+                    >
+                        <i class="fa fa-pen"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
         <Search
             onupdate={(q) => searchCities(q)}
             onclick={(item) => handleSearchClick(item)}
@@ -2377,7 +2670,7 @@
         <Button
             primary={true}
             type="button"
-            disabled={drawingActive}
+            disabled={!canModifyTrail}
             onclick={openFileBrowser}
             >{$formData.expand?.gpx_data
                 ? $_("upload-new-file")
@@ -2389,30 +2682,10 @@
                     type="checkbox"
                     class="mt-1"
                     bind:checked={snapImportedRouteToValhalla}
-                    disabled={drawingActive}
+                    disabled={!canModifyTrail}
                 />
                 <span>{$_("snap-imported-route-to-valhalla")}</span>
             </label>
-        {/if}
-        {#if env.PUBLIC_VALHALLA_URL && !$formData.expand?.gpx_data}
-            <div class="flex gap-4 items-center w-full">
-                <hr class="basis-full border-input-border" />
-                <span class="text-gray-500 uppercase">{$_("or")}</span>
-                <hr class="basis-full border-input-border" />
-            </div>
-            <button
-                class="btn-primary"
-                type="button"
-                onclick={async () => {
-                    if (drawingActive) {
-                        await stopDrawing();
-                    } else {
-                        startDrawing();
-                    }
-                }}
-            >
-                {drawingActive ? $_("stop-drawing") : $_("draw-a-route")}</button
-            >
         {/if}
         <input
             type="file"
@@ -2430,6 +2703,7 @@
                 type="button"
                 class="btn-icon"
                 style="font-size: 0.9rem"
+                disabled={!canModifyTrail}
                 onclick={() => (editingBasicInfo = !editingBasicInfo)}
                 ><i class="fa fa-{editingBasicInfo ? 'check' : 'pen'}"
                 ></i></button
@@ -2445,20 +2719,24 @@
                     bind:value={$formData.distance}
                     name="distance"
                     label={$_("distance")}
+                    disabled={!canModifyTrail}
                 ></TextField>
                 <TextField
                     bind:value={$formData.duration}
                     name="duration"
                     label={$_("est-duration")}
+                    disabled={!canModifyTrail}
                 ></TextField><TextField
                     bind:value={$formData.elevation_gain}
                     name="elevation_gain"
                     label={$_("elevation-gain")}
+                    disabled={!canModifyTrail}
                 ></TextField>
                 <TextField
                     bind:value={$formData.elevation_loss}
                     name="elevation_loss"
                     label={$_("elevation-loss")}
+                    disabled={!canModifyTrail}
                 ></TextField>
             {:else}
                 <div>
@@ -2507,27 +2785,61 @@
                 </div>
             {/if}
         </fieldset>
-        <TextField name="name" label={$_("name")} error={$errors.name}
+        <TextField
+            name="name"
+            label={$_("name")}
+            error={$errors.name}
+            disabled={!canModifyTrail}
         ></TextField>
         <TextField
             name="location"
             label={$_("location")}
             error={$errors.location}
+            disabled={!canModifyTrail}
         ></TextField>
-        <Datepicker label={$_("date")} bind:value={$formData.date}></Datepicker>
-        <Editor
-            extraClasses="min-h-24"
-            bind:value={$formData.description}
-            label={$_("describe-your-trail")}
-        ></Editor>
-        <Combobox
-            bind:value={getTrailTags, setTrailTags}
-            onupdate={searchTags}
-            items={tagItems}
-            label={$_("tags")}
-            multiple
-            chips
-        ></Combobox>
+        <Datepicker
+            label={$_("date")}
+            bind:value={$formData.date}
+            disabled={!canModifyTrail}
+        ></Datepicker>
+        {#if canModifyTrail}
+            <Editor
+                extraClasses="min-h-24"
+                bind:value={$formData.description}
+                label={$_("describe-your-trail")}
+            ></Editor>
+            <Combobox
+                bind:value={getTrailTags, setTrailTags}
+                onupdate={searchTags}
+                items={tagItems}
+                label={$_("tags")}
+                multiple
+                chips
+            ></Combobox>
+        {:else}
+            <div>
+                <p class="text-sm font-medium pb-1">{$_("describe-your-trail")}</p>
+                <article
+                    class="min-h-24 rounded-md border border-input-border bg-input-background p-3 text-sm prose dark:prose-invert"
+                >
+                    {@html $formData.description || ""}
+                </article>
+            </div>
+            <div>
+                <p class="text-sm font-medium pb-1">{$_("tags")}</p>
+                <div class="flex min-h-12 flex-wrap gap-2 rounded-md border border-input-border bg-input-background p-3">
+                    {#if ($formData.expand?.tags?.length ?? 0) > 0}
+                        {#each $formData.expand?.tags ?? [] as tag}
+                            <span class="rounded-full bg-secondary px-3 py-1 text-sm">
+                                {tag.name}
+                            </span>
+                        {/each}
+                    {:else}
+                        <span class="text-sm text-gray-500">-</span>
+                    {/if}
+                </div>
+            </div>
+        {/if}
         <div class="grid grid-cols-1 md:grid-cols-2 gap-y-4">
             <Select
                 name="difficulty"
@@ -2537,14 +2849,22 @@
                     { text: $_("moderate"), value: "moderate" },
                     { text: $_("difficult"), value: "difficult" },
                 ]}
+                disabled={!canModifyTrail}
             ></Select>
             <Select
                 name="category"
                 label={$_("category")}
-                items={$categories.map((c) => ({
+                items={editableRouteCategories.map((c) => ({
                     text: $_(c.name),
                     value: c.id,
                 }))}
+                disabled={!canModifyTrail}
+                onchange={(value) => {
+                    const routingMode = getRoutingModeForCategory(value);
+                    if (routingMode) {
+                        routingOptions.modeOfTransport = routingMode;
+                    }
+                }}
             ></Select>
         </div>
 
@@ -2552,6 +2872,7 @@
             name="public"
             label={$formData.public ? $_("public") : $_("private")}
             icon={$formData.public ? "globe" : "lock"}
+            disabled={!canModifyTrail}
         ></Toggle>
         <hr class="border-separator" />
         <h3 class="text-xl font-semibold">
@@ -2571,54 +2892,62 @@
                                 Verbindung {i} → {i + 1}
                             </span>
                             <span class="h-px flex-1 bg-input-border"></span>
-                            <select
-                                name={`waypoint-connection-mode-${waypoint.id ?? i}`}
-                                class="h-8 max-w-40 rounded-md bg-input-background px-2 text-xs outline outline-1 outline-input-border focus:outline-input-border-focus"
-                                value={waypoint.connectionMode ?? "snap"}
-                                onchange={(event) => {
-                                    const value = (
-                                        event.currentTarget as HTMLSelectElement
-                                    ).value as WaypointConnectionMode;
-                                    if (
-                                        value === "original-kml" &&
-                                        !importedOriginalRoute
-                                    ) {
-                                        return;
-                                    }
-                                    waypoint.connectionMode = value;
-                                    $formData.expand!.waypoints_via_trail = [
-                                        ...($formData.expand!.waypoints_via_trail ??
-                                            []),
-                                    ];
-                                    void recalculateSingleWaypointSegment(i);
-                                }}
-                            >
-                                <option value="snap">Valhalla-Snap</option>
-                                <option value="straight">Luftlinie</option>
-                                <option
-                                    value="original-kml"
-                                    disabled={!importedOriginalRoute}
-                                    >KML-Original</option
+                            {#if canModifyTrail}
+                                <select
+                                    name={`waypoint-connection-mode-${waypoint.id ?? i}`}
+                                    class="h-8 max-w-40 rounded-md bg-input-background px-2 text-xs outline outline-1 outline-input-border focus:outline-input-border-focus"
+                                    value={waypoint.connectionMode ??
+                                        getDefaultWaypointConnectionMode()}
+                                    onchange={(event) => {
+                                        const value = (
+                                            event.currentTarget as HTMLSelectElement
+                                        ).value as WaypointConnectionMode;
+                                        if (
+                                            value === "original-kml" &&
+                                            !importedOriginalRoute
+                                        ) {
+                                            return;
+                                        }
+                                        waypoint.connectionMode = value;
+                                        $formData.expand!.waypoints_via_trail = [
+                                            ...($formData.expand!.waypoints_via_trail ??
+                                                []),
+                                        ];
+                                        void recalculateSingleWaypointSegment(i);
+                                    }}
                                 >
-                            </select>
+                                    <option value="snap">Valhalla-Snap</option>
+                                    <option value="straight">Luftlinie</option>
+                                    <option
+                                        value="original-kml"
+                                        disabled={!importedOriginalRoute}
+                                        >KML-Original</option
+                                    >
+                                </select>
+                            {:else}
+                                <span class="rounded-full bg-input-background px-3 py-1 text-xs font-medium capitalize">
+                                    {waypoint.connectionMode ??
+                                        getDefaultWaypointConnectionMode()}
+                                </span>
+                            {/if}
                         </div>
                     {/if}
                     <WaypointCard
                         {waypoint}
                         waypointNumber={i + 1}
-                        canMoveUp={i > 0}
-                        canMoveDown={i <
+                        canMoveUp={canModifyTrail && i > 0}
+                        canMoveDown={canModifyTrail && i <
                             ($formData.expand?.waypoints_via_trail?.length ??
                                 0) -
                                 1}
                         onMoveUp={() => moveWaypoint(i, i - 1)}
                         onMoveDown={() => moveWaypoint(i, i + 1)}
-                        canSetAsStart={isLoopRouteActive()}
+                        canSetAsStart={canModifyTrail && isLoopRouteActive()}
                         routingRole={getRoutingRoleByIndex(
                             i,
                             $formData.expand?.waypoints_via_trail?.length ?? 0,
                         )}
-                        mode="edit"
+                        mode={canModifyTrail ? "edit" : "show"}
                         onchange={(item) =>
                             handleWaypointMenuClick(waypoint, i, item)}
                     ></WaypointCard>
@@ -2635,36 +2964,52 @@
                                 })}
                             </span>
                             <span class="h-px flex-1 bg-input-border"></span>
-                            <select
-                                name="loop-connection-mode"
-                                class="h-8 max-w-56 rounded-md bg-input-background px-2 text-xs outline outline-1 outline-input-border focus:outline-input-border-focus"
-                                value={loopConnectionMode}
-                                onchange={(event) => {
-                                    void updateLoopConnectionMode(
-                                        (
-                                            event.currentTarget as HTMLSelectElement
-                                        ).value as LoopConnectionMode,
-                                    );
-                                }}
-                            >
-                                <option value="none"
-                                    >{$_("roundtrip-mode-none")}</option
+                            {#if canModifyTrail}
+                                <select
+                                    name="loop-connection-mode"
+                                    class="h-8 max-w-56 rounded-md bg-input-background px-2 text-xs outline outline-1 outline-input-border focus:outline-input-border-focus"
+                                    value={loopConnectionMode}
+                                    onchange={(event) => {
+                                        void updateLoopConnectionMode(
+                                            (
+                                                event.currentTarget as HTMLSelectElement
+                                            ).value as LoopConnectionMode,
+                                        );
+                                    }}
                                 >
-                                <option value="snap"
-                                    >{$_("roundtrip-mode-snap")}</option
-                                >
-                                <option value="straight"
-                                    >{$_("roundtrip-mode-straight")}</option
-                                >
-                            </select>
+                                    <option value="none"
+                                        >{$_("roundtrip-mode-none")}</option
+                                    >
+                                    <option value="snap"
+                                        >{$_("roundtrip-mode-snap")}</option
+                                    >
+                                    <option value="straight"
+                                        >{$_("roundtrip-mode-straight")}</option
+                                    >
+                                </select>
+                            {:else}
+                                <span class="rounded-full bg-input-background px-3 py-1 text-xs font-medium">
+                                    {loopConnectionMode}
+                                </span>
+                            {/if}
                         </div>
                     {/if}
                 </li>
             {/each}
         </ul>
+        {#if canModifyTrail}
+            <button
+                class="btn-secondary"
+                type="button"
+                onclick={reverseTrail}
+                ><i class="fa fa-arrow-right-arrow-left mr-2"></i
+                >{$_("reverse-direction")}</button
+            >
+        {/if}
         <button
             class="btn-secondary"
             type="button"
+            disabled={!canModifyTrail}
             onclick={() => openPhotoBrowser()}
             ><i class="fa fa-image mr-2"></i>{$_("from-photos")}</button
         >
@@ -2686,13 +3031,15 @@
         />
         <hr class="border-separator" />
         <h3 class="text-xl font-semibold">{$_("photos")}</h3>
-        <PhotoPicker
-            id="trail"
-            parent={$formData}
-            bind:photos={$formData.photos}
-            bind:thumbnail={$formData.thumbnail}
-            bind:photoFiles
-        ></PhotoPicker>
+        <div class:readonly-edit-block={!canModifyTrail}>
+            <PhotoPicker
+                id="trail"
+                parent={$formData}
+                bind:photos={$formData.photos}
+                bind:thumbnail={$formData.thumbnail}
+                bind:photoFiles
+            ></PhotoPicker>
+        </div>
         <hr class="border-separator" />
         <h3 class="text-xl font-semibold">{$_("summit-book")}</h3>
         <ul>
@@ -2700,7 +3047,8 @@
                 <li>
                     <SummitLogCard
                         {log}
-                        mode={log.author == $currentUser?.actor
+                        mode={canModifyTrail &&
+                        log.author == $currentUser?.actor
                             ? "edit"
                             : "show"}
                         onchange={(item) =>
@@ -2712,6 +3060,7 @@
         <button
             class="btn-secondary"
             type="button"
+            disabled={!canModifyTrail}
             onclick={beforeSummitLogModalOpen}
             ><i class="fa fa-plus mr-2"></i>{$_("add-entry")}</button
         >
@@ -2744,23 +3093,29 @@
             <Button
                 secondary={true}
                 tooltip={$_("save-your-trail-first")}
-                disabled={page.params.id == "new" && !savedAtLeastOnce}
+                disabled={
+                    !canModifyTrail ||
+                    (page.params.id == "new" && !savedAtLeastOnce)
+                }
                 type="button"
                 onclick={() => listSelectModal.openModal()}
                 ><i class="fa fa-plus mr-2"></i>{$_("add-to-list")}</Button
             >
         {/if}
         <hr class="border-separator" />
-        <Button
-            primary={true}
-            large={true}
-            type="submit"
-            extraClasses="mb-2"
-            {loading}>{$_("save-trail")}</Button
-        >
+        {#if trailCanBeEdited}
+            <Button
+                primary={true}
+                large={true}
+                type="submit"
+                disabled={!canModifyTrail}
+                extraClasses="mb-2"
+                {loading}>{$_("save-trail")}</Button
+            >
+        {/if}
     </form>
     <div class="relative">
-        {#if drawingActive}
+        {#if drawingActive && canModifyTrail}
             <div
                 in:fly={{ easing: backInOut, x: -30 }}
                 out:fly={{ easing: backInOut, x: -30 }}
@@ -2768,11 +3123,6 @@
             >
                 <RouteEditor
                     bind:options={routingOptions}
-                    onReverse={reverseTrail}
-                    onReset={resetTrail}
-                    onCropToggle={toggleCropMarkers}
-                    onCrop={confirmCrop}
-                    onUpdateCropRange={updateCropMarkers}
                     onRecalculateElevationData={recalculateElevationData}
                     onUndo={undoRouteEdit}
                     onRedo={redoRouteEdit}
@@ -2783,18 +3133,25 @@
             <MapWithElevationMaplibre
                 trails={mapTrail}
                 waypoints={$formData.expand?.waypoints_via_trail}
-                drawing={drawingActive}
+                drawing={canModifyTrail && drawingActive}
+                crosshairCursor={canModifyTrail}
                 showTerrain={true}
                 autoGeolocateOnDrawing={page.params.id === "new"}
-                onmarkerdragend={moveMarker}
+                onmarkerdragend={canModifyTrail ? moveMarker : undefined}
                 activeTrail={0}
                 pois={filteredRoutePlannerPois}
                 poiAttributeDefinitions={data.poiAttributeDefinitions}
-                onpoiclick={addPoiAsRoutePoint}
+                onpoiclick={canModifyTrail ? addPoiAsRoutePoint : undefined}
                 bind:map
-                onclick={(target) => handleMapClick(target)}
-                onsegmentclick={(data) => handleSegmentClick(data)}
-                onsegmentdragend={(data) => handleSegmentDragEnd(data)}
+                onclick={canModifyTrail
+                    ? (target) => handleMapClick(target)
+                    : undefined}
+                onsegmentclick={canModifyTrail
+                    ? (data) => handleSegmentClick(data)
+                    : undefined}
+                onsegmentdragend={canModifyTrail
+                    ? (data) => handleSegmentDragEnd(data)
+                    : undefined}
                 mapOptions={{ preserveDrawingBuffer: true }}
             ></MapWithElevationMaplibre>
         </div>
@@ -2813,6 +3170,12 @@
     #trail-map {
         height: calc(50vh);
     }
+
+    .readonly-edit-block {
+        opacity: 0.65;
+        pointer-events: none;
+    }
+
     @media only screen and (min-width: 768px) {
         #trail-map,
         form {

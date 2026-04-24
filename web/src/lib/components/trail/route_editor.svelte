@@ -8,18 +8,11 @@
     import { _ } from "svelte-i18n";
     import { slide } from "svelte/transition";
     import Button from "../base/button.svelte";
-    import DoubleSlider from "../base/double_slider.svelte";
     import Select, { type SelectItem } from "../base/select.svelte";
     import Slider from "../base/slider.svelte";
     import Toggle from "../base/toggle.svelte";
-    import { tick } from "svelte";
     interface Props {
         options: RoutingOptions;
-        onReverse: () => void;
-        onReset: () => void;
-        onCropToggle: (active: boolean) => void;
-        onUpdateCropRange: (data: [number, number]) => void;
-        onCrop: () => void;
         onRecalculateElevationData: () => void;
         onUndo: () => void;
         onRedo: () => void;
@@ -27,21 +20,10 @@
 
     let {
         options = $bindable(),
-        onReverse,
-        onReset,
-        onCropToggle,
-        onUpdateCropRange,
-        onCrop,
         onRecalculateElevationData,
         onUndo,
         onRedo,
     }: Props = $props();
-
-    const modesOfTransport: SelectItem[] = [
-        { text: $_("hiking"), value: "pedestrian" },
-        { text: $_("cycling"), value: "bicycle" },
-        { text: $_("driving"), value: "auto" },
-    ];
 
     const bikeTypes: SelectItem[] = [
         { text: $_("hybrid"), value: "Hybrid" },
@@ -73,16 +55,6 @@
         };
     }
 
-    if (!options.autoOptions) {
-        options.autoOptions = {
-            width: 1.6,
-            height: 1.9,
-            top_speed: 140,
-            fixed_speed: 0,
-            shortest: false,
-        };
-    }
-
     $effect(() => {
         if (!options.autoRouting) {
             showSettings = false;
@@ -91,7 +63,6 @@
 
     let showSettings = $state(false);
     let editRoute = $state(false);
-    let crop = $state(false);
     let recalculateElevationData = $state(false);
 
     // svelte-ignore non_reactive_update
@@ -119,12 +90,9 @@
         }
     }
 
-    async function togglePanels(_edit: boolean, _crop: boolean, _recalc: boolean) {        
+    function togglePanels(_edit: boolean, _recalc: boolean) {
         recalculateElevationData = _recalc;
-        crop = _crop;
-        editRoute = _edit
-        await tick()
-        onCropToggle(_crop);
+        editRoute = _edit;
     }
 </script>
 
@@ -134,19 +102,13 @@
             class="btn-icon"
             class:bg-secondary-hover={editRoute}
             aria-label="edit route"
-            onclick={async () => await togglePanels(!editRoute, false, false)}><i class="fa fa-route text-sm"></i></button
-        >
-        <button
-            class="btn-icon"
-            class:bg-secondary-hover={crop}
-            aria-label="crop route"
-            onclick={async () => await togglePanels(false, !crop, false)}><i class="fa fa-scissors text-sm"></i></button
+            onclick={() => togglePanels(!editRoute, false)}><i class="fa fa-route text-sm"></i></button
         >
         <button
             class="btn-icon"
             class:bg-secondary-hover={recalculateElevationData}
             aria-label="recalculate elevation data"
-            onclick={async () => await togglePanels(false, false, !recalculateElevationData)}><i class="fa fa-mountain text-sm"></i></button
+            onclick={() => togglePanels(false, !recalculateElevationData)}><i class="fa fa-mountain text-sm"></i></button
         >
         <button
             class="btn-icon"
@@ -170,28 +132,7 @@
                 bind:value={options.autoRouting}
                 label={$_("enable-auto-routing")}
             ></Toggle>
-            <Select
-                items={modesOfTransport}
-                bind:value={options.modeOfTransport}
-                disabled={!options.autoRouting}
-                label={$_("activity", { values: { n: 1 } })}
-            ></Select>
             <div class="flex items-center gap-4 mt-4">
-                <button
-                    class="btn-icon tooltip"
-                    type="button"
-                    onclick={() => onReverse()}
-                    aria-label="Reverse trail direction"
-                    data-title={$_("reverse-direction")}
-                    ><i class="fa fa-arrow-right-arrow-left"></i></button
-                >
-                <button
-                    class="btn-icon tooltip"
-                    type="button"
-                    onclick={() => onReset()}
-                    aria-label="Reset route"
-                    data-title={$_("reset")}><i class="fa fa-trash"></i></button
-                >
                 <button
                     class="btn-icon tooltip"
                     type="button"
@@ -326,84 +267,9 @@
                             label={$_("shortest")}
                             bind:value={options.bicycleOptions.shortest}
                         ></Toggle>
-                    {:else if options.modeOfTransport === "auto" && options.autoOptions}
-                        <p class="text-sm font-medium pb-1">
-                            {$_("fixed-speed")}
-                        </p>
-                        <Slider
-                            minValue={0}
-                            maxValue={252}
-                            step={1}
-                            bind:currentValue={options.autoOptions.fixed_speed}
-                        ></Slider>
-                        <p class="text-sm text-end">
-                            {formatSpeed(
-                                options.autoOptions.fixed_speed! / 3.6,
-                            )}
-                        </p>
-                        <hr class="border-input-border my-3" />
-                        <p class="text-sm font-medium">{$_("top-speed")}</p>
-                        <Slider
-                            minValue={10}
-                            maxValue={252}
-                            step={1}
-                            bind:currentValue={options.autoOptions.top_speed}
-                        ></Slider>
-                        <p class="text-sm text-end">
-                            {formatSpeed(options.autoOptions.top_speed! / 3.6)}
-                        </p>
-                        <hr class="border-input-border my-3" />
-                        <p class="text-sm font-medium">
-                            {$_("car")}
-                            {$_("width")}
-                        </p>
-                        <Slider
-                            minValue={1}
-                            maxValue={10}
-                            step={0.1}
-                            bind:currentValue={options.autoOptions.width}
-                        ></Slider>
-                        <p class="text-sm text-end">
-                            {options.autoOptions.width?.toFixed(1)}
-                        </p>
-                        <hr class="border-input-border my-3" />
-                        <p class="text-sm font-medium">
-                            {$_("car")}
-                            {$_("height")}
-                        </p>
-                        <Slider
-                            minValue={1}
-                            maxValue={10}
-                            step={0.1}
-                            bind:currentValue={options.autoOptions.height}
-                        ></Slider>
-                        <p class="text-sm text-end">
-                            {options.autoOptions.height?.toFixed(1)}
-                        </p>
-                        <hr class="border-input-border my-3" />
-                        <Toggle
-                            label={$_("shortest")}
-                            bind:value={options.autoOptions.shortest}
-                        ></Toggle>
                     {/if}
                 </div>
             {/if}
-        </div>
-    {/if}
-
-    {#if crop}
-        <div
-            class="p-4 my-2 rounded-xl bg-background shadow-xl min-w-72 flex flex-col"
-        >
-            <DoubleSlider onupdate={onUpdateCropRange}></DoubleSlider>
-            <button
-                class="btn-secondary mb-2"
-                onclick={() => {
-                    crop = false;
-                    onCrop();
-                    onCropToggle(false);
-                }}>{$_("crop")}</button
-            >
         </div>
     {/if}
 

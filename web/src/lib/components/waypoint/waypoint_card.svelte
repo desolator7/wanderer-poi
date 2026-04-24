@@ -158,11 +158,6 @@
                 <i class="fa fa-{waypoint.icon} mr-2"></i>{waypoint.name || `${waypoint.lat.toFixed(5)}, ${waypoint.lon.toFixed(5)}`}
             </h5>
             <div class="flex items-center gap-2">
-                {#if routingRole}
-                    <span class="text-xs uppercase bg-slate-100 px-2 py-1 rounded text-slate-700"
-                        >{$_(routingRole)}</span
-                    >
-                {/if}
                 {#if mode == "edit"}
                     <Dropdown items={dropdownItems} {onchange}></Dropdown>
                 {/if}

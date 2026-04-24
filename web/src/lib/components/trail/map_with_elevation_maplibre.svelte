@@ -42,6 +42,7 @@
         markers?: M.Marker[];
         map?: M.Map | null;
         drawing?: boolean;
+        crosshairCursor?: boolean;
         showElevation?: boolean;
         showInfoPopup?: boolean;
         showGrid?: boolean;
@@ -95,6 +96,7 @@
         markers = $bindable([]),
         map = $bindable(),
         drawing = false,
+        crosshairCursor = false,
         showElevation = true,
         showInfoPopup = false,
         showGrid = false,
@@ -174,6 +176,14 @@
         }
     });
     $effect(() => {
+        drawing;
+        crosshairCursor;
+        map;
+        untrack(() => {
+            updateCursor();
+        });
+    });
+    $effect(() => {
         if (showGrid) {
             if (!graticule) {
                 graticule = new MaplibreGraticule({
@@ -202,7 +212,7 @@
         waypoints;
         untrack(() => {
             showWaypoints();
-            refreshElevationProfile();
+            void refreshElevationProfile();
         });
     });
     $effect(() => {
@@ -278,9 +288,9 @@
             return;
         }
 
-        refreshElevationProfile();
-        if (showElevation && data.length && activeTrail !== null) {
+        if (showElevation && getActiveTrailDataIndex() !== null) {
             epc?.showProfile();
+            void refreshElevationProfile();
         } else {
             epc?.hideProfile();
         }
@@ -306,20 +316,46 @@
         });
 
         if (!drawing && fitBounds !== "off" && (data.some((d) => d.bbox !== undefined) || pois.length)) {
-            if (activeTrail !== null && trails[activeTrail] && mapLoaded) {
-                focusTrail(trails[activeTrail]);
+            const trailIndex = getActiveTrailIndex();
+            if (trailIndex !== null && mapLoaded) {
+                focusTrail(trails[trailIndex]);
             } else {
                 flyToBounds();
             }
-        } else if (drawing && activeTrail !== null && mapLoaded) {
-            addCaretLayer(data[activeTrail]);
+        } else if (drawing && mapLoaded) {
+            const dataIndex = getActiveTrailDataIndex();
+            if (dataIndex !== null) {
+                addCaretLayer(data[dataIndex]);
+            }
         }
     }
 
-    export function refreshElevationProfile() {
-        if (activeTrail !== null && data[activeTrail]) {
-            epc?.setData(data[activeTrail]!, waypoints);
+    function getActiveTrailIndex() {
+        return typeof activeTrail === "number" &&
+            activeTrail >= 0 &&
+            trails[activeTrail] !== undefined
+            ? activeTrail
+            : null;
+    }
+
+    function getActiveTrailDataIndex() {
+        const trailIndex = getActiveTrailIndex();
+        return trailIndex !== null && data[trailIndex] !== undefined
+            ? trailIndex
+            : null;
+    }
+
+    function hasFiniteLngLat(lngLat: M.LngLat) {
+        return Number.isFinite(lngLat.lat) && Number.isFinite(lngLat.lng);
+    }
+
+    export async function refreshElevationProfile() {
+        const dataIndex = getActiveTrailDataIndex();
+        if (!showElevation || dataIndex === null || !epc) {
+            return;
         }
+        epc.showProfile();
+        await epc.setData(data[dataIndex]!, waypoints);
     }
 
     function getBounds() {
@@ -458,11 +494,17 @@
     }
 
     function moveCrosshairToCursorPosition(e: M.MapMouseEvent) {
+        if (!hasFiniteLngLat(e.lngLat)) {
+            return;
+        }
         epc?.moveCrosshair(e.lngLat.lat, e.lngLat.lng);
         moveElevationMarkerToCursorPosition(e);
     }
 
     function moveElevationMarkerToCursorPosition(e: M.MapMouseEvent) {
+        if (!hasFiniteLngLat(e.lngLat)) {
+            return;
+        }
         elevationMarker.setLngLat(e.lngLat);
     }
 
@@ -492,6 +534,7 @@
     function handleDragEnd(end: M.MapMouseEvent, start: M.MapMouseEvent) {
         map?.off("mousemove", moveElevationMarkerToCursorPosition);
         epc?.hideCrosshair();
+        suppressNextClick();
         const distanceDragged = Math.sqrt(
             Math.pow(end.originalEvent.x - start.originalEvent.x, 2) +
                 Math.pow(end.originalEvent.y - start.originalEvent.y, 2),
@@ -614,10 +657,10 @@
         onselect?.(trail);
 
         try {
-            refreshElevationProfile();
             if (showElevation) {
                 epc?.showProfile();
             }
+            void refreshElevationProfile();
             showWaypoints();
             addCaretLayer(data[activeTrail]);
             flyToBounds();
@@ -648,7 +691,7 @@
         }
         hideWaypoints();
         activeTrail ??= 0;
-        map.getCanvas().style.cursor = "crosshair";
+        updateCursor();
         if (trails[activeTrail]) {
             removeStartEndMarkers(trails[activeTrail].id);
         }
@@ -663,7 +706,7 @@
             return;
         }
         showWaypoints();
-        map.getCanvas().style.cursor = "inherit";
+        updateCursor();
 
         if (activeTrail !== null && trails[activeTrail] && !clusterTrails) {
             addStartEndMarkers(
@@ -927,19 +970,7 @@
         arrow.setAttribute("stroke-width", "3");
         arrow.setAttribute("stroke-linejoin", "round");
 
-        const dot = document.createElementNS(
-            "http://www.w3.org/2000/svg",
-            "circle",
-        );
-        dot.setAttribute("cx", "20");
-        dot.setAttribute("cy", "20");
-        dot.setAttribute("r", "5.5");
-        dot.setAttribute("fill", "rgb(var(--primary))");
-        dot.setAttribute("stroke", "white");
-        dot.setAttribute("stroke-width", "3");
-
         svg.appendChild(arrow);
-        svg.appendChild(dot);
 
         return svg;
     }
@@ -956,6 +987,14 @@
     }
 
     function hideUserHeadingMarker() {
+        const locationDot = map
+            ?.getContainer()
+            .querySelector(".maplibregl-user-location-dot") as HTMLElement | null;
+        locationDot?.classList.remove("wanderer-heading-marker");
+        locationDot?.style.removeProperty("overflow");
+        locationDot?.style.removeProperty("background");
+        locationDot?.style.removeProperty("border");
+        locationDot?.style.removeProperty("box-shadow");
         userHeadingIcon?.remove();
         userHeadingIcon = null;
     }
@@ -981,6 +1020,10 @@
         }
 
         locationDot.style.overflow = "visible";
+        locationDot.style.background = "transparent";
+        locationDot.style.border = "0";
+        locationDot.style.boxShadow = "none";
+        locationDot.classList.add("wanderer-heading-marker");
         if (!userHeadingIcon || userHeadingIcon.parentElement !== locationDot) {
             userHeadingIcon?.remove();
             userHeadingIcon = createUserHeadingIcon();
@@ -1192,6 +1235,7 @@
             });
             toggleEpcTheme();
             map.addControl(epc);
+            void refreshElevationProfile();
         }
 
         if (showFullscreen) {
@@ -1270,6 +1314,14 @@
                 geolocateControl.trigger();
             }
         }
+    }
+
+    function updateCursor() {
+        if (!map) {
+            return;
+        }
+        map.getCanvas().style.cursor =
+            drawing || crosshairCursor ? "crosshair" : "inherit";
     }
 
     onDestroy(() => {
@@ -1373,6 +1425,19 @@
             .maplibregl-user-location-dot
         ) {
         pointer-events: none;
+    }
+
+    :global(.maplibregl-user-location-dot.wanderer-heading-marker) {
+        width: 40px;
+        height: 40px;
+        background: transparent !important;
+        border: 0 !important;
+        box-shadow: none !important;
+    }
+
+    :global(.maplibregl-user-location-dot.wanderer-heading-marker::before),
+    :global(.maplibregl-user-location-dot.wanderer-heading-marker::after) {
+        display: none !important;
     }
 
 </style>

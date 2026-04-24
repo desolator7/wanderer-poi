@@ -52,24 +52,50 @@ export function createMarkerFromWaypoint(
     waypoint: Waypoint,
     onDragEnd?: (marker: M.Marker, wpId?: string) => void,
     order?: number,
-): FontawesomeMarker {
-    const marker = new FontawesomeMarker({
-        id: waypoint.id,
-        icon: `fa fa-${waypoint.icon}`,
-        width: 9,
-        style: "shadow-md",
-    }, {
-        draggable: onDragEnd !== undefined,
-        color: "#6b7280"
+): M.Marker {
+    const markerElement = document.createElement("div");
+    markerElement.className =
+        "cursor-pointer relative flex items-center justify-center";
+    markerElement.id = waypoint.id ?? "";
 
-    })
+    const iconName = waypoint.icon && icons.includes(waypoint.icon) ? waypoint.icon : "circle";
+    if (order !== undefined) {
+        markerElement.classList.add(
+            "route-anchor",
+            "h-9",
+            "w-9",
+            "rounded-full",
+            "bg-primary",
+            "text-sm",
+            "font-semibold",
+            "text-white",
+            "shadow-md",
+        );
+        markerElement.textContent = String(order);
+    } else {
+        markerElement.classList.add(
+            "h-9",
+            "w-9",
+            "rounded-full",
+            "bg-primary",
+            "text-white",
+            "shadow-md",
+        );
+        const markerIcon = document.createElement("i");
+        markerIcon.classList.add("fa", `fa-${iconName}`);
+        markerElement.appendChild(markerIcon);
+    }
+
+    const marker = new M.Marker({
+        draggable: onDragEnd !== undefined,
+        element: markerElement,
+    });
 
     const content = document.createElement("div");
     content.className = "p-2"
 
     const spanElement = document.createElement("span");
     const iconElement = document.createElement("i");
-    const iconName = waypoint.icon && icons.includes(waypoint.icon) ? waypoint.icon : "circle";
     iconElement.classList.add("fa", `fa-${iconName}`)
     spanElement.appendChild(iconElement);
 
@@ -99,13 +125,6 @@ export function createMarkerFromWaypoint(
     clickHitArea.className = "absolute -inset-2 rounded-full bg-transparent";
     clickHitArea.style.touchAction = "pan-x pan-y pinch-zoom";
     marker.getElement().appendChild(clickHitArea);
-
-    if (order !== undefined) {
-        const orderElement = document.createElement("span");
-        orderElement.className = "absolute -right-1 -top-1 min-w-4 h-4 px-1 rounded-full bg-primary text-white text-[10px] leading-4 text-center border border-white pointer-events-none";
-        orderElement.textContent = String(order);
-        marker.getElement().appendChild(orderElement);
-    }
 
     if (onDragEnd) {
         marker.on("dragend", () => onDragEnd(marker, waypoint.id,));

@@ -168,19 +168,13 @@
 
     function dropdownItems(): DropdownItem[] {
         return [
-            ...(!isMultiselectMode()
+            ...(!isMultiselectMode() && mode !== "overview"
                 ? [
-                      mode == "overview" || mode == "multi-select"
-                          ? {
-                                text: $_("show-on-map"),
-                                value: "show",
-                                icon: "map",
-                            }
-                          : {
-                                text: $_("show-in-overview"),
-                                value: "show",
-                                icon: "table-columns",
-                            },
+                      {
+                          text: $_("show-in-overview"),
+                          value: "show",
+                          icon: "table-columns",
+                      },
                   ]
                 : []),
             ...(!isMultiselectMode()
@@ -353,9 +347,7 @@
         if (ddVal == "show") {
             if (hasTrail()) {
                 const url =
-                    mode == "overview" || mode == "multi-select"
-                        ? `/map/trail/${handle}/${trailId()}`
-                        : `/trail/view/${handle}/${trailId()}`;
+                    `/trail/view/${handle}/${trailId()}`;
 
                 goto(url + "?" + page.url.searchParams);
             }
