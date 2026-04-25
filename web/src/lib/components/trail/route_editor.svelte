@@ -35,8 +35,8 @@
     if (!options.pedestrianOptions) {
         options.pedestrianOptions = {
             max_hiking_difficulty: 3,
-            walking_speed: 5.1,
-            use_hills: 1,
+            walking_speed: 4,
+            use_hills: 0.5,
             use_tracks: 1,
             walkway_factor: 0.7,
             sidewalk_factor: 1,
@@ -46,17 +46,17 @@
 
     if (!options.bicycleOptions) {
         options.bicycleOptions = {
-            bicycle_type: "Mountain",
-            cycling_speed: 16,
-            use_roads: 0,
-            use_hills: 0.8,
-            avoid_bad_surfaces: 0,
+            bicycle_type: "Hybrid",
+            cycling_speed: 18,
+            use_roads: 0.4,
+            use_hills: 0.5,
+            avoid_bad_surfaces: 0.4,
             shortest: true,
         };
     }
 
     $effect(() => {
-        if (!options.autoRouting) {
+        if (!options.autoRouting || options.modeOfTransport === "pedestrian") {
             showSettings = false;
         }
     });
@@ -132,74 +132,25 @@
                 bind:value={options.autoRouting}
                 label={$_("enable-auto-routing")}
             ></Toggle>
-            <div class="flex items-center gap-4 mt-4">
-                <button
-                    class="btn-icon tooltip"
-                    type="button"
-                    disabled={!options.autoRouting}
-                    onclick={() => (showSettings = !showSettings)}
-                    data-title={$_("more-route-settings")}
-                    aria-label="Toggle routing settings"
-                    ><i
-                        class="fa fa-cogs"
-                        class:text-gray-500={!options.autoRouting}
-                    ></i></button
-                >
-            </div>
+            {#if options.modeOfTransport !== "pedestrian"}
+                <div class="flex items-center gap-4 mt-4">
+                    <button
+                        class="btn-icon tooltip"
+                        type="button"
+                        disabled={!options.autoRouting}
+                        onclick={() => (showSettings = !showSettings)}
+                        data-title={$_("more-route-settings")}
+                        aria-label="Toggle routing settings"
+                        ><i
+                            class="fa fa-cogs"
+                            class:text-gray-500={!options.autoRouting}
+                        ></i></button
+                    >
+                </div>
+            {/if}
             {#if showSettings}
                 <div in:slide out:slide>
-                    {#if options.modeOfTransport === "pedestrian" && options.pedestrianOptions}
-                        <p class="text-sm font-medium pb-1">
-                            {$_("walking-speed")}
-                        </p>
-                        <Slider
-                            minValue={0.5}
-                            maxValue={25}
-                            bind:currentValue={
-                                options.pedestrianOptions.walking_speed
-                            }
-                        ></Slider>
-                        <p class="text-sm text-end">
-                            {formatSpeed(
-                                options.pedestrianOptions.walking_speed! / 3.6,
-                            )}
-                        </p>
-                        <hr class="border-input-border my-3" />
-                        <p class="text-sm font-medium">{$_("use-hills")}</p>
-                        <Slider
-                            minValue={0}
-                            maxValue={1}
-                            step={0.1}
-                            bind:currentValue={
-                                options.pedestrianOptions!.use_hills
-                            }
-                        ></Slider>
-                        <p class="text-sm text-end">
-                            {options.pedestrianOptions.use_hills?.toFixed(2)}
-                        </p>
-                        <hr class="border-input-border my-3" />
-                        <p class="text-sm font-medium">
-                            {$_("max-hiking-difficulty")}
-                        </p>
-                        <Slider
-                            minValue={0}
-                            maxValue={6}
-                            step={1}
-                            bind:currentValue={
-                                options.pedestrianOptions!.max_hiking_difficulty
-                            }
-                        ></Slider>
-                        <p class="text-sm text-end">
-                            {options.pedestrianOptions.max_hiking_difficulty?.toFixed(
-                                0,
-                            )}
-                        </p>
-                        <hr class="border-input-border my-3" />
-                        <Toggle
-                            label={$_("shortest")}
-                            bind:value={options.pedestrianOptions.shortest}
-                        ></Toggle>
-                    {:else if options.modeOfTransport === "bicycle" && options.bicycleOptions}
+                    {#if options.modeOfTransport === "bicycle" && options.bicycleOptions}
                         <Select
                             items={bikeTypes}
                             label={$_("bike-type")}
@@ -262,11 +213,6 @@
                                 2,
                             )}
                         </p>
-                        <hr class="border-input-border my-3" />
-                        <Toggle
-                            label={$_("shortest")}
-                            bind:value={options.bicycleOptions.shortest}
-                        ></Toggle>
                     {/if}
                 </div>
             {/if}

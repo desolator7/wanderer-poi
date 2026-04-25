@@ -20,7 +20,13 @@
     import type { List } from "$lib/models/list";
     import { SummitLog } from "$lib/models/summit_log";
     import { Trail } from "$lib/models/trail";
-    import type { RoutingOptions, ValhallaAnchor } from "$lib/models/valhalla";
+    import type {
+        RouteCalculationResult,
+        RoutingOptions,
+        SacScaleSegment,
+        ValhallaAnchor,
+        ValhallaBicycleCostingOptions,
+    } from "$lib/models/valhalla";
     import { Waypoint } from "$lib/models/waypoint";
     import { categories } from "$lib/stores/category_store";
     import {
@@ -180,22 +186,192 @@
         modeOfTransport: "pedestrian",
         pedestrianOptions: {
             max_hiking_difficulty: 3,
-            walking_speed: 5.1,
-            use_hills: 1,
+            walking_speed: 4,
+            use_hills: 0.5,
             use_tracks: 1,
             walkway_factor: 0.7,
             sidewalk_factor: 1,
             shortest: true,
         },
         bicycleOptions: {
+            bicycle_type: "Hybrid",
+            cycling_speed: 18,
+            use_roads: 0.4,
+            use_hills: 0.5,
+            avoid_bad_surfaces: 0.4,
+            shortest: true,
+        },
+    });
+    const maxHikingDifficultyItems = $derived([
+        { text: `1 - ${$_("sac-scale-1-short")}`, value: 1 },
+        { text: `2 - ${$_("sac-scale-2-short")}`, value: 2 },
+        { text: `3 - ${$_("sac-scale-3-short")}`, value: 3 },
+        { text: `4 - ${$_("sac-scale-4-short")}`, value: 4 },
+        { text: `5 - ${$_("sac-scale-5-short")}`, value: 5 },
+        { text: `6 - ${$_("sac-scale-6-short")}`, value: 6 },
+    ]);
+    const walkingSpeedItems = $derived([
+        {
+            text: `1 - ${$_("walking-speed-very-slow")} (2 km/h)`,
+            value: 2,
+            description: $_("walking-speed-very-slow-description"),
+        },
+        {
+            text: `2 - ${$_("walking-speed-slow")} (3 km/h)`,
+            value: 3,
+            description: $_("walking-speed-slow-description"),
+        },
+        {
+            text: `3 - ${$_("walking-speed-normal")} (4 km/h)`,
+            value: 4,
+            description: $_("walking-speed-normal-description"),
+        },
+        {
+            text: `4 - ${$_("walking-speed-brisk")} (5 km/h)`,
+            value: 5,
+            description: $_("walking-speed-brisk-description"),
+        },
+        {
+            text: `5 - ${$_("walking-speed-very-brisk")} (6 km/h)`,
+            value: 6,
+            description: $_("walking-speed-very-brisk-description"),
+        },
+        {
+            text: `6 - ${$_("walking-speed-fast")} (7 km/h)`,
+            value: 7,
+            description: $_("walking-speed-fast-description"),
+        },
+    ]);
+    const hillPreferenceItems = $derived([
+        {
+            text: `1 - ${$_("hill-preference-avoid-strongly")}`,
+            value: 0,
+            description: $_("hill-preference-avoid-strongly-description"),
+        },
+        {
+            text: `2 - ${$_("hill-preference-avoid")}`,
+            value: 0.2,
+            description: $_("hill-preference-avoid-description"),
+        },
+        {
+            text: `3 - ${$_("hill-preference-balanced")}`,
+            value: 0.5,
+            description: $_("hill-preference-balanced-description"),
+        },
+        {
+            text: `4 - ${$_("hill-preference-accept")}`,
+            value: 0.7,
+            description: $_("hill-preference-accept-description"),
+        },
+        {
+            text: `5 - ${$_("hill-preference-like")}`,
+            value: 0.85,
+            description: $_("hill-preference-like-description"),
+        },
+        {
+            text: `6 - ${$_("hill-preference-direct")}`,
+            value: 1,
+            description: $_("hill-preference-direct-description"),
+        },
+    ]);
+    type BicycleRouteProfile = "bicycle" | "mountainbike" | "ebike";
+    let bicycleRouteProfile: BicycleRouteProfile = $state("bicycle");
+    const bicycleRouteProfiles: Record<
+        BicycleRouteProfile,
+        ValhallaBicycleCostingOptions
+    > = {
+        bicycle: {
+            bicycle_type: "Hybrid",
+            cycling_speed: 18,
+            use_roads: 0.4,
+            use_hills: 0.5,
+            avoid_bad_surfaces: 0.4,
+            shortest: true,
+        },
+        mountainbike: {
             bicycle_type: "Mountain",
             cycling_speed: 16,
-            use_roads: 0,
+            use_roads: 0.1,
             use_hills: 0.8,
             avoid_bad_surfaces: 0,
             shortest: true,
         },
-    });
+        ebike: {
+            bicycle_type: "Hybrid",
+            cycling_speed: 22,
+            use_roads: 0.4,
+            use_hills: 1,
+            avoid_bad_surfaces: 0.4,
+            shortest: true,
+        },
+    };
+    const bicycleRouteProfileItems = $derived([
+        {
+            text: $_("bike-profile-bicycle"),
+            value: "bicycle",
+            description: $_("bike-profile-bicycle-description"),
+        },
+        {
+            text: $_("bike-profile-mountainbike"),
+            value: "mountainbike",
+            description: $_("bike-profile-mountainbike-description"),
+        },
+        {
+            text: $_("bike-profile-ebike"),
+            value: "ebike",
+            description: $_("bike-profile-ebike-description"),
+        },
+    ]);
+    let routeSacScaleSegments: SacScaleSegment[][] = $state([]);
+    type StoredTrailDifficulty = "easy" | "moderate" | "difficult";
+    type RouteDifficultyAssessment = {
+        label: string;
+        storedDifficulty: StoredTrailDifficulty;
+    };
+
+    function getFallbackDifficultyLabel(difficulty?: StoredTrailDifficulty) {
+        return $_(difficulty ?? "easy");
+    }
+
+    function getSacScaleLabel(sacScale: number) {
+        return $_(`sac-scale-${sacScale}-short`);
+    }
+
+    function getStoredDifficultyFromSacScale(sacScale: number): StoredTrailDifficulty {
+        if (sacScale >= 3) {
+            return "difficult";
+        }
+
+        if (sacScale === 2) {
+            return "moderate";
+        }
+
+        return "easy";
+    }
+
+    function calculateRouteDifficultyAssessment(
+        sacScaleSegments: SacScaleSegment[][],
+        fallbackDifficulty?: StoredTrailDifficulty,
+    ): RouteDifficultyAssessment {
+        const segments = sacScaleSegments.flat();
+        const maxSacScale = Math.max(
+            0,
+            ...segments.map((segment) => segment.sacScale),
+        );
+
+        if (maxSacScale <= 0) {
+            return {
+                label: getFallbackDifficultyLabel(fallbackDifficulty),
+                storedDifficulty: fallbackDifficulty ?? "easy",
+            };
+        }
+
+        return {
+            label: getSacScaleLabel(maxSacScale),
+            storedDifficulty: getStoredDifficultyFromSacScale(maxSacScale),
+        };
+    }
+
     let mapWaypointPopup: M.Popup | null = $state(null);
     let pendingWaypointInsertIndex: number | null = null;
     let importedOriginalRoute: GPX | null = $state(null);
@@ -227,28 +403,107 @@
         loopConnectionMode: LoopConnectionMode;
     };
 
-    const supportedRouteCategoryModes = {
-        hiking: "pedestrian",
-        cycling: "bicycle",
-    } as const;
+    function createRouteCalculationResult(
+        waypoints: GPXWaypoint[],
+        sacScaleSegments: SacScaleSegment[] = [],
+    ): RouteCalculationResult {
+        return { waypoints, sacScaleSegments };
+    }
 
     function getCategoryKey(categoryId?: string) {
         const category = $categories.find((entry) => entry.id === categoryId);
-        return category?.name?.toLowerCase() ?? null;
+        return (
+            category?.name
+                ?.toLowerCase()
+                .normalize("NFKD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .replace(/[^a-z0-9]+/g, "-")
+                .replace(/^-|-$/g, "") ?? null
+        );
     }
 
     function getRoutingModeForCategory(categoryId?: string) {
         const categoryKey = getCategoryKey(categoryId);
+
+        if (!categoryKey) {
+            return null;
+        }
+
+        if (["hiking", "wandern"].includes(categoryKey)) {
+            return "pedestrian";
+        }
+
         if (
-            categoryKey &&
-            categoryKey in supportedRouteCategoryModes
+            [
+                "biking",
+                "cycling",
+                "radfahren",
+                "fahrrad",
+                "mountain-biking",
+                "mountainbike",
+                "mountain-bike",
+                "mtb",
+                "e-bike",
+                "ebike",
+                "pedelec",
+            ].includes(categoryKey)
         ) {
-            return supportedRouteCategoryModes[
-                categoryKey as keyof typeof supportedRouteCategoryModes
-            ];
+            return "bicycle";
         }
 
         return null;
+    }
+
+    function getBicycleProfileForCategory(
+        categoryId?: string,
+    ): BicycleRouteProfile | null {
+        const categoryKey = getCategoryKey(categoryId);
+
+        if (!categoryKey) {
+            return null;
+        }
+
+        if (["e-bike", "ebike", "pedelec"].includes(categoryKey)) {
+            return "ebike";
+        }
+
+        if (
+            ["mountain-biking", "mountainbike", "mountain-bike", "mtb"].includes(
+                categoryKey,
+            )
+        ) {
+            return "mountainbike";
+        }
+
+        if (
+            ["biking", "cycling", "radfahren", "fahrrad"].includes(categoryKey)
+        ) {
+            return "bicycle";
+        }
+
+        return null;
+    }
+
+    function applyRoutingForCategory(categoryId?: string, recalculate = false) {
+        const routingMode = getRoutingModeForCategory(categoryId);
+        if (!routingMode) {
+            return;
+        }
+
+        routingOptions.modeOfTransport = routingMode;
+
+        const bicycleProfile = getBicycleProfileForCategory(categoryId);
+        if (bicycleProfile) {
+            bicycleRouteProfile = bicycleProfile;
+            routingOptions.bicycleOptions = {
+                ...routingOptions.bicycleOptions,
+                ...bicycleRouteProfiles[bicycleProfile],
+            };
+        }
+
+        if (recalculate) {
+            scheduleRoutingOptionRecalculation();
+        }
     }
 
     function getPreferredRouteCategoryId(preferredCategoryId?: string) {
@@ -257,17 +512,17 @@
         }
 
         const hikingCategory = $categories.find(
-            (category) => getCategoryKey(category.id) === "hiking",
+            (category) => getRoutingModeForCategory(category.id) === "pedestrian",
         );
         if (hikingCategory) {
             return hikingCategory.id;
         }
 
-        const cyclingCategory = $categories.find(
-            (category) => getCategoryKey(category.id) === "cycling",
+        const bicycleCategory = $categories.find(
+            (category) => getRoutingModeForCategory(category.id) === "bicycle",
         );
-        if (cyclingCategory) {
-            return cyclingCategory.id;
+        if (bicycleCategory) {
+            return bicycleCategory.id;
         }
 
         return undefined;
@@ -374,6 +629,10 @@
                 if (!formData.get("public")) {
                     form.public = false;
                 }
+                form.difficulty = calculateRouteDifficultyAssessment(
+                    routeSacScaleSegments,
+                    form.difficulty,
+                ).storedDifficulty;
                 form.photos = form.photos.filter(
                     (p) => !p.startsWith("data:image/svg+xml;base64"),
                 );
@@ -461,6 +720,85 @@
         },
     });
 
+    let computedRouteDifficulty = $derived(
+        calculateRouteDifficultyAssessment(
+            routeSacScaleSegments,
+            $formData.difficulty,
+        ),
+    );
+
+    function scheduleRoutingOptionRecalculation() {
+        if (($formData.expand?.waypoints_via_trail?.length ?? 0) > 1) {
+            scheduleRouteRecalculationFromWaypoints({ showSuccessToast: false });
+        }
+    }
+
+    function rerouteCurrentTrail() {
+        if (!canModifyTrail) {
+            return;
+        }
+
+        void recalculateRouteFromWaypoints({ showSuccessToast: true });
+    }
+
+    function setMaxHikingDifficulty(value: number | string) {
+        routingOptions.pedestrianOptions!.max_hiking_difficulty = Number(value);
+        scheduleRoutingOptionRecalculation();
+    }
+
+    function setWalkingSpeed(value: number | string) {
+        routingOptions.pedestrianOptions!.walking_speed = Number(value);
+        scheduleRoutingOptionRecalculation();
+    }
+
+    function setHillPreference(value: number | string) {
+        routingOptions.pedestrianOptions!.use_hills = Number(value);
+        scheduleRoutingOptionRecalculation();
+    }
+
+    function setBicycleRouteProfile(value: number | string) {
+        if (
+            value !== "bicycle" &&
+            value !== "mountainbike" &&
+            value !== "ebike"
+        ) {
+            return;
+        }
+
+        bicycleRouteProfile = value;
+        routingOptions.bicycleOptions = {
+            ...routingOptions.bicycleOptions,
+            ...bicycleRouteProfiles[bicycleRouteProfile],
+        };
+        scheduleRoutingOptionRecalculation();
+    }
+
+    function getSelectedWalkingSpeedDescription() {
+        const walkingSpeed = routingOptions.pedestrianOptions?.walking_speed;
+        return (
+            walkingSpeedItems.find(
+                (item) => Number(item.value) === Number(walkingSpeed),
+            )?.description ?? ""
+        );
+    }
+
+    function getSelectedHillPreferenceDescription() {
+        const hillPreference = routingOptions.pedestrianOptions?.use_hills;
+        return (
+            hillPreferenceItems.find(
+                (item) => Number(item.value) === Number(hillPreference),
+            )?.description ?? ""
+        );
+    }
+
+    function getSelectedBicycleRouteProfileDescription() {
+        return (
+            bicycleRouteProfileItems.find(
+                (item) => item.value === bicycleRouteProfile,
+            )?.description ?? ""
+        );
+    }
+
     const isNewTrail = page.params.id === "new";
 
     let trailCanBeEdited = $derived(
@@ -525,10 +863,7 @@
             return;
         }
 
-        const routingMode = getRoutingModeForCategory(preferredCategoryId);
-        if (routingMode && routingOptions.modeOfTransport !== routingMode) {
-            routingOptions.modeOfTransport = routingMode;
-        }
+        applyRoutingForCategory(preferredCategoryId);
     });
 
     $effect(() => {
@@ -554,6 +889,7 @@
         clearAnchors();
         clearRoute();
         clearUndoRedoStack();
+        routeSacScaleSegments = [];
 
         if ($formData.expand!.gpx_data) {
             $formData.id ??= cryptoRandomString({ length: 15 });
@@ -610,6 +946,7 @@
         clearAnchors();
         clearUndoRedoStack();
         clearRoute();
+        routeSacScaleSegments = [];
         mapTrail = [];
         drawingActive = false;
         loopConnectionMode = "none";
@@ -1181,7 +1518,7 @@
         }
 
         try {
-            const routeSegments: GPXWaypoint[][] = [];
+            const routeSegments: RouteCalculationResult[] = [];
             for (let i = 1; i < waypoints.length; i++) {
                 const previousWaypoint = waypoints[i - 1];
                 const currentWaypoint = waypoints[i] as Waypoint & {
@@ -1191,18 +1528,20 @@
                     currentWaypoint.connectionMode ??
                     getDefaultWaypointConnectionMode();
 
-                let routeWaypoints: GPXWaypoint[];
+                let routeSegment: RouteCalculationResult;
                 if (
                     connectionMode === "original-kml" &&
                     importedOriginalSegments[i - 1]?.length
                 ) {
-                    routeWaypoints = ensureRouteSegmentEndpoints(
-                        importedOriginalSegments[i - 1],
-                        previousWaypoint,
-                        currentWaypoint,
+                    routeSegment = createRouteCalculationResult(
+                        ensureRouteSegmentEndpoints(
+                            importedOriginalSegments[i - 1],
+                            previousWaypoint,
+                            currentWaypoint,
+                        ),
                     );
                 } else {
-                    routeWaypoints = await calculateRouteSegmentBetweenEndpoints(
+                    routeSegment = await calculateRouteSegmentBetweenEndpoints(
                         previousWaypoint,
                         currentWaypoint,
                         {
@@ -1212,7 +1551,7 @@
                     );
                 }
 
-                routeSegments.push(routeWaypoints);
+                routeSegments.push(routeSegment);
             }
             if (isLoopRouteActive()) {
                 routeSegments.push(
@@ -1290,7 +1629,7 @@
     async function calculateRouteSegmentForWaypointPair(
         waypoints: Waypoint[],
         toIndex: number,
-    ): Promise<GPXWaypoint[]> {
+    ): Promise<RouteCalculationResult> {
         const previousWaypoint = waypoints[toIndex - 1];
         const currentWaypoint = waypoints[toIndex] as Waypoint & {
             connectionMode?: WaypointConnectionMode;
@@ -1302,10 +1641,12 @@
             connectionMode === "original-kml" &&
             importedOriginalSegments[toIndex - 1]?.length
         ) {
-            return ensureRouteSegmentEndpoints(
-                cloneRouteSegment(importedOriginalSegments[toIndex - 1]),
-                previousWaypoint,
-                currentWaypoint,
+            return createRouteCalculationResult(
+                ensureRouteSegmentEndpoints(
+                    cloneRouteSegment(importedOriginalSegments[toIndex - 1]),
+                    previousWaypoint,
+                    currentWaypoint,
+                ),
             );
         }
 
@@ -1320,17 +1661,24 @@
             );
         } catch (e) {
             console.error(e);
-            return buildStraightFallbackSegment(previousWaypoint, currentWaypoint);
+            return createRouteCalculationResult(
+                buildStraightFallbackSegment(previousWaypoint, currentWaypoint),
+            );
         }
     }
 
-    function replaceRouteWithOrderedSegments(routeSegments: GPXWaypoint[][]) {
+    function replaceRouteWithOrderedSegments(
+        routeSegments: RouteCalculationResult[],
+    ) {
+        routeSacScaleSegments = routeSegments.map(
+            (routeSegment) => routeSegment.sacScaleSegments,
+        );
         valhallaStore.route = new GPX({
             trk: [
                 new Track({
                     trkseg: routeSegments.map(
-                        (routeWaypoints) =>
-                            new TrackSegment({ trkpt: routeWaypoints }),
+                        (routeSegment) =>
+                            new TrackSegment({ trkpt: routeSegment.waypoints }),
                     ),
                 }),
             ],
@@ -1343,20 +1691,26 @@
         options: RoutingOptions = routingOptions,
     ) {
         try {
-            return ensureRouteSegmentEndpoints(
-                await calculateRouteBetween(
-                    previousWaypoint.lat,
-                    previousWaypoint.lon,
-                    currentWaypoint.lat,
-                    currentWaypoint.lon,
-                    options,
+            const routeSegment = await calculateRouteBetween(
+                previousWaypoint.lat,
+                previousWaypoint.lon,
+                currentWaypoint.lat,
+                currentWaypoint.lon,
+                options,
+            );
+            return createRouteCalculationResult(
+                ensureRouteSegmentEndpoints(
+                    routeSegment.waypoints,
+                    previousWaypoint,
+                    currentWaypoint,
                 ),
-                previousWaypoint,
-                currentWaypoint,
+                routeSegment.sacScaleSegments,
             );
         } catch (e) {
             console.error(e);
-            return buildStraightFallbackSegment(previousWaypoint, currentWaypoint);
+            return createRouteCalculationResult(
+                buildStraightFallbackSegment(previousWaypoint, currentWaypoint),
+            );
         }
     }
 
@@ -1455,6 +1809,34 @@
         ];
     }
 
+    async function editCalculatedRouteSegment(
+        index: number,
+        routeSegment: RouteCalculationResult,
+    ) {
+        routeSacScaleSegments[index] = routeSegment.sacScaleSegments;
+        routeSacScaleSegments = [...routeSacScaleSegments];
+        await editRoute(index, routeSegment.waypoints);
+    }
+
+    async function insertCalculatedRouteSegment(
+        routeSegment: RouteCalculationResult,
+        index?: number,
+    ) {
+        if (index !== undefined) {
+            routeSacScaleSegments.splice(index, 0, routeSegment.sacScaleSegments);
+        } else {
+            routeSacScaleSegments.push(routeSegment.sacScaleSegments);
+        }
+        routeSacScaleSegments = [...routeSacScaleSegments];
+        await insertIntoRoute(routeSegment.waypoints, index);
+    }
+
+    function deleteCalculatedRouteSegment(index: number) {
+        routeSacScaleSegments.splice(index, 1);
+        routeSacScaleSegments = [...routeSacScaleSegments];
+        deleteFromRoute(index);
+    }
+
     async function recalculateAdjacentWaypointSegments(
         waypointIndex: number,
         options?: { snapAffectedSegments?: boolean },
@@ -1498,7 +1880,10 @@
             );
 
             for (const result of segmentResults) {
-                await editRoute(result.segmentToIndex - 1, result.routeWaypoints);
+                await editCalculatedRouteSegment(
+                    result.segmentToIndex - 1,
+                    result.routeWaypoints,
+                );
             }
 
             normalizeRouteTime();
@@ -1520,7 +1905,7 @@
                 waypoints,
                 toIndex,
             );
-            await editRoute(toIndex - 1, routeWaypoints);
+            await editCalculatedRouteSegment(toIndex - 1, routeWaypoints);
             normalizeRouteTime();
             updateTrailWithRouteData();
         } catch (e) {
@@ -1550,13 +1935,13 @@
                     waypoints,
                     1,
                 );
-                await insertIntoRoute(firstSegment, 0);
+                await insertCalculatedRouteSegment(firstSegment, 0);
             } else if (insertIndex >= waypoints.length - 1) {
                 const lastSegment = await calculateRouteSegmentForWaypointPair(
                     waypoints,
                     insertIndex,
                 );
-                await insertIntoRoute(lastSegment);
+                await insertCalculatedRouteSegment(lastSegment);
             } else {
                 const [previousSegment, nextSegment] = await Promise.all([
                     calculateRouteSegmentForWaypointPair(waypoints, insertIndex),
@@ -1565,8 +1950,11 @@
                         insertIndex + 1,
                     ),
                 ]);
-                await editRoute(insertIndex - 1, previousSegment);
-                await insertIntoRoute(nextSegment, insertIndex);
+                await editCalculatedRouteSegment(
+                    insertIndex - 1,
+                    previousSegment,
+                );
+                await insertCalculatedRouteSegment(nextSegment, insertIndex);
             }
             normalizeRouteTime();
             updateTrailWithRouteData();
@@ -1584,21 +1972,22 @@
 
         if (waypoints.length === 0) {
             clearRoute();
+            routeSacScaleSegments = [];
             updateTrailWithRouteData();
             return;
         }
 
         if (waypoints.length === 1) {
-            deleteFromRoute(0);
+            deleteCalculatedRouteSegment(0);
             updateTrailWithRouteData();
             return;
         }
 
         try {
             if (deletedIndex <= 0) {
-                deleteFromRoute(0);
+                deleteCalculatedRouteSegment(0);
             } else if (deletedIndex >= previousWaypointCount - 1) {
-                deleteFromRoute(previousWaypointCount - 2);
+                deleteCalculatedRouteSegment(previousWaypointCount - 2);
             } else {
                 setSegmentToDefaultConnectionMode(waypoints, deletedIndex);
                 $formData.expand!.waypoints_via_trail = [...waypoints];
@@ -1606,8 +1995,8 @@
                     waypoints,
                     deletedIndex,
                 );
-                await editRoute(deletedIndex - 1, mergedSegment);
-                deleteFromRoute(deletedIndex);
+                await editCalculatedRouteSegment(deletedIndex - 1, mergedSegment);
+                deleteCalculatedRouteSegment(deletedIndex);
             }
             normalizeRouteTime();
             updateTrailWithRouteData();
@@ -1649,7 +2038,10 @@
             );
 
             for (const update of segmentUpdates) {
-                await editRoute(update.segmentIndex, update.routeWaypoints);
+                await editCalculatedRouteSegment(
+                    update.segmentIndex,
+                    update.routeWaypoints,
+                );
             }
 
             normalizeRouteTime();
@@ -2068,7 +2460,7 @@
                 previousAnchor,
                 { lat, lon },
             );
-            await insertIntoRoute(routeWaypoints);
+            await insertCalculatedRouteSegment(routeWaypoints);
             updateTrailWithRouteData();
             normalizeRouteTime();
         } catch (e) {
@@ -2220,15 +2612,15 @@
             return;
         }
         if (anchorIndex == 0) {
-            deleteFromRoute(anchorIndex);
+            deleteCalculatedRouteSegment(anchorIndex);
             if ($formData.expand?.gpx_data) {
                 updateTrailWithRouteData();
             }
         } else if (anchorIndex == valhallaStore.anchors.length) {
-            deleteFromRoute(anchorIndex - 1);
+            deleteCalculatedRouteSegment(anchorIndex - 1);
             updateTrailWithRouteData();
         } else {
-            deleteFromRoute(anchorIndex - 1);
+            deleteCalculatedRouteSegment(anchorIndex - 1);
             await recalculateRoute(anchorIndex);
         }
     }
@@ -2273,10 +2665,13 @@
             ]);
 
             if (nextRouteSegment) {
-                await editRoute(anchorIndex, nextRouteSegment);
+                await editCalculatedRouteSegment(anchorIndex, nextRouteSegment);
             }
             if (previousRouteSegment) {
-                await editRoute(anchorIndex - 1, previousRouteSegment);
+                await editCalculatedRouteSegment(
+                    anchorIndex - 1,
+                    previousRouteSegment,
+                );
             }
             updateTrailWithRouteData();
             normalizeRouteTime();
@@ -2336,8 +2731,11 @@
                 calculateRouteSegmentForWaypointPair(waypoints, data.segment + 2),
             ]);
 
-            await editRoute(data.segment, previousRouteSegment);
-            await insertIntoRoute(nextRouteSegment, data.segment + 1);
+            await editCalculatedRouteSegment(data.segment, previousRouteSegment);
+            await insertCalculatedRouteSegment(
+                nextRouteSegment,
+                data.segment + 1,
+            );
             normalizeRouteTime();
             updateTrailWithRouteData();
         } catch (e) {
@@ -2406,6 +2804,7 @@
         }
         reverseWaypointOrder();
         reverseRoute();
+        routeSacScaleSegments = [...routeSacScaleSegments].reverse();
 
         updateTrailWithRouteData();
     }
@@ -2431,12 +2830,17 @@
 
     function updateTotals(gpx: GPX) {
         const totals = gpx.features;
+        const routeDifficulty = calculateRouteDifficultyAssessment(
+            routeSacScaleSegments,
+            $formData.difficulty,
+        ).storedDifficulty;
         formData.set({
             ...$formData,
             distance: totals.distance,
             duration: totals.duration / 1000,
             elevation_gain: totals.elevationGain,
             elevation_loss: totals.elevationLoss,
+            difficulty: routeDifficulty,
         });
     }
 
@@ -2840,17 +3244,27 @@
                 </div>
             </div>
         {/if}
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-y-4">
-            <Select
-                name="difficulty"
-                label={$_("difficulty")}
-                items={[
-                    { text: $_("easy"), value: "easy" },
-                    { text: $_("moderate"), value: "moderate" },
-                    { text: $_("difficult"), value: "difficult" },
-                ]}
-                disabled={!canModifyTrail}
-            ></Select>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <p class="text-sm font-medium pb-1">{$_("difficulty")}</p>
+                <div
+                    class="flex h-10 items-center rounded-md bg-input-background px-4 outline outline-1 outline-input-border"
+                >
+                    <span class="text-sm font-medium">
+                        {computedRouteDifficulty.label}
+                    </span>
+                </div>
+            </div>
+            {#if routingOptions.modeOfTransport === "pedestrian" && routingOptions.pedestrianOptions}
+                <Select
+                    label={$_("max-hiking-difficulty")}
+                    items={maxHikingDifficultyItems}
+                    disabled={!canModifyTrail}
+                    onchange={setMaxHikingDifficulty}
+                    bind:value={routingOptions.pedestrianOptions
+                        .max_hiking_difficulty}
+                ></Select>
+            {/if}
             <Select
                 name="category"
                 label={$_("category")}
@@ -2860,12 +3274,65 @@
                 }))}
                 disabled={!canModifyTrail}
                 onchange={(value) => {
-                    const routingMode = getRoutingModeForCategory(value);
-                    if (routingMode) {
-                        routingOptions.modeOfTransport = routingMode;
-                    }
+                    const categoryId = String(value);
+                    setFields("category", categoryId);
+                    applyRoutingForCategory(categoryId, true);
                 }}
             ></Select>
+            {#if routingOptions.modeOfTransport === "pedestrian" && routingOptions.pedestrianOptions}
+                <Select
+                    label={$_("walking-speed")}
+                    items={walkingSpeedItems}
+                    disabled={!canModifyTrail}
+                    onchange={setWalkingSpeed}
+                    bind:value={routingOptions.pedestrianOptions.walking_speed}
+                ></Select>
+                <div>
+                    <Select
+                        label={$_("use-hills")}
+                        items={hillPreferenceItems}
+                        disabled={!canModifyTrail}
+                        onchange={setHillPreference}
+                        bind:value={routingOptions.pedestrianOptions.use_hills}
+                    ></Select>
+                    <p class="mt-1 text-xs text-gray-500">
+                        {$_("valhalla-use-hills-value", {
+                            values: {
+                                value:
+                                    routingOptions.pedestrianOptions.use_hills,
+                            },
+                        })}
+                    </p>
+                </div>
+                <p class="-mt-3 text-xs text-gray-500 md:col-span-1">
+                    {getSelectedWalkingSpeedDescription()}
+                </p>
+                <p class="-mt-3 text-xs text-gray-500 md:col-span-1">
+                    {getSelectedHillPreferenceDescription()}
+                </p>
+            {/if}
+            {#if routingOptions.modeOfTransport === "bicycle" && routingOptions.bicycleOptions}
+                <Select
+                    label={$_("bike-profile")}
+                    items={bicycleRouteProfileItems}
+                    disabled={!canModifyTrail}
+                    onchange={setBicycleRouteProfile}
+                    bind:value={bicycleRouteProfile}
+                ></Select>
+                <p class="self-end text-xs text-gray-500">
+                    {getSelectedBicycleRouteProfileDescription()}
+                </p>
+            {/if}
+            {#if routingOptions.modeOfTransport === "pedestrian" || routingOptions.modeOfTransport === "bicycle"}
+                <Button
+                    secondary
+                    type="button"
+                    disabled={!canModifyTrail ||
+                        ($formData.expand?.waypoints_via_trail?.length ?? 0) < 2}
+                    onclick={rerouteCurrentTrail}
+                    ><i class="fa fa-route mr-2"></i>{$_("reroute")}</Button
+                >
+            {/if}
         </div>
 
         <Toggle
