@@ -490,15 +490,34 @@
             return;
         }
 
-        routingOptions.modeOfTransport = routingMode;
+        if (routingOptions.modeOfTransport !== routingMode) {
+            routingOptions.modeOfTransport = routingMode;
+        }
 
         const bicycleProfile = getBicycleProfileForCategory(categoryId);
         if (bicycleProfile) {
-            bicycleRouteProfile = bicycleProfile;
-            routingOptions.bicycleOptions = {
-                ...routingOptions.bicycleOptions,
-                ...bicycleRouteProfiles[bicycleProfile],
-            };
+            if (bicycleRouteProfile !== bicycleProfile) {
+                bicycleRouteProfile = bicycleProfile;
+            }
+
+            const profileOptions = bicycleRouteProfiles[bicycleProfile];
+            if (
+                routingOptions.bicycleOptions?.bicycle_type !==
+                    profileOptions.bicycle_type ||
+                routingOptions.bicycleOptions?.cycling_speed !==
+                    profileOptions.cycling_speed ||
+                routingOptions.bicycleOptions?.use_roads !==
+                    profileOptions.use_roads ||
+                routingOptions.bicycleOptions?.use_hills !==
+                    profileOptions.use_hills ||
+                routingOptions.bicycleOptions?.avoid_bad_surfaces !==
+                    profileOptions.avoid_bad_surfaces
+            ) {
+                routingOptions.bicycleOptions = {
+                    ...routingOptions.bicycleOptions,
+                    ...profileOptions,
+                };
+            }
         }
 
         if (recalculate) {
@@ -863,7 +882,7 @@
             return;
         }
 
-        applyRoutingForCategory(preferredCategoryId);
+        untrack(() => applyRoutingForCategory(preferredCategoryId));
     });
 
     $effect(() => {
@@ -3247,10 +3266,10 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
                 <p class="text-sm font-medium pb-1">{$_("difficulty")}</p>
-                <div
-                    class="flex h-10 items-center rounded-md bg-input-background px-4 outline outline-1 outline-input-border"
-                >
-                    <span class="text-sm font-medium">
+                <div class="flex min-h-10 items-center">
+                    <span
+                        class="inline-flex min-h-8 items-center rounded-full bg-secondary px-3 py-1 text-sm font-semibold"
+                    >
                         {computedRouteDifficulty.label}
                     </span>
                 </div>
@@ -3273,6 +3292,7 @@
                     value: c.id,
                 }))}
                 disabled={!canModifyTrail}
+                bind:value={$formData.category}
                 onchange={(value) => {
                     const categoryId = String(value);
                     setFields("category", categoryId);
