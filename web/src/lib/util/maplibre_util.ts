@@ -398,6 +398,9 @@ export function calculateScaleFactor(map: M.Map) {
 export function createMarkerFromPoi(
     poi: Poi,
     attributeDefinitions: PoiAttribute[] = [],
+    options?: {
+        draggable?: boolean;
+    },
 ): FontawesomeMarker {
     const icon = poi.icon ?? poi.expand?.category?.icon ?? "location-dot";
     const color = getPoiDisplayColor(poi, attributeDefinitions);
@@ -410,7 +413,7 @@ export function createMarkerFromPoi(
             fontColor: color ?? "white",
             style: "shadow-md",
         },
-        {},
+        { draggable: options?.draggable ?? false },
     ).setLngLat([poi.lon, poi.lat]);
 
     const clickHitArea = document.createElement("span");

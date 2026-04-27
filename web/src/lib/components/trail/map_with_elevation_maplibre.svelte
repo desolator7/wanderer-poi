@@ -83,6 +83,8 @@
             attributes: Record<string, string | boolean | null>,
         ) => Promise<void> | void;
         caneditpoi?: (poi: Poi) => boolean;
+        canmovepoi?: (poi: Poi) => boolean;
+        onpoidragend?: (poi: Poi, marker: M.Marker) => void;
     }
 
     let user = $derived($currentUser);
@@ -123,6 +125,8 @@
         onpoiclick,
         onpoisave,
         caneditpoi,
+        canmovepoi,
+        onpoidragend,
     }: Props = $props();
 
     let mapContainer: HTMLDivElement;
@@ -821,7 +825,9 @@
             const definitions = poiAttributeDefinitions.filter(
                 (definition) => definition.category === poi.category,
             );
-            const marker = createMarkerFromPoi(poi, definitions).addTo(map);
+            const marker = createMarkerFromPoi(poi, definitions, {
+                draggable: canmovepoi?.(poi) ?? false,
+            }).addTo(map);
             const popup = onpoiclick
                 ? undefined
                 : createPopupFromPoi(
@@ -851,6 +857,9 @@
                 }
             };
             marker.getElement().addEventListener("click", handlePoiMarkerClick);
+            if (canmovepoi?.(poi) && onpoidragend) {
+                marker.on("dragend", () => onpoidragend(poi, marker));
+            }
             poiMarkers.push(marker);
         }
         updatePoiLabelVisibility();

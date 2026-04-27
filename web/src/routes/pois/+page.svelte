@@ -23,6 +23,7 @@
     import { show_toast } from "$lib/stores/toast_store.svelte";
     import { defaultPoiIcon, poiIconOptions } from "$lib/util/icon_util";
     import { getPoiDisplayColor } from "$lib/util/poi_util";
+    import type * as M from "maplibre-gl";
     import { _ } from "svelte-i18n";
 
     let { data } = $props();
@@ -59,6 +60,7 @@
         icon: defaultPoiIcon,
         public: false,
     });
+    let mapInteractionMode = $state(false);
 
     let filteredPois = $derived(
         allPois.filter((poi) => {
@@ -305,8 +307,8 @@
         return normalized.length ? normalized : null;
     }
 
-    function createPoi() {
-        editingPoi = new Poi(0, 0, {
+    function createPoiAt(lat: number, lon: number) {
+        editingPoi = new Poi(lat, lon, {
             name: "",
             category: data.categories[0]?.id ?? "",
             icon: defaultPoiIcon,
@@ -332,6 +334,37 @@
             updated: poi.updated,
         });
         poiModal.openModal();
+    }
+
+    function handleMapPoiCreate(event: M.MapMouseEvent & Object) {
+        if (!page.data.user || !mapInteractionMode) {
+            return;
+        }
+        createPoiAt(event.lngLat.lat, event.lngLat.lng);
+    }
+
+    async function movePoi(poi: Poi, marker: M.Marker) {
+        if (!mapInteractionMode || !canManagePoi(poi)) {
+            return;
+        }
+        const lngLat = marker.getLngLat();
+        await savePoi(
+            new Poi(lngLat.lat, lngLat.lng, {
+                id: poi.id,
+                name: poi.name,
+                description: poi.description,
+                location: poi.location,
+                icon: poi.icon,
+                color: poi.color,
+                public: poi.public,
+                author: poi.author,
+                category: poi.category,
+                attributes: { ...(poi.attributes ?? {}) },
+                expand: poi.expand,
+                created: poi.created,
+                updated: poi.updated,
+            }),
+        );
     }
 
     async function savePoi(poi: Poi) {
@@ -577,12 +610,49 @@
                     placeholder={$_("poi-search-placeholder")}
                     onupdate={(value) => (searchQuery = value)}
                 ></Search>
-                {#if page.data.user}
-                    <Button primary={true} onclick={createPoi}>
-                        <i class="fa fa-plus mr-2"></i>POI
-                    </Button>
-                {/if}
             </div>
+            {#if page.data.user}
+                <div class="rounded-xl border border-input-border p-4">
+                    <div class="flex items-center justify-between gap-4">
+                        <div>
+                            <p class="text-xs font-medium uppercase tracking-[0.18em] text-gray-500">
+                                {$_("map")} / {$_("edit")}
+                            </p>
+                            <p class="text-sm text-gray-500">
+                                {#if mapInteractionMode}
+                                    {$_("edit")}
+                                {:else}
+                                    <i class="fa fa-lock mr-2"></i>Ansicht gesperrt
+                                {/if}
+                            </p>
+                        </div>
+                        <div class="inline-flex items-center gap-1 rounded-full border border-input-border bg-input-background p-1">
+                            <button
+                                type="button"
+                                class="flex h-10 w-10 items-center justify-center rounded-full transition-colors"
+                                class:bg-primary={!mapInteractionMode}
+                                class:text-white={!mapInteractionMode}
+                                aria-label="Locked view"
+                                title="Locked view"
+                                onclick={() => (mapInteractionMode = false)}
+                            >
+                                <i class="fa fa-lock"></i>
+                            </button>
+                            <button
+                                type="button"
+                                class="flex h-10 w-10 items-center justify-center rounded-full transition-colors"
+                                class:bg-primary={mapInteractionMode}
+                                class:text-white={mapInteractionMode}
+                                aria-label={$_("edit")}
+                                title={$_("edit")}
+                                onclick={() => (mapInteractionMode = true)}
+                            >
+                                <i class="fa fa-pen"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            {/if}
 
             <PoiFilterPanel
                 categories={data.categories}
@@ -971,7 +1041,11 @@
             pois={filteredPois}
             poiAttributeDefinitions={data.attributeDefinitions}
             caneditpoi={(poi) => page.data.user?.id === poi.author}
+            canmovepoi={(poi) =>
+                Boolean(page.data.user?.id === poi.author && mapInteractionMode)}
             onpoisave={savePoiAttributes}
+            onpoidragend={movePoi}
+            onclick={handleMapPoiCreate}
             showElevation={false}
             showTerrain={true}
         ></MapWithElevationMaplibre>
