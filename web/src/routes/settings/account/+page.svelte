@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { browser } from "$app/environment";
     import { goto, invalidateAll } from "$app/navigation";
     import { page } from "$app/state";
     import Button from "$lib/components/base/button.svelte";
@@ -120,6 +121,36 @@
             });
         }
     }
+
+    async function clearPWACache() {
+        if (!browser) return;
+
+        try {
+            if ("caches" in window) {
+                const cacheKeys = await caches.keys();
+                await Promise.all(cacheKeys.map((cacheKey) => caches.delete(cacheKey)));
+            }
+
+            if ("serviceWorker" in navigator) {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                await Promise.all(
+                    registrations.map((registration) => registration.unregister()),
+                );
+            }
+
+            show_toast({
+                text: $_("pwa-cache-cleared"),
+                icon: "check",
+                type: "success",
+            });
+        } catch (e) {
+            show_toast({
+                text: $_("error-clearing-pwa-cache"),
+                icon: "close",
+                type: "error",
+            });
+        }
+    }
 </script>
 
 <svelte:head>
@@ -214,6 +245,12 @@
             <h4 class="text-xl text-red-400 font-medium">
                 {$_("danger-zone")}
             </h4>
+            <button
+                id="clear-pwa-cache"
+                class="btn-danger"
+                onclick={clearPWACache}
+                >{$_("clear-pwa-cache")}</button
+            >
             <button
                 id="delete-account"
                 class="btn-danger"

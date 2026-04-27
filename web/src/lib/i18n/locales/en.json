@@ -564,5 +564,8 @@
   "public-write-access": "Public value editing",
   "all-users": "All users",
   "admins-only": "Admins only",
-  "public-admin-only": "Public (admins only)"
+  "public-admin-only": "Public (admins only)",
+  "clear-pwa-cache": "Clear PWA cache",
+  "pwa-cache-cleared": "PWA cache has been cleared",
+  "error-clearing-pwa-cache": "Error clearing PWA cache"
 }
