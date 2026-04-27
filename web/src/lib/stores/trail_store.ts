@@ -356,6 +356,25 @@ export async function trails_delete(trail: Trail) {
 
 }
 
+export async function trails_move_to_summit_log(sourceTrail: Trail, targetTrail: Trail) {
+    const r = await fetch(`/api/v1/trail/${sourceTrail.id}/move-to-summit-log`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            targetTrail: targetTrail.id,
+        }),
+    })
+
+    if (!r.ok) {
+        const response = await r.json();
+        throw new APIError(r.status, response.message, response.detail)
+    }
+
+    return await r.json() as Trail;
+}
+
 export async function trails_get_filter_values(f: (url: RequestInfo | URL, config?: RequestInit) => Promise<Response> = fetch): Promise<TrailFilterValues> {
     const r = await f('/api/v1/trail/filter', {
         method: 'GET',
@@ -441,6 +460,7 @@ export async function searchResultToTrailList(hits: Hits<TrailSearchResult>): Pr
             name: h.name,
             photos: h.thumbnail ? [h.thumbnail] : [],
             public: h.public,
+            completed: h.completed,
             summit_logs: [],
             waypoints: [],
             tags: h.tags ?? [],

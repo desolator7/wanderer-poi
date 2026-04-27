@@ -253,7 +253,14 @@ func syncTrailsWithRoutes(app core.App, i StravaIntegration, accessToken string,
 		if containsExternalID(i.ExcludedTrailIDs, route.IDStr) {
 			continue
 		}
-		trails, err := app.FindRecordsByFilter("trails", "external_id = {:id}", "", 1, 0, dbx.Params{"id": route.IDStr})
+		trails, err := app.FindRecordsByFilter(
+			"trails",
+			"external_provider = 'strava' && external_id = {:id}",
+			"",
+			1,
+			0,
+			dbx.Params{"id": route.IDStr},
+		)
 		if err != nil {
 			return err
 		}
@@ -341,7 +348,7 @@ func createTrailFromRoute(app core.App, route StravaRoute, gpx *filesystem.File,
 	}
 
 	bikeCategory, _ := app.FindFirstRecordByData("categories", "name", "Biking")
-	hikeCategory, _ := app.FindFirstRecordByData("categories", "name", "Walking")
+	hikeCategory, _ := app.FindFirstRecordByData("categories", "name", "Hiking")
 
 	category := ""
 
@@ -372,6 +379,7 @@ func createTrailFromRoute(app core.App, route StravaRoute, gpx *filesystem.File,
 		"name":              route.Name,
 		"description":       route.Description,
 		"public":            public,
+		"completed":         false,
 		"distance":          route.Distance,
 		"elevation_gain":    route.ElevationGain,
 		"duration":          route.EstimatedMovingTime,
@@ -429,11 +437,28 @@ func syncTrailsWithActivities(app core.App, i StravaIntegration, accessToken str
 		if containsExternalID(i.ExcludedTrailIDs, externalID) {
 			continue
 		}
-		trails, err := app.FindRecordsByFilter("trails", "external_id = {:id}", "", 1, 0, dbx.Params{"id": externalID})
+		trails, err := app.FindRecordsByFilter(
+			"trails",
+			"external_provider = 'strava' && external_id = {:id}",
+			"",
+			1,
+			0,
+			dbx.Params{"id": externalID},
+		)
 		if err != nil {
 			return err
 		}
 		if len(trails) != 0 {
+			if err := attachActivityToExistingTrail(app, activity, accessToken, actor, trails[0]); err != nil {
+				app.Logger().Warn(fmt.Sprintf("Unable to attach activity '%s' to existing trail: %v", activity.Name, err))
+			}
+			continue
+		}
+		synced, err := summitLogExists(app, "strava", externalID)
+		if err != nil {
+			return err
+		}
+		if synced {
 			continue
 		}
 		detailedActivity, err := fetchDetailedActivity(activity, accessToken)
@@ -463,6 +488,38 @@ func containsExternalID(ids []string, externalID string) bool {
 		}
 	}
 	return false
+}
+
+func attachActivityToExistingTrail(app core.App, activity StravaActivity, accessToken string, actor string, trail *core.Record) error {
+	externalID := strconv.Itoa(int(activity.ID))
+	synced, err := summitLogExists(app, "strava", externalID)
+	if err != nil {
+		return err
+	}
+	if synced {
+		return nil
+	}
+
+	detailedActivity, err := fetchDetailedActivity(activity, accessToken)
+	if err != nil {
+		return err
+	}
+
+	gpx, err := generateActivityGPX(detailedActivity, accessToken)
+	if err != nil {
+		return err
+	}
+
+	if err := createSummitLogFromActivity(app, detailedActivity, gpx, actor, trail.Id); err != nil {
+		return err
+	}
+
+	if !trail.GetBool("completed") {
+		trail.Set("completed", true)
+		return app.Save(trail)
+	}
+
+	return nil
 }
 
 func fetchDetailedActivity(activity StravaActivity, accessToken string) (*DetailedStravaActivity, error) {
@@ -513,43 +570,43 @@ func createTrailFromActivity(app core.App, activity *DetailedStravaActivity, gpx
 	record := core.NewRecord(collection)
 
 	activityMap := map[string]string{
-		"AlpineSki":       "Skiing",
-		"BackcountrySki":  "Skiing",
-		"Canoeing":        "Canoeing",
-		"Crossfit":        "Workout",
+		"AlpineSki":       "Hiking",
+		"BackcountrySki":  "Hiking",
+		"Canoeing":        "Hiking",
+		"Crossfit":        "Hiking",
 		"EBikeRide":       "Biking",
-		"Elliptical":      "Workout",
-		"Golf":            "Walking",
+		"Elliptical":      "Hiking",
+		"Golf":            "Hiking",
 		"Handcycle":       "Biking",
 		"Hike":            "Hiking",
-		"IceSkate":        "Skiing",
+		"IceSkate":        "Hiking",
 		"InlineSkate":     "Biking",
-		"Kayaking":        "Canoeing",
-		"Kitesurf":        "Canoeing",
-		"NordicSki":       "Skiing",
+		"Kayaking":        "Hiking",
+		"Kitesurf":        "Hiking",
+		"NordicSki":       "Hiking",
 		"Ride":            "Biking",
-		"RockClimbing":    "Climbing",
-		"RollerSki":       "Skiing",
-		"Rowing":          "Canoeing",
-		"Run":             "Walking",
-		"Sail":            "Canoeing",
-		"Skateboard":      "Walking",
-		"Snowboard":       "Skiing",
+		"RockClimbing":    "Hiking",
+		"RollerSki":       "Hiking",
+		"Rowing":          "Hiking",
+		"Run":             "Hiking",
+		"Sail":            "Hiking",
+		"Skateboard":      "Hiking",
+		"Snowboard":       "Hiking",
 		"Snowshoe":        "Hiking",
-		"Soccer":          "Workout",
-		"StairStepper":    "Workout",
-		"StandUpPaddling": "Canoeing",
-		"Surfing":         "Canoeing",
-		"Swim":            "Workout",
+		"Soccer":          "Hiking",
+		"StairStepper":    "Hiking",
+		"StandUpPaddling": "Hiking",
+		"Surfing":         "Hiking",
+		"Swim":            "Hiking",
 		"Velomobile":      "Biking",
 		"VirtualRide":     "Biking",
-		"VirtualRun":      "Walking",
-		"Walk":            "Walking",
-		"WeightTraining":  "Workout",
-		"Wheelchair":      "Walking",
-		"Windsurf":        "Canoeing",
-		"Workout":         "Workout",
-		"Yoga":            "Workout",
+		"VirtualRun":      "Hiking",
+		"Walk":            "Hiking",
+		"WeightTraining":  "Hiking",
+		"Wheelchair":      "Hiking",
+		"Windsurf":        "Hiking",
+		"Workout":         "Hiking",
+		"Yoga":            "Hiking",
 	}
 
 	category, _ := app.FindFirstRecordByData("categories", "name", activityMap[activity.Type])
@@ -578,6 +635,7 @@ func createTrailFromActivity(app core.App, activity *DetailedStravaActivity, gpx
 		"name":              activity.Name,
 		"description":       activity.Description,
 		"public":            public,
+		"completed":         true,
 		"distance":          activity.Distance,
 		"elevation_gain":    activity.TotalElevationGain,
 		"duration":          activity.ElapsedTime,
@@ -603,7 +661,47 @@ func createTrailFromActivity(app core.App, activity *DetailedStravaActivity, gpx
 		return err
 	}
 
-	return nil
+	return createSummitLogFromActivity(app, activity, gpx, actor, record.Id)
+}
+
+func createSummitLogFromActivity(app core.App, activity *DetailedStravaActivity, gpx *filesystem.File, actor string, trailID string) error {
+	collection, err := app.FindCollectionByNameOrId("summit_logs")
+	if err != nil {
+		return err
+	}
+
+	summitLogRecord := core.NewRecord(collection)
+	summitLogRecord.Load(map[string]any{
+		"distance":          activity.Distance,
+		"elevation_gain":    activity.TotalElevationGain,
+		"duration":          activity.ElapsedTime,
+		"date":              activity.StartDate,
+		"external_provider": "strava",
+		"external_id":       strconv.Itoa(int(activity.ID)),
+		"author":            actor,
+		"trail":             trailID,
+	})
+	if gpx != nil {
+		summitLogRecord.Set("gpx", gpx)
+	}
+
+	return app.Save(summitLogRecord)
+}
+
+func summitLogExists(app core.App, provider string, externalID string) (bool, error) {
+	logs, err := app.FindRecordsByFilter(
+		"summit_logs",
+		"external_provider = {:provider} && external_id = {:id}",
+		"",
+		1,
+		0,
+		dbx.Params{"provider": provider, "id": externalID},
+	)
+	if err != nil {
+		return false, err
+	}
+
+	return len(logs) > 0, nil
 }
 
 func fetchActivityPhoto(activity *DetailedStravaActivity) (*filesystem.File, error) {

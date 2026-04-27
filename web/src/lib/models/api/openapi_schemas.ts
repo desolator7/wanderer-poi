@@ -184,6 +184,9 @@
  *           format: date
  *         public:
  *           type: boolean
+ *         completed:
+ *           type: boolean
+ *           description: Whether the trail is completed (false means planned)
  *         difficulty:
  *           type: string
  *           enum: [easy, moderate, difficult]
@@ -259,6 +262,9 @@
  *           format: date
  *         public:
  *           type: boolean
+ *         completed:
+ *           type: boolean
+ *           description: Whether the trail is completed (false means planned)
  *         difficulty:
  *           type: string
  *           enum: [easy, moderate, difficult]
@@ -278,6 +284,11 @@
  *           type: number
  *         duration:
  *           type: number
+ *         external_provider:
+ *           type: string
+ *           enum: [strava, komoot, hammerhead]
+ *         external_id:
+ *           type: string
  *         photos:
  *           type: array
  *           items:
@@ -312,6 +323,9 @@
  *           format: date
  *         public:
  *           type: boolean
+ *         completed:
+ *           type: boolean
+ *           description: Whether the trail is completed (false means planned)
  *         difficulty:
  *           type: string
  *           enum: [easy, moderate, difficult]
@@ -331,6 +345,11 @@
  *           type: number
  *         duration:
  *           type: number
+ *         external_provider:
+ *           type: string
+ *           enum: [strava, komoot, hammerhead]
+ *         external_id:
+ *           type: string
  *         photos:
  *           type: array
  *           items:
@@ -434,6 +453,11 @@
  *           type: number
  *         duration:
  *           type: number
+ *         external_provider:
+ *           type: string
+ *           enum: [strava, komoot, hammerhead]
+ *         external_id:
+ *           type: string
  *         photos:
  *           type: array
  *           items:

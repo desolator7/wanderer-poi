@@ -45,8 +45,14 @@
     );
 
     const radioGroupCompletenessItems: RadioItem[] = [
-        { text: $_("completed"), value: "completed" },
-        { text: $_("not-completed"), value: "not_completed" },
+        {
+            text: $_("completed-tours", { values: { n: 1 } }),
+            value: "completed",
+        },
+        {
+            text: $_("planned-tours", { values: { n: 1 } }),
+            value: "not_completed",
+        },
         { text: $_("no-preference"), value: "no_preference" },
     ];
 

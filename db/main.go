@@ -463,6 +463,10 @@ func createSummitLogHandler(client meilisearch.ServiceManager) func(e *core.Reco
 			return err
 		}
 
+		if err := setTrailCompleted(e.App, trail, true); err != nil {
+			return err
+		}
+
 		if err := util.IndexTrails(e.App, []*core.Record{trail}, client); err != nil {
 			return err
 		}
@@ -509,6 +513,17 @@ func deleteSummitLogHandler(client meilisearch.ServiceManager) func(e *core.Reco
 			return err
 		}
 
+		logCount, err := e.App.CountRecords("summit_logs", dbx.NewExp("trail={:id}", dbx.Params{"id": trail.Id}))
+		if err != nil {
+			return err
+		}
+
+		if logCount == 0 {
+			if err := setTrailCompleted(e.App, trail, false); err != nil {
+				return err
+			}
+		}
+
 		if err := util.IndexTrails(e.App, []*core.Record{trail}, client); err != nil {
 			return err
 		}
@@ -519,6 +534,15 @@ func deleteSummitLogHandler(client meilisearch.ServiceManager) func(e *core.Reco
 		}
 		return nil
 	}
+}
+
+func setTrailCompleted(app core.App, trail *core.Record, completed bool) error {
+	if trail.GetBool("completed") == completed {
+		return nil
+	}
+
+	trail.Set("completed", completed)
+	return app.UnsafeWithoutHooks().Save(trail)
 }
 
 func createCommentHandler() func(e *core.RecordRequestEvent) error {
@@ -1553,7 +1577,7 @@ func bootstrapCategories(app core.App) error {
 	if len(records) == 0 {
 		collection, _ := app.FindCollectionByNameOrId("categories")
 
-		categories := []string{"Hiking", "Walking", "Climbing", "Skiing", "Canoeing", "Biking"}
+		categories := []string{"Hiking", "Biking"}
 		for _, element := range categories {
 			record := core.NewRecord(collection)
 			record.Set("name", element)

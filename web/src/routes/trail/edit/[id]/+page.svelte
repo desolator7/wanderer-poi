@@ -606,6 +606,7 @@
 
     const getInitialFormValues = () => ({
         ...data.trail,
+        completed: data.trail.completed ?? false,
         public: data.trail.id
             ? data.trail.public
             : page.data.settings?.privacy?.trails === "public",
@@ -650,6 +651,9 @@
                 const formData = new FormData(htmlForm);
                 if (!formData.get("public")) {
                     form.public = false;
+                }
+                if (!formData.get("completed")) {
+                    form.completed = false;
                 }
                 form.difficulty = calculateRouteDifficultyAssessment(
                     routeSacScaleSegments,
@@ -2320,15 +2324,52 @@
         $formData.expand!.waypoints_via_trail = [...waypoints];
     }
 
+    function createPrefilledSummitLog() {
+        const newSummitLog = new SummitLog(
+            ($formData.date || new Date().toISOString().split("T")[0]).substring(0, 10),
+            {
+                distance: $formData.distance,
+                elevation_gain: $formData.elevation_gain,
+                elevation_loss: $formData.elevation_loss,
+                duration: $formData.duration,
+            },
+        );
+        newSummitLog.author = $currentUser?.actor;
+        newSummitLog.trail = $formData.id;
+
+        const gpxData = $formData.expand?.gpx_data;
+        if (gpxData) {
+            newSummitLog.expand ??= {};
+            newSummitLog.expand.gpx_data = gpxData;
+            newSummitLog._gpx = new File(
+                [gpxData],
+                `${$formData.name || "route"}.gpx`,
+                { type: "text/xml" },
+            );
+        }
+
+        return newSummitLog;
+    }
+
     function beforeSummitLogModalOpen() {
         if (!canModifyTrail) {
             return;
         }
-        const newSummitLog = new SummitLog(
-            new Date().toISOString().split("T")[0],
-        );
-        newSummitLog.author = $currentUser?.actor;
-        summitLog.set(newSummitLog);
+        summitLog.set(createPrefilledSummitLog());
+        summitLogModal.openModal();
+    }
+
+    function handleCompletedChange(value: boolean) {
+        $formData.completed = value;
+
+        if (
+            !value ||
+            ($formData.expand?.summit_logs_via_trail?.length ?? 0) > 0
+        ) {
+            return;
+        }
+
+        summitLog.set(createPrefilledSummitLog());
         summitLogModal.openModal();
     }
 
@@ -2336,6 +2377,7 @@
         if (!canModifyTrail) {
             return;
         }
+        $formData.completed = true;
         let editedSummitLogIndex =
             $formData.expand!.summit_logs_via_trail?.findIndex(
                 (s) => s.id == log.id,
@@ -2364,9 +2406,14 @@
             summitLog.set(currentSummitLog);
             summitLogModal.openModal();
         } else if (item.value === "delete") {
-            $formData.expand!.summit_logs_via_trail?.splice(index, 1);
-            $formData.expand!.summit_logs_via_trail =
-                $formData.expand!.summit_logs_via_trail;
+            const updatedSummitLogs = [
+                ...($formData.expand!.summit_logs_via_trail ?? []),
+            ];
+            updatedSummitLogs.splice(index, 1);
+            $formData.expand!.summit_logs_via_trail = updatedSummitLogs;
+            if (updatedSummitLogs.length === 0) {
+                $formData.completed = false;
+            }
         }
     }
 
@@ -3396,9 +3443,20 @@
 
         <Toggle
             name="public"
+            bind:value={$formData.public}
             label={$formData.public ? $_("public") : $_("private")}
             icon={$formData.public ? "globe" : "lock"}
             disabled={!canModifyTrail}
+        ></Toggle>
+        <Toggle
+            name="completed"
+            bind:value={$formData.completed}
+            label={$formData.completed
+                ? $_("completed-tours", { values: { n: 1 } })
+                : $_("planned-tours", { values: { n: 1 } })}
+            icon={$formData.completed ? "check" : "route"}
+            disabled={!canModifyTrail}
+            onchange={handleCompletedChange}
         ></Toggle>
         <hr class="border-separator" />
         <h3 class="text-xl font-semibold">
