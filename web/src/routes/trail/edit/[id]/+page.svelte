@@ -391,6 +391,9 @@
         maxPoints: 35,
         minDistanceMeters: 120,
     };
+    const valhallaSnapImportMaxPointsCap = 120;
+    const valhallaSnapImportGrowthStartKm = 40;
+    const valhallaSnapImportKmPerExtraWaypoint = 2;
 
     let savedAtLeastOnce = $state(false);
 
@@ -1098,6 +1101,37 @@
         loopConnectionMode = "none";
     }
 
+    function getValhallaSnapImportMaxPoints(
+        points: { lat: number; lon: number }[],
+    ) {
+        if (points.length < 2) {
+            return valhallaSnapImportSimplifyOptions.maxPoints;
+        }
+
+        let totalDistanceMeters = 0;
+        for (let i = 1; i < points.length; i++) {
+            const previous = points[i - 1];
+            const current = points[i];
+            totalDistanceMeters += haversineDistance(
+                previous.lat,
+                previous.lon,
+                current.lat,
+                current.lon,
+            );
+        }
+
+        const totalDistanceKm = totalDistanceMeters / 1000;
+        const extraWaypoints = Math.ceil(
+            Math.max(0, totalDistanceKm - valhallaSnapImportGrowthStartKm) /
+                valhallaSnapImportKmPerExtraWaypoint,
+        );
+
+        return Math.min(
+            valhallaSnapImportMaxPointsCap,
+            valhallaSnapImportSimplifyOptions.maxPoints + extraWaypoints,
+        );
+    }
+
     function buildOriginalSegmentsFromGPX(
         gpx: GPX | null,
         snapToValhalla: boolean,
@@ -1106,9 +1140,6 @@
             return [];
         }
         const segments: GPXWaypoint[][] = [];
-        const simplifyOptions = snapToValhalla
-            ? valhallaSnapImportSimplifyOptions
-            : originalKmlImportSimplifyOptions;
 
         for (const track of gpx.trk ?? []) {
             for (const trkseg of track.trkseg ?? []) {
@@ -1119,6 +1150,14 @@
                         ? [{ lat: point.$.lat, lon: point.$.lon }]
                         : [],
                 );
+                const simplifyOptions = snapToValhalla
+                    ? {
+                          ...valhallaSnapImportSimplifyOptions,
+                          maxPoints: getValhallaSnapImportMaxPoints(
+                              segmentPoints,
+                          ),
+                      }
+                    : originalKmlImportSimplifyOptions;
                 const simplifiedPoints = pruneImportedRouteControlPoints(
                     simplifyPolylinePoints(segmentPoints, simplifyOptions),
                     simplifyOptions,
