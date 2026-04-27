@@ -29,9 +29,6 @@
     let { data } = $props();
 
     let allPois = $state(data.pois);
-    let activeTab = $state(
-        page.url.searchParams.get("tab") === "import" ? 1 : 0,
-    );
     let searchQuery = $state("");
     let includePublic = $state(true);
     let includeOwn = $state(Boolean(page.data.user));
@@ -44,7 +41,6 @@
     let importIcon: string = $state(defaultPoiIcon);
     let importPublic = $state(false);
     let importBusy = $state(false);
-    let offerUpload = $state(false);
     let selectedPoiIds = $state<string[]>([]);
     let bulkSaveBusy = $state(false);
     let bulkDeleteBusy = $state(false);
@@ -558,7 +554,6 @@
                 }
                 allPois = [...imported, ...allPois];
             }
-            activeTab = 0;
             show_toast({
                 type: "success",
                 icon: "check",
@@ -583,89 +578,111 @@
 
 <main class="grid grid-cols-1 md:grid-cols-[420px_1fr]">
     <div class="overflow-y-auto px-6 py-6 space-y-4">
-        <div class="flex gap-2">
-            <button
-                class="btn-secondary"
-                class:bg-primary={activeTab === 0}
-                class:text-white={activeTab === 0}
-                onclick={() => (activeTab = 0)}
-            >
-                {$_("pois")}
-            </button>
-            <button
-                class="btn-secondary"
-                class:bg-primary={activeTab === 1}
-                class:text-white={activeTab === 1}
-                onclick={() => (activeTab = 1)}
-            >
-                {$_("import")}
-            </button>
-        </div>
-
-        {#if activeTab === 0}
-            <div class="flex gap-2">
-                <Search
-                    extraClasses="w-full"
-                    items={[]}
-                    placeholder={$_("poi-search-placeholder")}
-                    onupdate={(value) => (searchQuery = value)}
-                ></Search>
-            </div>
-            {#if page.data.user}
-                <div class="rounded-xl border border-input-border p-4">
-                    <div class="flex items-center justify-between gap-4">
-                        <div>
-                            <p class="text-xs font-medium uppercase tracking-[0.18em] text-gray-500">
-                                {$_("map")} / {$_("edit")}
-                            </p>
-                            <p class="text-sm text-gray-500">
-                                {#if mapInteractionMode}
-                                    {$_("edit")}
-                                {:else}
-                                    <i class="fa fa-lock mr-2"></i>Ansicht gesperrt
-                                {/if}
-                            </p>
-                        </div>
-                        <div class="inline-flex items-center gap-1 rounded-full border border-input-border bg-input-background p-1">
-                            <button
-                                type="button"
-                                class="flex h-10 w-10 items-center justify-center rounded-full transition-colors"
-                                class:bg-primary={!mapInteractionMode}
-                                class:text-white={!mapInteractionMode}
-                                aria-label="Locked view"
-                                title="Locked view"
-                                onclick={() => (mapInteractionMode = false)}
-                            >
-                                <i class="fa fa-lock"></i>
-                            </button>
-                            <button
-                                type="button"
-                                class="flex h-10 w-10 items-center justify-center rounded-full transition-colors"
-                                class:bg-primary={mapInteractionMode}
-                                class:text-white={mapInteractionMode}
-                                aria-label={$_("edit")}
-                                title={$_("edit")}
-                                onclick={() => (mapInteractionMode = true)}
-                            >
-                                <i class="fa fa-pen"></i>
-                            </button>
-                        </div>
+        {#if page.data.user}
+            <div class="rounded-xl border border-input-border p-4">
+                <div class="flex items-center justify-between gap-4">
+                    <div>
+                        <p class="text-xs font-medium uppercase tracking-[0.18em] text-gray-500">
+                            {$_("map")} / {$_("edit")}
+                        </p>
+                        <p class="text-sm text-gray-500">
+                            {#if mapInteractionMode}
+                                {$_("edit")}
+                            {:else}
+                                <i class="fa fa-lock mr-2"></i>Ansicht gesperrt
+                            {/if}
+                        </p>
+                    </div>
+                    <div class="inline-flex items-center gap-1 rounded-full border border-input-border bg-input-background p-1">
+                        <button
+                            type="button"
+                            class="flex h-10 w-10 items-center justify-center rounded-full transition-colors"
+                            class:bg-primary={!mapInteractionMode}
+                            class:text-white={!mapInteractionMode}
+                            aria-label="Locked view"
+                            title="Locked view"
+                            onclick={() => (mapInteractionMode = false)}
+                        >
+                            <i class="fa fa-lock"></i>
+                        </button>
+                        <button
+                            type="button"
+                            class="flex h-10 w-10 items-center justify-center rounded-full transition-colors"
+                            class:bg-primary={mapInteractionMode}
+                            class:text-white={mapInteractionMode}
+                            aria-label={$_("edit")}
+                            title={$_("edit")}
+                            onclick={() => (mapInteractionMode = true)}
+                        >
+                            <i class="fa fa-pen"></i>
+                        </button>
                     </div>
                 </div>
-            {/if}
+            </div>
+        {/if}
 
-            <PoiFilterPanel
-                categories={data.categories}
-                bind:selectedCategoryIds
-                bind:includePublic
-                bind:includeOwn
-                showOwnToggle={Boolean(page.data.user)}
-            ></PoiFilterPanel>
+        <div class="flex gap-2">
+            <Search
+                extraClasses="w-full"
+                items={[]}
+                placeholder={$_("poi-search-placeholder")}
+                onupdate={(value) => (searchQuery = value)}
+            ></Search>
+        </div>
 
-            {#if page.data.user}
-                <div
-                    class="rounded-xl border border-input-border p-4 space-y-4"
-                >
+        {#if page.data.user}
+            <div class="rounded-xl border border-input-border p-4 space-y-4">
+                <Select
+                    bind:value={importCategory}
+                    label={$_("category")}
+                    items={data.categories.map((category) => ({
+                        text: category.name,
+                        value: category.id,
+                    }))}
+                ></Select>
+                <Select
+                    bind:value={importIcon}
+                    label={$_("icon")}
+                    items={poiIconOptions.map((option) => ({
+                        text: $_(option.labelKey),
+                        value: option.value,
+                    }))}
+                ></Select>
+                <Toggle
+                    bind:value={importPublic}
+                    label={importPublic ? $_("public") : $_("private")}
+                    icon={importPublic ? "globe" : "lock"}
+                ></Toggle>
+                <Button secondary={true} onclick={openFileBrowser}>
+                    {$_("upload-new-file")}
+                </Button>
+                <input
+                    id="poi-import-input"
+                    type="file"
+                    accept=".kml,.KML,.kmz,.KMZ"
+                    multiple={true}
+                    hidden
+                    disabled={importBusy}
+                    onchange={async (event) =>
+                        await importFiles(
+                            (event.currentTarget as HTMLInputElement).files,
+                        )}
+                />
+            </div>
+        {/if}
+
+        <PoiFilterPanel
+            categories={data.categories}
+            bind:selectedCategoryIds
+            bind:includePublic
+            bind:includeOwn
+            showOwnToggle={Boolean(page.data.user)}
+        ></PoiFilterPanel>
+
+        {#if page.data.user}
+            <div
+                class="rounded-xl border border-input-border p-4 space-y-4"
+            >
                     <div
                         class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"
                     >
@@ -870,15 +887,15 @@
                             </Button>
                         {/if}
                     {/if}
-                </div>
-            {/if}
+            </div>
+        {/if}
 
-            <div class="space-y-3">
-                {#if filteredPois.length}
-                    {#each filteredPois as poi}
-                        <div
-                            class="rounded-xl border border-input-border p-4 space-y-3"
-                        >
+        <div class="space-y-3">
+            {#if filteredPois.length}
+                {#each filteredPois as poi}
+                    <div
+                        class="rounded-xl border border-input-border p-4 space-y-3"
+                    >
                             <div class="flex items-start justify-between gap-4">
                                 <div class="flex items-start gap-3">
                                     {#if canManagePoi(poi)}
@@ -967,72 +984,14 @@
                                     </div>
                                 {/if}
                             </div>
-                        </div>
-                    {/each}
-                {:else}
-                    <p class="text-sm text-gray-500">
-                        {$_("no-matching-pois")}
-                    </p>
-                {/if}
-            </div>
-        {:else}
-            <div class="space-y-4">
-                <h2 class="text-xl font-semibold">{$_("import-kml-as-pois")}</h2>
-                <Select
-                    bind:value={importCategory}
-                    label={$_("category")}
-                    items={data.categories.map((category) => ({
-                        text: category.name,
-                        value: category.id,
-                    }))}
-                ></Select>
-                <Select
-                    bind:value={importIcon}
-                    label={$_("icon")}
-                    items={poiIconOptions.map((option) => ({
-                        text: $_(option.labelKey),
-                        value: option.value,
-                    }))}
-                ></Select>
-                <Button secondary={true} onclick={openFileBrowser}>
-                    {$_("choose-file")}
-                </Button>
-                <Toggle
-                    bind:value={importPublic}
-                    label={importPublic ? $_("public") : $_("private")}
-                    icon={importPublic ? "globe" : "lock"}
-                ></Toggle>
-                <button
-                    class="drop-area relative h-56 w-full p-4 border border-content border-dashed rounded-xl flex items-center justify-center text-gray-500 bg-background cursor-pointer hover:bg-menu-item-background-hover transition-colors"
-                    class:border-2={offerUpload}
-                    onclick={openFileBrowser}
-                    ondragover={(event) => {
-                        event.preventDefault();
-                        offerUpload = true;
-                    }}
-                    ondragleave={() => (offerUpload = false)}
-                    ondrop={async (event) => {
-                        event.preventDefault();
-                        offerUpload = false;
-                        await importFiles(event.dataTransfer?.files);
-                    }}
-                >
-                    {$_("drop-kml-kmz")}
-                </button>
-                <input
-                    id="poi-import-input"
-                    type="file"
-                    accept=".kml,.KML,.kmz,.KMZ"
-                    multiple={true}
-                    hidden
-                    disabled={importBusy}
-                    onchange={async (event) =>
-                        await importFiles(
-                            (event.currentTarget as HTMLInputElement).files,
-                        )}
-                />
-            </div>
-        {/if}
+                    </div>
+                {/each}
+            {:else}
+                <p class="text-sm text-gray-500">
+                    {$_("no-matching-pois")}
+                </p>
+            {/if}
+        </div>
     </div>
 
     <div id="poi-map">
