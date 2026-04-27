@@ -79,12 +79,14 @@
 
     function colCount() {
         return [
+            showPhotos,
             showCategory,
             showTrail,
             showAuthor,
             showRoute,
             showDescription,
-        ].reduce((b, v) => (v ? b + 1 : b), 7);
+            showMenu,
+        ].reduce((b, v) => (v ? b + 1 : b), 5);
     }
 
     function handleDropdownClick(item: DropdownItem): void {
