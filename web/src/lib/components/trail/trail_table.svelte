@@ -101,6 +101,11 @@
             );
         }
     }
+
+
+    function isPlannedTrail(trail: Trail): boolean {
+        return Boolean(trail.external_provider) && trail.completed === false;
+    }
 </script>
 
 <div
@@ -171,6 +176,9 @@
                                 title={trail.name}
                             >
                                 {trail.name}
+                                {#if isPlannedTrail(trail)}
+                                    <span class="ml-2 rounded-full bg-secondary-hover text-xs px-2 py-0.5 align-middle">{$_("planned")}</span>
+                                {/if}
                             </div>
                             <div class="flex flex-col items-center">
                                 {#if trail.expand && trail.expand.author}

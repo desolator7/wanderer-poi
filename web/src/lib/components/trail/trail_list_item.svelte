@@ -53,6 +53,10 @@
 
     let expandedTags = $state(false);
 
+    let isPlannedTrail = $derived(
+        Boolean(trail.external_provider) && trail.completed === false,
+    );
+
     function toggleExpandTags(e: MouseEvent) {
         e.preventDefault();
         e.stopPropagation();
@@ -83,9 +87,14 @@
     </div>
     <div class="min-w-0 basis-full relative">
         <div class="flex items-center justify-between">
-            <h4 class="font-semibold text-lg line-clamp-2 wrap-anywhere">
-                {trail.name}
-            </h4>
+            <div class="flex items-center gap-2 min-w-0">
+                <h4 class="font-semibold text-lg line-clamp-2 wrap-anywhere">
+                    {trail.name}
+                </h4>
+                {#if isPlannedTrail}
+                    <span class="rounded-full bg-secondary-hover text-xs px-2 py-0.5 shrink-0">{$_("planned")}</span>
+                {/if}
+            </div>
             <div class="flex items-center shrink-0 gap-3">
                 {#if trail.public && $currentUser}
                     <span class="tooltip" data-title={$_("public")}>

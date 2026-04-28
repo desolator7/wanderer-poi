@@ -51,6 +51,10 @@
         (trail.expand?.trail_share_via_trail?.length ?? 0) > 0,
     );
 
+    let isPlannedTrail = $derived(
+        Boolean(trail.external_provider) && trail.completed === false,
+    );
+
     function handleInputClick(e: Event) {
         e.stopPropagation();
         onTrailSelect?.();
@@ -151,7 +155,12 @@
     {/if}
     <div class="p-4">
         <div>
-            <h4 class="font-semibold text-lg line-clamp-2 wrap-anywhere">{trail.name}</h4>
+            <div class="flex flex-wrap items-center gap-2">
+                <h4 class="font-semibold text-lg line-clamp-2 wrap-anywhere">{trail.name}</h4>
+                {#if isPlannedTrail}
+                    <span class="rounded-full bg-secondary-hover text-xs px-2 py-0.5">{$_("planned")}</span>
+                {/if}
+            </div>
             {#if trail.date}
                 <p class="text-xs text-gray-500 mb-3">
                     {new Date(trail.date).toLocaleDateString(undefined, {
