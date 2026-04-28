@@ -186,6 +186,16 @@
                         : "@" + trail.expand.author.domain}
                 </p>
             {/if}
+            {#if $currentUser && trail.completed_by_current_user}
+                <div class="mb-3">
+                    <span
+                        class="inline-flex items-center gap-1 rounded-full border border-input-border bg-menu-item-background px-2 py-1 text-xs font-medium text-green-600"
+                    >
+                        <i class="fa fa-circle-check"></i>
+                        {$_("completed-by-you")}
+                    </span>
+                </div>
+            {/if}
             {#if trail.tags.length}
                 <div class="flex flex-wrap gap-1 mb-3 items-center">
                     {#each expandedTags ? trail.tags : trail.tags.slice(0, 2) as t}

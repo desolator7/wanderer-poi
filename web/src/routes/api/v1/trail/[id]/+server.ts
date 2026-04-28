@@ -1,6 +1,7 @@
 import { RecordOptionsSchema } from '$lib/models/api/base_schema';
 import { TrailUpdateSchema } from '$lib/models/api/trail_schema';
 import type { Trail } from "$lib/models/trail";
+import { markTrailsCompletedByCurrentUser } from '$lib/server/trail_completion';
 import { APIError, Collection, handleError, remove, show, update } from "$lib/util/api_util";
 import { objectToFormData } from "$lib/util/file_util";
 import { json, type RequestEvent } from "@sveltejs/kit";
@@ -163,6 +164,11 @@ export async function GET(event: RequestEvent) {
 
         // remove time from dates
         await enrichRecord(event.locals.pb, t);
+        await markTrailsCompletedByCurrentUser(
+            event.locals.pb,
+            event.locals.user?.actor,
+            [t],
+        );
 
         // sort waypoints by distance
         t.expand?.waypoints_via_trail?.sort((a, b) => (a.distance_from_start ?? 0) - (b.distance_from_start ?? 0))

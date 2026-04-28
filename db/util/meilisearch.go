@@ -52,7 +52,7 @@ func documentFromTrailRecord(app core.App, r *core.Record, author *core.Record, 
 		domain = author.GetString("domain")
 	}
 
-	logCount, err := app.CountRecords("summit_logs", dbx.NewExp("trail={:id}", dbx.Params{"id": r.Id}))
+	completedBy, err := completedByFromTrailRecord(app, r)
 	if err != nil {
 		return nil, err
 	}
@@ -120,6 +120,29 @@ func documentFromTrailRecord(app core.App, r *core.Record, author *core.Record, 
 	}
 
 	return document, nil
+}
+
+func completedByFromTrailRecord(app core.App, r *core.Record) ([]string, error) {
+	logs, err := app.FindAllRecords(
+		"summit_logs",
+		dbx.NewExp("trail = {:trail}", dbx.Params{"trail": r.Id}),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	seen := map[string]bool{}
+	actorIDs := []string{}
+	for _, log := range logs {
+		actorID := log.GetString("author")
+		if actorID == "" || seen[actorID] {
+			continue
+		}
+		seen[actorID] = true
+		actorIDs = append(actorIDs, actorID)
+	}
+
+	return actorIDs, nil
 }
 
 func difficultyToNumber(difficulty string) int32 {

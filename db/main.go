@@ -106,9 +106,12 @@ func setupEventHandlers(app *pocketbase.PocketBase, client meilisearch.ServiceMa
 	app.OnRecordAfterUpdateSuccess("trails").BindFunc(updateTrailHandler(client))
 	app.OnRecordAfterDeleteSuccess("trails").BindFunc(deleteTrailHandler(client))
 
-	app.OnRecordCreateRequest("summit_logs").BindFunc(createSummitLogHandler(client))
+	app.OnRecordCreateRequest("summit_logs").BindFunc(createSummitLogHandler())
 	app.OnRecordUpdateRequest("summit_logs").BindFunc(updateSummitLogHandler())
-	app.OnRecordDeleteRequest("summit_logs").BindFunc(deleteSummitLogHandler(client))
+	app.OnRecordDeleteRequest("summit_logs").BindFunc(deleteSummitLogHandler())
+	app.OnRecordAfterCreateSuccess("summit_logs").BindFunc(reindexSummitLogTrailsHandler(client))
+	app.OnRecordAfterUpdateSuccess("summit_logs").BindFunc(reindexSummitLogTrailsHandler(client))
+	app.OnRecordAfterDeleteSuccess("summit_logs").BindFunc(reindexSummitLogTrailsHandler(client))
 
 	app.OnRecordCreateRequest("comments").BindFunc(createCommentHandler())
 	app.OnRecordUpdateRequest("comments").BindFunc(updateCommentHandler())
@@ -445,7 +448,7 @@ func addDeletedImportedTrailToExclusionList(app core.App, trail *core.Record) er
 	return app.Save(integration)
 }
 
-func createSummitLogHandler(client meilisearch.ServiceManager) func(e *core.RecordRequestEvent) error {
+func createSummitLogHandler() func(e *core.RecordRequestEvent) error {
 	return func(e *core.RecordRequestEvent) error {
 
 		err := e.Next()
@@ -455,15 +458,6 @@ func createSummitLogHandler(client meilisearch.ServiceManager) func(e *core.Reco
 
 		userActor, err := e.App.FindFirstRecordByData("activitypub_actors", "user", e.Auth.Id)
 		if err != nil {
-			return err
-		}
-
-		trail, err := e.App.FindRecordById("trails", e.Record.GetString("trail"))
-		if err != nil {
-			return err
-		}
-
-		if err := util.IndexTrails(e.App, []*core.Record{trail}, client); err != nil {
 			return err
 		}
 
@@ -497,19 +491,10 @@ func updateSummitLogHandler() func(e *core.RecordRequestEvent) error {
 	}
 }
 
-func deleteSummitLogHandler(client meilisearch.ServiceManager) func(e *core.RecordRequestEvent) error {
+func deleteSummitLogHandler() func(e *core.RecordRequestEvent) error {
 	return func(e *core.RecordRequestEvent) error {
 		err := e.Next()
 		if err != nil {
-			return err
-		}
-
-		trail, err := e.App.FindRecordById("trails", e.Record.GetString("trail"))
-		if err != nil {
-			return err
-		}
-
-		if err := util.IndexTrails(e.App, []*core.Record{trail}, client); err != nil {
 			return err
 		}
 
@@ -518,6 +503,33 @@ func deleteSummitLogHandler(client meilisearch.ServiceManager) func(e *core.Reco
 			return err
 		}
 		return nil
+	}
+}
+
+func reindexSummitLogTrailsHandler(client meilisearch.ServiceManager) func(e *core.RecordEvent) error {
+	return func(e *core.RecordEvent) error {
+		trailIDs := map[string]bool{}
+		if trailID := e.Record.GetString("trail"); trailID != "" {
+			trailIDs[trailID] = true
+		}
+		if originalTrailID := e.Record.Original().GetString("trail"); originalTrailID != "" {
+			trailIDs[originalTrailID] = true
+		}
+
+		for trailID := range trailIDs {
+			trail, err := e.App.FindRecordById("trails", trailID)
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					continue
+				}
+				return err
+			}
+			if err := util.IndexTrails(e.App, []*core.Record{trail}, client); err != nil {
+				return err
+			}
+		}
+
+		return e.Next()
 	}
 }
 
@@ -1553,7 +1565,7 @@ func bootstrapCategories(app core.App) error {
 	if len(records) == 0 {
 		collection, _ := app.FindCollectionByNameOrId("categories")
 
-		categories := []string{"Hiking", "Walking", "Climbing", "Skiing", "Canoeing", "Biking"}
+		categories := []string{"Hiking", "Biking"}
 		for _, element := range categories {
 			record := core.NewRecord(collection)
 			record.Set("name", element)
@@ -1634,7 +1646,7 @@ func bootstrapMeilisearchConfig(client meilisearch.ServiceManager) {
 		"trails": {
 			SearchableAttributes: []string{"author_name", "name", "description", "location", "tags"},
 			FilterableAttributes: []string{
-				"_geo", "author", "category", "completed", "date", "difficulty",
+				"_geo", "author", "category", "completed_by", "date", "difficulty",
 				"distance", "elevation_gain", "elevation_loss", "likes", "public",
 				"shares", "tags",
 			},

@@ -1,3 +1,4 @@
+import { markTrailsCompletedByCurrentUser } from "$lib/server/trail_completion";
 import { error, json, type RequestEvent } from "@sveltejs/kit";
 
 /**
@@ -40,6 +41,19 @@ export async function POST(event: RequestEvent) {
         const r = await event.locals.ms.multiSearch({
             queries: data.queries
         });
+        await Promise.all(
+            r.results.map(async (result: any) => {
+                if (result.indexUid !== "trails") {
+                    return;
+                }
+
+                await markTrailsCompletedByCurrentUser(
+                    event.locals.pb,
+                    event.locals.user?.actor,
+                    result.hits as any[],
+                );
+            }),
+        );
         return json(r);
     } catch (e: any) {
         throw error(e.httpStatus, e)

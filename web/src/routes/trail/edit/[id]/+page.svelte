@@ -100,6 +100,7 @@
         getWaypointInsertIndexByNearestSegment,
         simplifyPolylinePoints,
     } from "$lib/util/waypoint_routing";
+    import { consumeRouteImportSession } from "$lib/util/route_import_util";
     import EXIF from "$lib/vendor/exif-js/exif.js";
     import { validator } from "@felte/validator-zod";
     import cryptoRandomString from "crypto-random-string";
@@ -913,6 +914,23 @@
         clearUndoRedoStack();
         routeSacScaleSegments = [];
 
+        if (
+            page.params.id === "new" &&
+            page.url.searchParams.get("import") === "session"
+        ) {
+            const pendingImport = consumeRouteImportSession();
+            if (pendingImport?.gpxData) {
+                await applyImportedTrailData(
+                    pendingImport.gpxData,
+                    pendingImport.name ?? "route.gpx",
+                    new Blob([pendingImport.gpxData], {
+                        type: "application/gpx+xml",
+                    }),
+                );
+                return;
+            }
+        }
+
         if ($formData.expand!.gpx_data) {
             $formData.id ??= cryptoRandomString({ length: 15 });
             const gpx = GPX.parse($formData.expand!.gpx_data);
@@ -931,6 +949,19 @@
                 }
 
                 setRoute(gpx);
+                if (
+                    ($formData.expand!.waypoints_via_trail ?? []).some(
+                        (waypoint, index) =>
+                            index > 0 &&
+                            waypoint.connectionMode === "original-kml",
+                    )
+                ) {
+                    importedOriginalRoute = gpx;
+                    importedOriginalSegments = buildOriginalSegmentsFromGPX(
+                        gpx,
+                        false,
+                    );
+                }
                 loopConnectionMode = inferLoopConnectionModeFromRoute(
                     gpx,
                     $formData.expand!.waypoints_via_trail ?? [],
@@ -952,18 +983,11 @@
         document.getElementById("fileInput")!.click();
     }
 
-    async function handleFileSelection() {
-        if (!canModifyTrail) {
-            return;
-        }
-        const selectedFile = (
-            document.getElementById("fileInput") as HTMLInputElement
-        ).files?.[0];
-
-        if (!selectedFile) {
-            return;
-        }
-
+    async function applyImportedTrailData(
+        gpxData: string,
+        fileName: string,
+        file: File | Blob,
+    ) {
         clearWaypoints();
         clearAnchors();
         clearUndoRedoStack();
@@ -972,13 +996,11 @@
         mapTrail = [];
         drawingActive = false;
         loopConnectionMode = "none";
-
-        const { gpxData, gpxFile: file } = await fromFile(selectedFile);
         gpxFile = file;
 
         try {
             const prevId = $formData.id;
-            const parseResult = await gpx2trail(gpxData, selectedFile.name);
+            const parseResult = await gpx2trail(gpxData, fileName);
             setFields(parseResult.trail);
             $formData.id = prevId ?? cryptoRandomString({ length: 15 });
             $formData.expand!.gpx_data = gpxData;
@@ -1024,7 +1046,7 @@
                 parseResult.gpx.rte = undefined;
             }
             setRoute(parseResult.gpx);
-            if (/\.(kml|kmz)$/i.test(selectedFile.name)) {
+            if (/\.(kml|kmz)$/i.test(fileName)) {
                 const parsedOriginalRoute = GPX.parse(parseResult.gpx.toString());
                 importedOriginalRoute =
                     parsedOriginalRoute instanceof Error
@@ -1084,13 +1106,31 @@
                 type: "error",
                 text: $_("error-reading-file"),
             });
-            return;
+            return false;
         }
         const r = await searchLocationReverse($formData.lat!, $formData.lon!);
 
         if (r) {
             setFields("location", r);
         }
+
+        return true;
+    }
+
+    async function handleFileSelection() {
+        if (!canModifyTrail) {
+            return;
+        }
+        const selectedFile = (
+            document.getElementById("fileInput") as HTMLInputElement
+        ).files?.[0];
+
+        if (!selectedFile) {
+            return;
+        }
+
+        const { gpxData, gpxFile: file } = await fromFile(selectedFile);
+        await applyImportedTrailData(gpxData, selectedFile.name, file);
     }
 
     function clearWaypoints() {
@@ -2320,15 +2360,38 @@
         $formData.expand!.waypoints_via_trail = [...waypoints];
     }
 
+    function createPrefilledSummitLog() {
+        const newSummitLog = new SummitLog(
+            ($formData.date || new Date().toISOString().split("T")[0]).substring(0, 10),
+            {
+                distance: $formData.distance,
+                elevation_gain: $formData.elevation_gain,
+                elevation_loss: $formData.elevation_loss,
+                duration: $formData.duration,
+            },
+        );
+        newSummitLog.author = $currentUser?.actor;
+        newSummitLog.trail = $formData.id;
+
+        const gpxData = $formData.expand?.gpx_data;
+        if (gpxData) {
+            newSummitLog.expand ??= {};
+            newSummitLog.expand.gpx_data = gpxData;
+            newSummitLog._gpx = new File(
+                [gpxData],
+                `${$formData.name || "route"}.gpx`,
+                { type: "text/xml" },
+            );
+        }
+
+        return newSummitLog;
+    }
+
     function beforeSummitLogModalOpen() {
         if (!canModifyTrail) {
             return;
         }
-        const newSummitLog = new SummitLog(
-            new Date().toISOString().split("T")[0],
-        );
-        newSummitLog.author = $currentUser?.actor;
-        summitLog.set(newSummitLog);
+        summitLog.set(createPrefilledSummitLog());
         summitLogModal.openModal();
     }
 
@@ -2364,9 +2427,11 @@
             summitLog.set(currentSummitLog);
             summitLogModal.openModal();
         } else if (item.value === "delete") {
-            $formData.expand!.summit_logs_via_trail?.splice(index, 1);
-            $formData.expand!.summit_logs_via_trail =
-                $formData.expand!.summit_logs_via_trail;
+            const updatedSummitLogs = [
+                ...($formData.expand!.summit_logs_via_trail ?? []),
+            ];
+            updatedSummitLogs.splice(index, 1);
+            $formData.expand!.summit_logs_via_trail = updatedSummitLogs;
         }
     }
 
@@ -3396,6 +3461,7 @@
 
         <Toggle
             name="public"
+            bind:value={$formData.public}
             label={$formData.public ? $_("public") : $_("private")}
             icon={$formData.public ? "globe" : "lock"}
             disabled={!canModifyTrail}

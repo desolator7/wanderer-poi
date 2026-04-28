@@ -1,4 +1,6 @@
 <script lang="ts">
+    import { goto } from "$app/navigation";
+    import Button from "$lib/components/base/button.svelte";
     import type { SummitLog } from "$lib/models/summit_log";
     import { onMount, tick } from "svelte";
     import Modal from "../base/modal.svelte";
@@ -11,6 +13,8 @@
     import MapWithElevationMaplibre from "../trail/map_with_elevation_maplibre.svelte";
     import { fetchGPX } from "$lib/stores/trail_store";
     import { currentUser } from "$lib/stores/user_store";
+    import { saveAs } from "$lib/util/file_util";
+    import { saveRouteImportSession } from "$lib/util/route_import_util";
 
     interface Props {
         summitLogs?: SummitLog[];
@@ -46,21 +50,51 @@
     let trail: Trail | null = $state(null);
 
     let currentText: string = $state("");
+    let currentLog: SummitLog | null = $state(null);
+    let currentGpxData: string = $state("");
 
     onMount(async () => {});
 
-    async function openMap(log: SummitLog) {
+    function hasRoute(log: SummitLog) {
+        return Boolean(log.gpx || log.expand?.gpx_data);
+    }
+
+    function getRouteFileName(log: SummitLog | null) {
+        const datePrefix = log?.date ? `${log.date.substring(0, 10)}-` : "";
+        const routeName = log?.expand?.trail?.name || "route";
+        const safeName = `${datePrefix}${routeName}`
+            .replace(/[^\w.-]+/g, "-")
+            .replace(/^-+|-+$/g, "");
+
+        return `${safeName || "route"}.gpx`;
+    }
+
+    async function ensureGpxData(log: SummitLog) {
         if (!log.expand?.gpx_data) {
             const gpxData: string = await fetchGPX(log as any, fetch);
+            if (!gpxData) {
+                return "";
+            }
             log.expand = {
                 ...(log.expand ?? {}),
                 gpx_data: gpxData,
             };
         }
 
-        trail = (await gpx2trail(log.expand.gpx_data!)).trail;
+        return log.expand.gpx_data;
+    }
+
+    async function openMap(log: SummitLog) {
+        const gpxData = await ensureGpxData(log);
+        if (!gpxData) {
+            return;
+        }
+
+        trail = (await gpx2trail(gpxData)).trail;
         trail.id = log.id;
-        trail.expand!.gpx_data = log.expand.gpx_data;
+        trail.expand!.gpx_data = gpxData;
+        currentLog = log;
+        currentGpxData = gpxData;
 
         mapModal.openModal();
         await tick();
@@ -70,6 +104,26 @@
     async function openText(log: SummitLog) {
         currentText = log.text ?? "";
         textModal.openModal();
+    }
+
+    function exportCurrentGpx() {
+        if (!currentGpxData) {
+            return;
+        }
+
+        saveAs(
+            new Blob([currentGpxData], { type: "application/gpx+xml" }),
+            getRouteFileName(currentLog),
+        );
+    }
+
+    function planRouteFromCurrentGpx() {
+        if (!currentGpxData) {
+            return;
+        }
+
+        saveRouteImportSession(currentGpxData, getRouteFileName(currentLog));
+        goto("/trail/edit/new?import=session");
     }
 </script>
 
@@ -102,7 +156,7 @@
                     {$_("author", { values: { n: 1 } })}
                 </th>
             {/if}
-            {#if showRoute && summitLogs.some((l) => l.gpx)}
+            {#if showRoute && summitLogs.some(hasRoute)}
                 <th>
                     {$_("map")}
                 </th>
@@ -125,7 +179,7 @@
                 showPhotos={showPhotos &&
                     summitLogs.some((l) => l.photos.length)}
                 showDescription={summitLogs.some((l) => l.text?.length)}
-                showRoute={showRoute && summitLogs.some((l) => l.gpx)}
+                showRoute={showRoute && summitLogs.some(hasRoute)}
                 showMenu={showMenu && log.author == $currentUser?.actor}
                 {ondelete}
                 {onedit}
@@ -139,7 +193,7 @@
 <Modal
     id="summit-log-table-map-modal"
     size="md:min-w-2xl lg:min-w-4xl"
-    title=""
+    title={$_("map")}
     bind:this={mapModal}
 >
     {#snippet content()}
@@ -148,6 +202,28 @@
                 <MapWithElevationMaplibre trails={[trail]} bind:map showTerrain
                 ></MapWithElevationMaplibre>
             {/if}
+        </div>
+    {/snippet}
+    {#snippet footer()}
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <Button
+                type="button"
+                secondary
+                icon="download"
+                disabled={!currentGpxData}
+                onclick={exportCurrentGpx}
+            >
+                {$_("export")} GPX
+            </Button>
+            <Button
+                type="button"
+                primary
+                icon="route"
+                disabled={!currentGpxData}
+                onclick={planRouteFromCurrentGpx}
+            >
+                {$_("new-trail")}
+            </Button>
         </div>
     {/snippet}
 </Modal>

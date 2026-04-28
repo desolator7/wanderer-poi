@@ -15,6 +15,7 @@ class Trail {
     location?: string;
     date?: string;
     public: boolean;
+    completed_by_current_user?: boolean;
     distance?: number;
     elevation_gain?: number;
     elevation_loss?: number;
@@ -57,6 +58,7 @@ class Trail {
             location?: string,
             date?: string,
             public?: boolean,
+            completed_by_current_user?: boolean,
             distance?: number,
             elevation_gain?: number,
             elevation_loss?: number,
@@ -84,6 +86,7 @@ class Trail {
         this.location = params?.location;
         this.date = params?.date ?? new Date().toISOString().split('T')[0];
         this.public = params?.public ?? false
+        this.completed_by_current_user = params?.completed_by_current_user ?? false
         this.distance = params?.distance ?? 0;
         this.elevation_gain = params?.elevation_gain ?? 0;
         this.elevation_loss = params?.elevation_loss ?? 0;
@@ -123,6 +126,7 @@ class Trail {
             lon: orig.lon,
             location: orig.location,
             public: orig.public,
+            completed_by_current_user: orig.completed_by_current_user,
             tags: orig.expand?.tags,
             category: orig.expand?.category,
             gpx_data: orig.expand?.gpx_data,
@@ -161,7 +165,7 @@ interface TrailFilter {
     elevationLossLimit: number;
     startDate?: string;
     endDate?: string;
-    completed?: boolean;
+    completedByCurrentUser?: boolean;
     liked?: boolean;
     sort: "name" | "distance" | "elevation_gain" | "created";
     sortOrder: "+" | "-"

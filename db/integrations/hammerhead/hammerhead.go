@@ -22,6 +22,7 @@ import (
 	"github.com/pocketbase/pocketbase/tools/filesystem"
 	"github.com/pocketbase/pocketbase/tools/security"
 	"github.com/tkrajina/gpxgo/gpx"
+	routeutil "pocketbase/util"
 )
 
 func SyncHammerhead(app core.App) error {
@@ -108,7 +109,7 @@ func SyncHammerhead(app core.App) error {
 					totalPages = curTotalPages
 				}
 
-				err, stopped = syncTrailWithTours(app, h, actorId, tours, after)
+				err, stopped = syncTrailWithTours(app, h, userId, actorId, tours, after)
 				if err != nil {
 					warning := fmt.Sprintf("error syncing Hammerhead tours with trails: %v\n", err)
 					fmt.Print(warning)
@@ -139,7 +140,7 @@ func SyncHammerhead(app core.App) error {
 					totalPages = curTotalPages
 				}
 
-				err, stopped = syncTrailWithActivities(app, h, actorId, tours, after)
+				err, stopped = syncTrailWithActivities(app, h, userId, actorId, tours, after)
 				if err != nil {
 					warning := fmt.Sprintf("error syncing Hammerhead tours with trails: %v\n", err)
 					fmt.Print(warning)
@@ -406,15 +407,30 @@ func (h *HammerheadApi) fetchDetailedTour(tour HammerheadTourResponse) (*Hammerh
 	return data, nil
 }
 
-func syncTrailWithTours(app core.App, k *HammerheadApi, actor string, tours []HammerheadTourResponse, after int64) (error, bool) {
+func syncTrailWithTours(app core.App, k *HammerheadApi, user string, actor string, tours []HammerheadTourResponse, after int64) (error, bool) {
 	for _, tour := range tours {
 
-		trails, err := app.FindRecordsByFilter("trails", "external_id = {:id}", "", 1, 0, dbx.Params{"id": tour.ID})
+		trails, err := app.FindRecordsByFilter(
+			"trails",
+			"external_provider = 'hammerhead' && external_id = {:id}",
+			"",
+			1,
+			0,
+			dbx.Params{"id": tour.ID},
+		)
 		if err != nil {
 			return err, true
 		}
 
 		if len(trails) != 0 {
+			continue
+		}
+
+		synced, err := routeutil.ExternalSourceExists(app, "hammerhead", tour.ID)
+		if err != nil {
+			return err, true
+		}
+		if synced {
 			continue
 		}
 
@@ -439,7 +455,7 @@ func syncTrailWithTours(app core.App, k *HammerheadApi, actor string, tours []Ha
 			continue
 		}
 
-		_, err = createTrailFromTour(app, detailedTour, gpx, actor)
+		_, err = createTrailFromTour(app, detailedTour, gpx, user, actor)
 		if err != nil {
 			app.Logger().Warn(fmt.Sprintf("Unable to create trail for tour '%s': %v", tour.Name, err))
 			continue
@@ -449,15 +465,32 @@ func syncTrailWithTours(app core.App, k *HammerheadApi, actor string, tours []Ha
 	return nil, false
 }
 
-func syncTrailWithActivities(app core.App, k *HammerheadApi, actor string, tours []HammerheadActivityResponse, after int64) (error, bool) {
+func syncTrailWithActivities(app core.App, k *HammerheadApi, user string, actor string, tours []HammerheadActivityResponse, after int64) (error, bool) {
 	for _, tour := range tours {
 
-		trails, err := app.FindRecordsByFilter("trails", "external_id = {:id}", "", 1, 0, dbx.Params{"id": tour.ID})
+		trails, err := app.FindRecordsByFilter(
+			"trails",
+			"external_provider = 'hammerhead' && external_id = {:id}",
+			"",
+			1,
+			0,
+			dbx.Params{"id": tour.ID},
+		)
 		if err != nil {
 			return err, true
 		}
 
 		if len(trails) != 0 {
+			if err := attachActivityToExistingTrail(app, k, tour, actor, trails[0]); err != nil {
+				app.Logger().Warn(fmt.Sprintf("Unable to attach Hammerhead activity '%s' to existing trail: %v", tour.Name, err))
+			}
+			continue
+		}
+		synced, err := routeutil.ExternalSourceExists(app, "hammerhead", tour.ID)
+		if err != nil {
+			return err, true
+		}
+		if synced {
 			continue
 		}
 
@@ -483,7 +516,7 @@ func syncTrailWithActivities(app core.App, k *HammerheadApi, actor string, tours
 			continue
 		}
 
-		_, err = createTrailFromActivity(app, detailedTour, gpx, actor)
+		_, err = createTrailFromActivity(app, detailedTour, gpx, user, actor)
 		if err != nil {
 			app.Logger().Warn(fmt.Sprintf("Unable to create trail for tour '%s': %v", tour.Name, err))
 			continue
@@ -491,6 +524,32 @@ func syncTrailWithActivities(app core.App, k *HammerheadApi, actor string, tours
 	}
 
 	return nil, false
+}
+
+func attachActivityToExistingTrail(app core.App, k *HammerheadApi, tour HammerheadActivityResponse, actor string, trail *core.Record) error {
+	synced, err := summitLogExists(app, "hammerhead", tour.ID)
+	if err != nil {
+		return err
+	}
+	if synced {
+		return nil
+	}
+
+	detailedTour, err := k.fetchDetailedActivity(tour)
+	if err != nil {
+		return err
+	}
+
+	gpx, err := generateActivityGPX(detailedTour)
+	if err != nil {
+		return err
+	}
+
+	if err := createSummitLogFromActivity(app, detailedTour, gpx, actor, trail.Id); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func activityDistance(detailedTour *HammerheadActivity) (float64, bool) {
@@ -502,7 +561,7 @@ func activityDistance(detailedTour *HammerheadActivity) (float64, bool) {
 	return detailedTour.ActivityData.ActivityInfo[idDistance].Value.Value, true
 }
 
-func createTrailFromActivity(app core.App, detailedTour *HammerheadActivity, gpx *filesystem.File, actor string) (string, error) {
+func createTrailFromActivity(app core.App, detailedTour *HammerheadActivity, gpx *filesystem.File, user string, actor string) (string, error) {
 	trailid := security.RandomStringWithAlphabet(core.DefaultIdLength, core.DefaultIdAlphabet)
 
 	collection, err := app.FindCollectionByNameOrId("trails")
@@ -565,29 +624,74 @@ func createTrailFromActivity(app core.App, detailedTour *HammerheadActivity, gpx
 		return "", err
 	}
 
-	collection, err = app.FindCollectionByNameOrId("summit_logs")
-	if err != nil {
+	if err := routeutil.CreateRouteWaypointsFromGPX(app, gpx, user, trailid); err != nil {
 		return "", err
 	}
 
-	summitLogRecord := core.NewRecord(collection)
-	summitLogRecord.Load(map[string]any{
-		"distance":       detailedTour.ActivityData.ActivityInfo[idDistance].Value.Value,
-		"elevation_gain": detailedTour.ActivityData.ActivityInfo[idElevationGain].Value.Value,
-		"elevation_loss": detailedTour.ActivityData.ActivityInfo[idElevationLoss].Value.Value,
-		"duration":       duration / 1000,
-		"date":           detailedTour.ActivityData.CreatedAt,
-		"author":         actor,
-		"trail":          trailid,
-	})
-	if err := app.Save(summitLogRecord); err != nil {
+	if err := createSummitLogFromActivity(app, detailedTour, gpx, actor, trailid); err != nil {
 		return "", err
 	}
 
 	return trailid, nil
 }
 
-func createTrailFromTour(app core.App, detailedTour *HammerheadTour, gpx *filesystem.File, actor string) (string, error) {
+func createSummitLogFromActivity(app core.App, detailedTour *HammerheadActivity, gpx *filesystem.File, actor string, trailID string) error {
+	idDistance := slices.IndexFunc(detailedTour.ActivityData.ActivityInfo, func(c HammerheadInfo) bool { return c.Key == "TYPE_DISTANCE_ID" })
+	idElevationGain := slices.IndexFunc(detailedTour.ActivityData.ActivityInfo, func(c HammerheadInfo) bool { return c.Key == "TYPE_ELEVATION_GAIN_ID" })
+	idElevationLoss := slices.IndexFunc(detailedTour.ActivityData.ActivityInfo, func(c HammerheadInfo) bool { return c.Key == "TYPE_ELEVATION_LOSS_ID" })
+
+	duration := 0
+	for _, lap := range detailedTour.ActivityData.Laps {
+		duration += lap.ActiveTime
+	}
+
+	collection, err := app.FindCollectionByNameOrId("summit_logs")
+	if err != nil {
+		return err
+	}
+
+	summitLogRecord := core.NewRecord(collection)
+	summitLogRecord.Load(map[string]any{
+		"duration":          duration / 1000,
+		"date":              detailedTour.ActivityData.CreatedAt,
+		"external_provider": "hammerhead",
+		"external_id":       detailedTour.ActivityData.ID,
+		"author":            actor,
+		"trail":             trailID,
+	})
+	if idDistance >= 0 {
+		summitLogRecord.Set("distance", detailedTour.ActivityData.ActivityInfo[idDistance].Value.Value)
+	}
+	if idElevationGain >= 0 {
+		summitLogRecord.Set("elevation_gain", detailedTour.ActivityData.ActivityInfo[idElevationGain].Value.Value)
+	}
+	if idElevationLoss >= 0 {
+		summitLogRecord.Set("elevation_loss", detailedTour.ActivityData.ActivityInfo[idElevationLoss].Value.Value)
+	}
+	if gpx != nil {
+		summitLogRecord.Set("gpx", gpx)
+	}
+
+	return app.Save(summitLogRecord)
+}
+
+func summitLogExists(app core.App, provider string, externalID string) (bool, error) {
+	logs, err := app.FindRecordsByFilter(
+		"summit_logs",
+		"external_provider = {:provider} && external_id = {:id}",
+		"",
+		1,
+		0,
+		dbx.Params{"provider": provider, "id": externalID},
+	)
+	if err != nil {
+		return false, err
+	}
+
+	return len(logs) > 0, nil
+}
+
+func createTrailFromTour(app core.App, detailedTour *HammerheadTour, gpx *filesystem.File, user string, actor string) (string, error) {
 	trailid := security.RandomStringWithAlphabet(core.DefaultIdLength, core.DefaultIdAlphabet)
 
 	collection, err := app.FindCollectionByNameOrId("trails")
@@ -627,6 +731,10 @@ func createTrailFromTour(app core.App, detailedTour *HammerheadTour, gpx *filesy
 	}
 
 	if err := app.Save(record); err != nil {
+		return "", err
+	}
+
+	if err := routeutil.CreateRouteWaypointsFromGPX(app, gpx, user, trailid); err != nil {
 		return "", err
 	}
 
