@@ -353,6 +353,9 @@ func updateTrailHandler(client meilisearch.ServiceManager) func(e *core.RecordEv
 func deleteTrailHandler(client meilisearch.ServiceManager) func(e *core.RecordEvent) error {
 	return func(e *core.RecordEvent) error {
 		record := e.Record
+		if err := addDeletedImportedTrailToExclusionList(e.App, record); err != nil {
+			return err
+		}
 		task, err := client.Index("trails").DeleteDocument(record.Id, nil)
 		if err != nil {
 			return err
@@ -376,6 +379,70 @@ func deleteTrailHandler(client meilisearch.ServiceManager) func(e *core.RecordEv
 
 		return e.Next()
 	}
+}
+
+func addDeletedImportedTrailToExclusionList(app core.App, trail *core.Record) error {
+	provider := trail.GetString("external_provider")
+	if provider == "" {
+		return nil
+	}
+	externalID := trail.GetString("external_id")
+	if externalID == "" {
+		return nil
+	}
+	if provider != "strava" && provider != "komoot" {
+		return nil
+	}
+
+	author, err := app.FindRecordById("activitypub_actors", trail.GetString("author"))
+	if err != nil {
+		return err
+	}
+	userID := author.GetString("user")
+	if userID == "" {
+		return nil
+	}
+
+	integration, err := app.FindFirstRecordByFilter("integrations", "user = {:id}", dbx.Params{"id": userID})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		return err
+	}
+
+	rawProviderConfig := integration.GetString(provider)
+	if rawProviderConfig == "" {
+		return nil
+	}
+
+	var providerConfig map[string]interface{}
+	if err := json.Unmarshal([]byte(rawProviderConfig), &providerConfig); err != nil {
+		return err
+	}
+
+	excludedTrailIDs := []string{}
+	if existingExcludedIDs, ok := providerConfig["excludedTrailIds"].([]interface{}); ok {
+		for _, existingID := range existingExcludedIDs {
+			if id, idOk := existingID.(string); idOk && id != "" {
+				excludedTrailIDs = append(excludedTrailIDs, id)
+			}
+		}
+	}
+	for _, id := range excludedTrailIDs {
+		if id == externalID {
+			return nil
+		}
+	}
+
+	providerConfig["excludedTrailIds"] = append(excludedTrailIDs, externalID)
+	updatedProviderConfig, err := json.Marshal(providerConfig)
+	if err != nil {
+		return err
+	}
+	integration.Set(provider, string(updatedProviderConfig))
+
+	return app.Save(integration)
 }
 
 func createSummitLogHandler(client meilisearch.ServiceManager) func(e *core.RecordRequestEvent) error {

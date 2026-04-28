@@ -104,6 +104,7 @@
                 clientSecret: integration.strava.clientSecret,
                 routes: integration.strava.routes,
                 activities: integration.strava.activities,
+                excludedTrailIds: integration.strava.excludedTrailIds,
                 privacy: integration.strava.privacy,
                 accessToken: undefined,
                 refreshToken: undefined,

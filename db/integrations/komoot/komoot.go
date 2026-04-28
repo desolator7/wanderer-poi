@@ -191,7 +191,11 @@ func (k *KomootApi) fetchDetailedTour(tour KomootTour) (*DetailedKomootTour, err
 func syncTrailWithTours(app core.App, k *KomootApi, i KomootIntegration, user string, actor string, tours []KomootTour) (bool, error) {
 	allAlreadySynced := true
 	for _, tour := range tours {
-		trails, err := app.FindRecordsByFilter("trails", "external_id = {:id}", "", 1, 0, dbx.Params{"id": strconv.Itoa(int(tour.ID))})
+		externalID := strconv.Itoa(int(tour.ID))
+		if containsExternalID(i.ExcludedTrailIDs, externalID) {
+			continue
+		}
+		trails, err := app.FindRecordsByFilter("trails", "external_id = {:id}", "", 1, 0, dbx.Params{"id": externalID})
 		if err != nil {
 			return false, err
 		}
@@ -226,6 +230,15 @@ func syncTrailWithTours(app core.App, k *KomootApi, i KomootIntegration, user st
 
 	}
 	return allAlreadySynced, nil
+}
+
+func containsExternalID(ids []string, externalID string) bool {
+	for _, id := range ids {
+		if id == externalID {
+			return true
+		}
+	}
+	return false
 }
 
 func createTrailFromTour(app core.App, k *KomootApi, detailedTour *DetailedKomootTour, gpx *filesystem.File, user string, actor string, privacy string) (string, error) {
