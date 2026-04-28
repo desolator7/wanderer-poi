@@ -463,6 +463,8 @@ export async function searchResultToTrailList(hits: Hits<TrailSearchResult>): Pr
             iri: h.iri,
             thumbnail: 0,
             like_count: h.like_count,
+            completed: h.completed,
+            external_provider: h.external_provider,
             expand: {
                 author: {
                     collectionId: "activitypub_actors",
