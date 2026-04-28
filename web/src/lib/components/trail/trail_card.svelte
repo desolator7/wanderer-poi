@@ -51,7 +51,9 @@
         (trail.expand?.trail_share_via_trail?.length ?? 0) > 0,
     );
 
-    let isPlannedTrail = $derived(trail.completed === false);
+    let isPlannedTrail = $derived(
+        Boolean(trail.external_provider) && trail.completed === false,
+    );
 
     function handleInputClick(e: Event) {
         e.stopPropagation();

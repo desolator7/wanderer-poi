@@ -53,7 +53,9 @@
 
     let expandedTags = $state(false);
 
-    let isPlannedTrail = $derived(trail.completed === false);
+    let isPlannedTrail = $derived(
+        Boolean(trail.external_provider) && trail.completed === false,
+    );
 
     function toggleExpandTags(e: MouseEvent) {
         e.preventDefault();

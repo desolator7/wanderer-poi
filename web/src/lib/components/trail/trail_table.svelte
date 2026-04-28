@@ -105,7 +105,7 @@
 
 
     function isPlannedTrail(trail: Trail): boolean {
-        return trail.completed === false;
+        return Boolean(trail.external_provider) && trail.completed === false;
     }
 </script>
 

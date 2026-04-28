@@ -206,7 +206,6 @@ interface TrailSearchResult {
     category: string;
     completed: boolean;
     external_provider?: string;
-    completed_by_current_user?: boolean;
     date: number;
     created: number;
     public: boolean;
@@ -241,7 +240,6 @@ export const defaultTrailSearchAttributes = [
     "category",
     "completed",
     "external_provider",
-    "completed_by_current_user",
     "date",
     "created",
     "public",
