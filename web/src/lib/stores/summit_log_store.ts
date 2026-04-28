@@ -26,8 +26,10 @@ export async function summit_logs_index(filter?: SummitLogFilter, handle?: strin
     }
 
     const fetchedSummitLogs: ListResult<SummitLog> = await r.json();
+    const deduplicatedLogs = deduplicateSummitLogs(fetchedSummitLogs.items);
 
-    summitLogs.set(fetchedSummitLogs.items);
+    summitLogs.set(deduplicatedLogs);
+    fetchedSummitLogs.items = deduplicatedLogs;
 
     return fetchedSummitLogs;
 }
@@ -153,4 +155,58 @@ export function buildFilterText(filter: SummitLogFilter,): string {
 
     return filterText;
 
+}
+
+function deduplicateSummitLogs(logs: SummitLog[]): SummitLog[] {
+    const logsByKey = new Map<string, SummitLog>();
+
+    for (const log of logs) {
+        const keys = getSummitLogKeys(log);
+        if (!keys.length) {
+            continue;
+        }
+
+        const existing = keys
+            .map((k) => logsByKey.get(k))
+            .find((l) => l !== undefined);
+
+        const selected = pickPreferredSummitLog(existing, log);
+
+        for (const key of keys) {
+            logsByKey.set(key, selected);
+        }
+    }
+
+    return Array.from(new Set(logsByKey.values())).sort(
+        (a, b) => Date.parse(a.date) - Date.parse(b.date),
+    );
+}
+
+function getSummitLogKeys(log: SummitLog): string[] {
+    const keys = new Set<string>();
+    if (log.id) {
+        keys.add(`id:${log.id}`);
+    }
+
+    if (log.iri) {
+        keys.add(`iri:${log.iri}`);
+        const iriId = log.iri.split("/").filter(Boolean).at(-1);
+        if (iriId) {
+            keys.add(`id:${iriId}`);
+        }
+    }
+
+    return Array.from(keys);
+}
+
+function pickPreferredSummitLog(current: SummitLog | undefined, incoming: SummitLog) {
+    if (!current) {
+        return incoming;
+    }
+
+    if (!current.gpx && incoming.gpx) {
+        return { ...current, ...incoming };
+    }
+
+    return current;
 }
