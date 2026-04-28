@@ -1,6 +1,10 @@
 <script lang="ts">
     import { goto } from "$app/navigation";
-    import type { Trail, TrailFilter } from "$lib/models/trail";
+    import {
+        isTrailPlanned,
+        type Trail,
+        type TrailFilter,
+    } from "$lib/models/trail";
     import {
         formatDistance,
         formatElevation,
@@ -102,11 +106,6 @@
             );
         }
     }
-
-
-    function isPlannedTrail(trail: Trail): boolean {
-        return Boolean(trail.external_provider) && trail.completed === false;
-    }
 </script>
 
 <div
@@ -177,9 +176,6 @@
                                 title={trail.name}
                             >
                                 {trail.name}
-                                {#if isPlannedTrail(trail)}
-                                    <span class="ml-2 rounded-full bg-secondary-hover text-xs px-2 py-0.5 align-middle">{$_("planned")}</span>
-                                {/if}
                             </div>
                             <div class="flex flex-col items-center">
                                 {#if trail.expand && trail.expand.author}
@@ -191,6 +187,14 @@
                                                 `https://api.dicebear.com/7.x/initials/svg?seed=${trail.expand.author.preferred_username}&backgroundType=gradientLinear`}
                                             alt="avatar"
                                         />
+                                    </div>
+                                {/if}
+                                {#if isTrailPlanned(trail)}
+                                    <div
+                                        class="tooltip text-primary"
+                                        data-title={$_("planned")}
+                                    >
+                                        <i class="fa fa-route"></i>
                                     </div>
                                 {/if}
                                 {#if $currentUser && trail.completed_by_current_user}

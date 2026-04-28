@@ -140,6 +140,14 @@ class Trail {
     }
 }
 
+function isTrailPlanned(trail: Trail): boolean {
+    if (Array.isArray(trail.expand?.summit_logs_via_trail)) {
+        return trail.expand.summit_logs_via_trail.length === 0;
+    }
+
+    return trail.completed === false;
+}
+
 interface TrailFilter {
     q: string,
     category: string[],
@@ -214,6 +222,7 @@ interface TrailSearchResult {
     likes?: string[];
     like_count: number;
     shares?: string[];
+    completed_by?: string[];
     tags?: string[]
     domain?: string;
     iri?: string;
@@ -239,6 +248,7 @@ export const defaultTrailSearchAttributes = [
     "difficulty",
     "category",
     "completed",
+    "completed_by",
     "external_provider",
     "date",
     "created",
@@ -253,6 +263,6 @@ export const defaultTrailSearchAttributes = [
     "_geo",]
 
 
-export { Trail };
+export { isTrailPlanned, Trail };
 
 export type { TrailBoundingBox, TrailFilter, TrailFilterValues, TrailSearchResult };

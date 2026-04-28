@@ -451,6 +451,7 @@ export async function fetchGPX(trail: { gpx?: string } & Record<string, any>, f:
 
 export async function searchResultToTrailList(hits: Hits<TrailSearchResult>): Promise<Trail[]> {
     const trails: Trail[] = []
+    const user = get(currentUser)
     for (const h of hits) {
         const t: Trail & RecordModel = {
             collectionId: "trails",
@@ -460,7 +461,7 @@ export async function searchResultToTrailList(hits: Hits<TrailSearchResult>): Pr
             name: h.name,
             photos: h.thumbnail ? [h.thumbnail] : [],
             public: h.public,
-            completed_by_current_user: h.completed_by_current_user ?? false,
+            completed_by_current_user: Boolean(user?.actor && h.completed_by?.includes(user.actor)),
             summit_logs: [],
             waypoints: [],
             tags: h.tags ?? [],

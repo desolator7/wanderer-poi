@@ -1,7 +1,7 @@
 <script lang="ts">
     import emptyStateTrailDark from "$lib/assets/svgs/empty_states/empty_state_trail_dark.svg";
     import emptyStateTrailLight from "$lib/assets/svgs/empty_states/empty_state_trail_light.svg";
-    import type { Trail } from "$lib/models/trail";
+    import { isTrailPlanned, type Trail } from "$lib/models/trail";
     import { theme } from "$lib/stores/theme_store";
     import { currentUser } from "$lib/stores/user_store";
     import { getFileURL, isVideoURL } from "$lib/util/file_util";
@@ -51,9 +51,7 @@
         (trail.expand?.trail_share_via_trail?.length ?? 0) > 0,
     );
 
-    let isPlannedTrail = $derived(
-        Boolean(trail.external_provider) && trail.completed === false,
-    );
+    let isPlanned = $derived(isTrailPlanned(trail));
 
     function handleInputClick(e: Event) {
         e.stopPropagation();
@@ -155,11 +153,8 @@
     {/if}
     <div class="p-4">
         <div>
-            <div class="flex flex-wrap items-center gap-2">
+            <div>
                 <h4 class="font-semibold text-lg line-clamp-2 wrap-anywhere">{trail.name}</h4>
-                {#if isPlannedTrail}
-                    <span class="rounded-full bg-secondary-hover text-xs px-2 py-0.5">{$_("planned")}</span>
-                {/if}
             </div>
             {#if trail.date}
                 <p class="text-xs text-gray-500 mb-3">
@@ -186,14 +181,24 @@
                         : "@" + trail.expand.author.domain}
                 </p>
             {/if}
-            {#if $currentUser && trail.completed_by_current_user}
-                <div class="mb-3">
-                    <span
-                        class="inline-flex items-center gap-1 rounded-full border border-input-border bg-menu-item-background px-2 py-1 text-xs font-medium text-green-600"
-                    >
-                        <i class="fa fa-circle-check"></i>
-                        {$_("completed-by-you")}
-                    </span>
+            {#if isPlanned || ($currentUser && trail.completed_by_current_user)}
+                <div class="mb-3 flex flex-wrap gap-2">
+                    {#if isPlanned}
+                        <span
+                            class="inline-flex items-center gap-1 rounded-full border border-input-border bg-menu-item-background px-2 py-1 text-xs font-medium text-primary"
+                        >
+                            <i class="fa fa-route"></i>
+                            {$_("planned")}
+                        </span>
+                    {/if}
+                    {#if $currentUser && trail.completed_by_current_user}
+                        <span
+                            class="inline-flex items-center gap-1 rounded-full border border-input-border bg-menu-item-background px-2 py-1 text-xs font-medium text-green-600"
+                        >
+                            <i class="fa fa-circle-check"></i>
+                            {$_("completed-by-you")}
+                        </span>
+                    {/if}
                 </div>
             {/if}
             {#if trail.tags.length}
