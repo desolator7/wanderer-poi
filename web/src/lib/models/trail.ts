@@ -33,6 +33,8 @@ class Trail {
     domain?: string;
     iri?: string;
     like_count: number;
+    completed?: boolean;
+    external_provider?: string;
     expand?: {
         tags?: Tag[]
         category?: Category;
@@ -199,6 +201,7 @@ interface TrailSearchResult {
     difficulty: 0 | 1 | 2;
     category: string;
     completed: boolean;
+    external_provider?: string;
     date: number;
     created: number;
     public: boolean;
@@ -232,6 +235,7 @@ export const defaultTrailSearchAttributes = [
     "difficulty",
     "category",
     "completed",
+    "external_provider",
     "date",
     "created",
     "public",
@@ -248,4 +252,3 @@ export const defaultTrailSearchAttributes = [
 export { Trail };
 
 export type { TrailBoundingBox, TrailFilter, TrailFilterValues, TrailSearchResult };
-
