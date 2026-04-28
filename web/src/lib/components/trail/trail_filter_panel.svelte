@@ -46,12 +46,12 @@
 
     const radioGroupCompletenessItems: RadioItem[] = [
         {
-            text: $_("completed-tours", { values: { n: 1 } }),
-            value: "completed",
+            text: $_("completed-by-you"),
+            value: "completed_by_current_user",
         },
         {
-            text: $_("planned-tours", { values: { n: 1 } }),
-            value: "not_completed",
+            text: $_("not-completed-by-you"),
+            value: "not_completed_by_current_user",
         },
         { text: $_("no-preference"), value: "no_preference" },
     ];
@@ -101,16 +101,16 @@
     function setCompletedFilter(item: RadioItem) {
         switch (item.value) {
             case "no_preference":
-                filter.completed = undefined;
+                filter.completedByCurrentUser = undefined;
                 break;
-            case "completed":
-                filter.completed = true;
+            case "completed_by_current_user":
+                filter.completedByCurrentUser = true;
                 break;
-            case "not_completed":
-                filter.completed = false;
+            case "not_completed_by_current_user":
+                filter.completedByCurrentUser = false;
                 break;
             default:
-                filter.completed = undefined;
+                filter.completedByCurrentUser = undefined;
                 break;
         }
 
@@ -397,11 +397,11 @@
             <hr class="my-4 border-separator" />
             <p class="text-sm font-medium pb-4">{$_("completion-status")}</p>
             <RadioGroup
-                name="completed"
+                name="completed-by-current-user"
                 items={radioGroupCompletenessItems}
-                selected={filter.completed === undefined
+                selected={filter.completedByCurrentUser === undefined
                     ? 2
-                    : filter.completed === true
+                    : filter.completedByCurrentUser === true
                       ? 0
                       : 1}
                 onchange={(item) => setCompletedFilter(item)}

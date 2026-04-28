@@ -65,7 +65,6 @@
         try {
             const filter = [
                 `author="${escapeFilterValue($currentUser.actor)}"`,
-                "completed=false",
                 `id!="${escapeFilterValue(sourceTrail.id)}"`,
                 `(name~"${escapeFilterValue(normalizedQuery)}" || location~"${escapeFilterValue(normalizedQuery)}")`,
             ].join(" && ");

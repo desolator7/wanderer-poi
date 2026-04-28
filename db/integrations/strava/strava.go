@@ -17,6 +17,7 @@ import (
 	"github.com/pocketbase/pocketbase/tools/security"
 	"github.com/tkrajina/gpxgo/gpx"
 	"github.com/twpayne/go-polyline"
+	routeutil "pocketbase/util"
 )
 
 type StravaApi struct {
@@ -267,19 +268,23 @@ func syncTrailsWithRoutes(app core.App, i StravaIntegration, accessToken string,
 		if len(trails) != 0 {
 			continue
 		}
+
+		synced, err := routeutil.ExternalSourceExists(app, "strava", route.IDStr)
+		if err != nil {
+			return err
+		}
+		if synced {
+			continue
+		}
+
 		gpx, err := fetchRouteGPX(route, accessToken)
 		if err != nil {
 			app.Logger().Warn(fmt.Sprintf("Unable to fetch GPX for route '%s': %v", route.Name, err))
 			continue
 		}
-		trailid, err := createTrailFromRoute(app, route, gpx, user, actor, i.Privacy)
+		_, err = createTrailFromRoute(app, route, gpx, user, actor, i.Privacy)
 		if err != nil {
 			app.Logger().Warn(fmt.Sprintf("Unable to create trail for route '%s': %v", route.Name, err))
-			continue
-		}
-		err = createWaypointsFromRoute(app, route, user, trailid)
-		if err != nil {
-			app.Logger().Warn(fmt.Sprintf("Unable to create waypoints for route '%s': %v", route.Name, err))
 			continue
 		}
 	}
@@ -379,7 +384,6 @@ func createTrailFromRoute(app core.App, route StravaRoute, gpx *filesystem.File,
 		"name":              route.Name,
 		"description":       route.Description,
 		"public":            public,
-		"completed":         false,
 		"distance":          route.Distance,
 		"elevation_gain":    route.ElevationGain,
 		"duration":          route.EstimatedMovingTime,
@@ -398,6 +402,10 @@ func createTrailFromRoute(app core.App, route StravaRoute, gpx *filesystem.File,
 	}
 
 	if err := app.Save(record); err != nil {
+		return "", err
+	}
+
+	if err := routeutil.CreateRouteWaypointsFromGPX(app, gpx, user, trailid); err != nil {
 		return "", err
 	}
 
@@ -454,7 +462,7 @@ func syncTrailsWithActivities(app core.App, i StravaIntegration, accessToken str
 			}
 			continue
 		}
-		synced, err := summitLogExists(app, "strava", externalID)
+		synced, err := routeutil.ExternalSourceExists(app, "strava", externalID)
 		if err != nil {
 			return err
 		}
@@ -512,11 +520,6 @@ func attachActivityToExistingTrail(app core.App, activity StravaActivity, access
 
 	if err := createSummitLogFromActivity(app, detailedActivity, gpx, actor, trail.Id); err != nil {
 		return err
-	}
-
-	if !trail.GetBool("completed") {
-		trail.Set("completed", true)
-		return app.Save(trail)
 	}
 
 	return nil
@@ -635,7 +638,6 @@ func createTrailFromActivity(app core.App, activity *DetailedStravaActivity, gpx
 		"name":              activity.Name,
 		"description":       activity.Description,
 		"public":            public,
-		"completed":         true,
 		"distance":          activity.Distance,
 		"elevation_gain":    activity.TotalElevationGain,
 		"duration":          activity.ElapsedTime,
@@ -658,6 +660,10 @@ func createTrailFromActivity(app core.App, activity *DetailedStravaActivity, gpx
 	}
 
 	if err := app.Save(record); err != nil {
+		return err
+	}
+
+	if err := routeutil.CreateRouteWaypointsFromGPX(app, gpx, user, record.Id); err != nil {
 		return err
 	}
 

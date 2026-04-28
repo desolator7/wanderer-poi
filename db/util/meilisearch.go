@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/meilisearch/meilisearch-go"
+	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/tkrajina/gpxgo/gpx"
 	"github.com/twpayne/go-polyline"
@@ -51,6 +52,11 @@ func documentFromTrailRecord(app core.App, r *core.Record, author *core.Record, 
 		domain = author.GetString("domain")
 	}
 
+	completedBy, err := completedByFromTrailRecord(app, r)
+	if err != nil {
+		return nil, err
+	}
+
 	document := map[string]any{
 		"id":                r.Id,
 		"author":            author.Id,
@@ -66,6 +72,7 @@ func documentFromTrailRecord(app core.App, r *core.Record, author *core.Record, 
 		"difficulty":        difficultyToNumber(r.GetString("difficulty")),
 		"category":          category,
 		"completed":         r.GetBool("completed"),
+		"completed_by":      completedBy,
 		"external_provider": r.GetString("external_provider"),
 		"date":              r.GetDateTime("date").Time().Unix(),
 		"created":           r.GetDateTime("created").Time().Unix(),
@@ -114,6 +121,29 @@ func documentFromTrailRecord(app core.App, r *core.Record, author *core.Record, 
 	}
 
 	return document, nil
+}
+
+func completedByFromTrailRecord(app core.App, r *core.Record) ([]string, error) {
+	logs, err := app.FindAllRecords(
+		"summit_logs",
+		dbx.NewExp("trail = {:trail}", dbx.Params{"trail": r.Id}),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	seen := map[string]bool{}
+	actorIDs := []string{}
+	for _, log := range logs {
+		actorID := log.GetString("author")
+		if actorID == "" || seen[actorID] {
+			continue
+		}
+		seen[actorID] = true
+		actorIDs = append(actorIDs, actorID)
+	}
+
+	return actorIDs, nil
 }
 
 func difficultyToNumber(difficulty string) int32 {

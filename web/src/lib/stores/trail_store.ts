@@ -460,7 +460,7 @@ export async function searchResultToTrailList(hits: Hits<TrailSearchResult>): Pr
             name: h.name,
             photos: h.thumbnail ? [h.thumbnail] : [],
             public: h.public,
-            completed: h.completed,
+            completed_by_current_user: h.completed_by_current_user ?? false,
             summit_logs: [],
             waypoints: [],
             tags: h.tags ?? [],
@@ -614,8 +614,12 @@ function buildFilterText(user: AuthRecord, filter: TrailFilter, includeGeo: bool
         filterText += ` AND (${filter.tags.map(t => `tags = '${t}'`).join(" OR ")})`;
     }
 
-    if (filter.completed !== undefined) {
-        filterText += ` AND completed = ${filter.completed}`;
+    if (filter.completedByCurrentUser !== undefined && user?.actor) {
+        if (filter.completedByCurrentUser) {
+            filterText += ` AND completed_by = ${user.actor}`;
+        } else {
+            filterText += ` AND NOT completed_by = ${user.actor}`;
+        }
     }
 
     if (filter.near.lat && filter.near.lon && includeGeo) {

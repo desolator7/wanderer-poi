@@ -76,6 +76,8 @@
   "collapse-trail-list": "Skjul stiliste",
   "comment": "{n, plural, =1 {Kommentar} other {Kommentarer}}",
   "completed": "Fullført",
+  "completed-by-you": "Completed by you",
+  "not-completed-by-you": "Not completed by you",
   "completed-a-trail": "fullførte en sti",
   "completed-tours": "Fullførte turer",
   "completion-status": "Fullføringsstatus",

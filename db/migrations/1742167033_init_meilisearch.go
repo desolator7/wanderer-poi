@@ -29,7 +29,7 @@ func init() {
 		}
 
 		_, err = client.Index("trails").UpdateFilterableAttributes(&[]interface{}{
-			"_geo", "author", "category", "completed", "date", "difficulty", "distance", "elevation_gain", "elevation_loss", "public", "shares", "tags",
+			"_geo", "author", "category", "completed_by", "date", "difficulty", "distance", "elevation_gain", "elevation_loss", "public", "shares", "tags",
 		})
 
 		if err != nil {

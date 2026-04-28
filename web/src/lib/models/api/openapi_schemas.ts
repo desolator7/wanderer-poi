@@ -184,9 +184,9 @@
  *           format: date
  *         public:
  *           type: boolean
- *         completed:
+ *         completed_by_current_user:
  *           type: boolean
- *           description: Whether the trail is completed (false means planned)
+ *           description: Whether the authenticated user has a summit log for this trail
  *         difficulty:
  *           type: string
  *           enum: [easy, moderate, difficult]
@@ -262,9 +262,6 @@
  *           format: date
  *         public:
  *           type: boolean
- *         completed:
- *           type: boolean
- *           description: Whether the trail is completed (false means planned)
  *         difficulty:
  *           type: string
  *           enum: [easy, moderate, difficult]
@@ -323,9 +320,6 @@
  *           format: date
  *         public:
  *           type: boolean
- *         completed:
- *           type: boolean
- *           description: Whether the trail is completed (false means planned)
  *         difficulty:
  *           type: string
  *           enum: [easy, moderate, difficult]
@@ -563,6 +557,9 @@
  *         icon:
  *           type: string
  *           description: Icon identifier
+ *         connectionMode:
+ *           type: string
+ *           enum: [snap, straight, original-kml]
  *         author:
  *           type: string
  *           description: Author user ID (15 chars)
@@ -606,6 +603,9 @@
  *           type: number
  *         icon:
  *           type: string
+ *         connectionMode:
+ *           type: string
+ *           enum: [snap, straight, original-kml]
  *         author:
  *           type: string
  *           description: Author user ID (15 chars)
@@ -636,6 +636,9 @@
  *           type: number
  *         icon:
  *           type: string
+ *         connectionMode:
+ *           type: string
+ *           enum: [snap, straight, original-kml]
  *         photos:
  *           type: array
  *           items:

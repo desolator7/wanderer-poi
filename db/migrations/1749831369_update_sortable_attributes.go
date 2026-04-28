@@ -21,7 +21,7 @@ func init() {
 		}
 
 		_, err = client.Index("trails").UpdateFilterableAttributes(&[]any{
-			"_geo", "author", "category", "completed", "date", "difficulty", "distance", "elevation_gain", "elevation_loss", "public", "shares", "tags", "likes",
+			"_geo", "author", "category", "completed_by", "date", "difficulty", "distance", "elevation_gain", "elevation_loss", "public", "shares", "tags", "likes",
 		})
 
 		return err
@@ -34,7 +34,7 @@ func init() {
 		}
 
 		_, err = client.Index("trails").UpdateFilterableAttributes(&[]any{
-			"_geo", "author", "category", "completed", "date", "difficulty", "distance", "elevation_gain", "elevation_loss", "public", "shares", "tags",
+			"_geo", "author", "category", "completed_by", "date", "difficulty", "distance", "elevation_gain", "elevation_loss", "public", "shares", "tags",
 		})
 
 		return err

@@ -6,6 +6,7 @@
         formatElevation,
         formatTimeHHMM,
     } from "$lib/util/format_util";
+    import { currentUser } from "$lib/stores/user_store";
     import { _ } from "svelte-i18n";
     import type { SelectItem } from "../base/select.svelte";
     import ShareInfo from "../share_info.svelte";
@@ -190,6 +191,14 @@
                                                 `https://api.dicebear.com/7.x/initials/svg?seed=${trail.expand.author.preferred_username}&backgroundType=gradientLinear`}
                                             alt="avatar"
                                         />
+                                    </div>
+                                {/if}
+                                {#if $currentUser && trail.completed_by_current_user}
+                                    <div
+                                        class="tooltip text-green-600"
+                                        data-title={$_("completed-by-you")}
+                                    >
+                                        <i class="fa fa-circle-check"></i>
                                     </div>
                                 {/if}
                                 <div class="flex gap-x-1">

@@ -83,6 +83,8 @@
   "collapse-trail-list": "Routenliste einklappen",
   "comment": "{n, plural, =1 {Kommentar} other {Kommentare}}",
   "completed": "Abgeschlossen",
+  "completed-by-you": "Von dir gemacht",
+  "not-completed-by-you": "Von dir nicht gemacht",
   "completed-a-trail": "hat eine Route abgeschlossen",
   "completed-tours": "Abgeschlossene Touren",
   "completion-status": "Abschlussstatus",

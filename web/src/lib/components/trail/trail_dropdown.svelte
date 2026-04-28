@@ -350,7 +350,7 @@
         return (
             !isMultiselectMode() &&
             isFromCurrentUser() &&
-            Boolean(trail()?.completed)
+            Boolean(trail()?.completed_by_current_user)
         );
     }
 

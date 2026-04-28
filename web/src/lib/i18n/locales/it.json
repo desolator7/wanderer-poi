@@ -74,6 +74,8 @@
   "collapse-trail-list": "",
   "comment": "{n, plural, =1 {Commento} other {Commenti}}",
   "completed": "Completato",
+  "completed-by-you": "Completed by you",
+  "not-completed-by-you": "Not completed by you",
   "completed-a-trail": "percorso completato",
   "completed-tours": "Completed tours",
   "completion-status": "Stato di completamento",

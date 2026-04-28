@@ -17,6 +17,7 @@ import (
 	"github.com/pocketbase/pocketbase/tools/filesystem"
 	"github.com/pocketbase/pocketbase/tools/security"
 	"github.com/tkrajina/gpxgo/gpx"
+	routeutil "pocketbase/util"
 )
 
 func SyncKomoot(app core.App) error {
@@ -214,19 +215,19 @@ func syncTrailWithTours(app core.App, k *KomootApi, i KomootIntegration, user st
 			}
 			continue
 		}
+
+		synced, err := routeutil.ExternalSourceExists(app, "komoot", externalID)
+		if err != nil {
+			return false, err
+		}
+		if synced {
+			continue
+		}
+
 		// Tour is not yet in the DB - we must keep paginating regardless of type filter
 		allAlreadySynced = false
 		if (tour.Type == "tour_planned" && !i.Planned) || (tour.Type == "tour_recorded" && !i.Completed) {
 			continue
-		}
-		if tour.Type == "tour_recorded" {
-			synced, err := summitLogExists(app, "komoot", externalID)
-			if err != nil {
-				return false, err
-			}
-			if synced {
-				continue
-			}
 		}
 		detailedTour, err := k.fetchDetailedTour(tour)
 		if err != nil {
@@ -238,17 +239,11 @@ func syncTrailWithTours(app core.App, k *KomootApi, i KomootIntegration, user st
 			app.Logger().Warn(fmt.Sprintf("Unable to generate GPX for tour '%s': %v", tour.Name, err))
 			continue
 		}
-		trailid, err := createTrailFromTour(app, k, detailedTour, gpx, user, actor, i.Privacy)
+		_, err = createTrailFromTour(app, k, detailedTour, gpx, user, actor, i.Privacy)
 		if err != nil {
 			app.Logger().Warn(fmt.Sprintf("Unable to create trail for tour '%s': %v", tour.Name, err))
 			continue
 		}
-		err = createWaypointsFromTour(app, detailedTour, user, trailid)
-		if err != nil {
-			app.Logger().Warn(fmt.Sprintf("Unable to create waypoints for tour '%s': %v", tour.Name, err))
-			continue
-		}
-
 	}
 	return allAlreadySynced, nil
 }
@@ -284,11 +279,6 @@ func attachRecordedTourToExistingTrail(app core.App, k *KomootApi, tour KomootTo
 
 	if err := createSummitLogFromTour(app, detailedTour, gpx, actor, trail.Id); err != nil {
 		return err
-	}
-
-	if !trail.GetBool("completed") {
-		trail.Set("completed", true)
-		return app.Save(trail)
 	}
 
 	return nil
@@ -358,7 +348,6 @@ func createTrailFromTour(app core.App, k *KomootApi, detailedTour *DetailedKomoo
 		"id":                trailid,
 		"name":              detailedTour.Name,
 		"public":            public,
-		"completed":         detailedTour.Type == "tour_recorded",
 		"distance":          detailedTour.Distance,
 		"elevation_gain":    detailedTour.ElevationUp,
 		"elevation_loss":    detailedTour.ElevationDown,
@@ -381,6 +370,10 @@ func createTrailFromTour(app core.App, k *KomootApi, detailedTour *DetailedKomoo
 	}
 
 	if err := app.Save(record); err != nil {
+		return "", err
+	}
+
+	if err := routeutil.CreateRouteWaypointsFromGPX(app, gpx, user, trailid); err != nil {
 		return "", err
 	}
 

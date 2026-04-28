@@ -1,6 +1,7 @@
 import type { SummitLog } from "$lib/models/summit_log";
 import type { Trail } from "$lib/models/trail";
 import { handleError } from "$lib/util/api_util";
+import { objectToFormData } from "$lib/util/file_util";
 import { json, type RequestEvent } from "@sveltejs/kit";
 import { z } from "zod";
 
@@ -67,19 +68,16 @@ export async function POST(event: RequestEvent) {
                 newSummitLog.external_id = sourceTrail.external_id;
             }
 
-            await event.locals.pb.collection("summit_logs").create(newSummitLog);
+            const formData = objectToFormData(newSummitLog);
+            await appendTrailGpxToFormData(event, sourceTrail, formData);
+
+            await event.locals.pb.collection("summit_logs").create(formData);
         } else {
             for (const log of sourceLogs) {
                 await event.locals.pb.collection("summit_logs").update(log.id!, {
                     trail: targetTrail,
                 });
             }
-        }
-
-        if (!target.completed) {
-            await event.locals.pb.collection("trails").update(targetTrail, {
-                completed: true,
-            });
         }
 
         const remainingSourceLogs = await event.locals.pb
@@ -102,4 +100,23 @@ export async function POST(event: RequestEvent) {
     } catch (e: any) {
         return handleError(e);
     }
+}
+
+async function appendTrailGpxToFormData(
+    event: RequestEvent,
+    trail: Trail & Record<string, any>,
+    formData: FormData,
+) {
+    if (!trail.gpx) {
+        return;
+    }
+
+    const gpxUrl = event.locals.pb.files.getURL(trail, trail.gpx);
+    const response = await event.fetch(gpxUrl);
+    if (!response.ok) {
+        return;
+    }
+
+    const gpx = await response.blob();
+    formData.append("gpx", gpx, trail.gpx);
 }

@@ -1,3 +1,4 @@
+import { markTrailsCompletedByCurrentUser } from "$lib/server/trail_completion";
 import { error, json, type RequestEvent } from "@sveltejs/kit";
 
 /**
@@ -44,6 +45,13 @@ export async function POST(event: RequestEvent) {
 
     try {
         const r = await event.locals.ms.index(event.params.index as string).search(data.q, data.options);
+        if (event.params.index === "trails") {
+            await markTrailsCompletedByCurrentUser(
+                event.locals.pb,
+                event.locals.user?.actor,
+                r.hits as any[],
+            );
+        }
         return json(r);
     } catch (e: any) {
         console.error(e);
