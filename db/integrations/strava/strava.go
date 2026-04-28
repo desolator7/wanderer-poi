@@ -250,6 +250,9 @@ func fetchStravaActivities(accessToken string, page int, after int64) ([]StravaA
 
 func syncTrailsWithRoutes(app core.App, i StravaIntegration, accessToken string, user string, actor string, routes []StravaRoute) error {
 	for _, route := range routes {
+		if containsExternalID(i.ExcludedTrailIDs, route.IDStr) {
+			continue
+		}
 		trails, err := app.FindRecordsByFilter("trails", "external_id = {:id}", "", 1, 0, dbx.Params{"id": route.IDStr})
 		if err != nil {
 			return err
@@ -422,7 +425,11 @@ func createWaypointsFromRoute(app core.App, route StravaRoute, user string, trai
 
 func syncTrailsWithActivities(app core.App, i StravaIntegration, accessToken string, user string, actor string, activities []StravaActivity) error {
 	for _, activity := range activities {
-		trails, err := app.FindRecordsByFilter("trails", "external_id = {:id}", "", 1, 0, dbx.Params{"id": strconv.Itoa(int(activity.ID))})
+		externalID := strconv.Itoa(int(activity.ID))
+		if containsExternalID(i.ExcludedTrailIDs, externalID) {
+			continue
+		}
+		trails, err := app.FindRecordsByFilter("trails", "external_id = {:id}", "", 1, 0, dbx.Params{"id": externalID})
 		if err != nil {
 			return err
 		}
@@ -447,6 +454,15 @@ func syncTrailsWithActivities(app core.App, i StravaIntegration, accessToken str
 	}
 
 	return nil
+}
+
+func containsExternalID(ids []string, externalID string) bool {
+	for _, id := range ids {
+		if id == externalID {
+			return true
+		}
+	}
+	return false
 }
 
 func fetchDetailedActivity(activity StravaActivity, accessToken string) (*DetailedStravaActivity, error) {

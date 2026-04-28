@@ -21,16 +21,17 @@ type RefreshTokenResponse struct {
 	ExpiresAt    int64  `json:"expires_at"`
 }
 type StravaIntegration struct {
-	Active       bool   `json:"active"`
-	Routes       bool   `json:"routes"`
-	Activities   bool   `json:"activities"`
-	ClientID     int32  `json:"clientId"`
-	ClientSecret string `json:"clientSecret"`
-	AccessToken  string `json:"accessToken,omitempty"`
-	RefreshToken string `json:"refreshToken,omitempty"`
-	ExpiresAt    int64  `json:"expiresAt,omitempty"`
-	Privacy      string `json:"privacy"`
-	After        string `json:"after,omitempty"`
+	Active           bool     `json:"active"`
+	Routes           bool     `json:"routes"`
+	Activities       bool     `json:"activities"`
+	ExcludedTrailIDs []string `json:"excludedTrailIds,omitempty"`
+	ClientID         int32    `json:"clientId"`
+	ClientSecret     string   `json:"clientSecret"`
+	AccessToken      string   `json:"accessToken,omitempty"`
+	RefreshToken     string   `json:"refreshToken,omitempty"`
+	ExpiresAt        int64    `json:"expiresAt,omitempty"`
+	Privacy          string   `json:"privacy"`
+	After            string   `json:"after,omitempty"`
 }
 type StravaRoute struct {
 	Athlete             Athlete     `json:"athlete"`

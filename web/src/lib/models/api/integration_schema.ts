@@ -6,6 +6,7 @@ const StravaSchema = z.object({
     clientSecret: z.string().length(40).optional().or(z.literal('')),
     routes: z.boolean(),
     activities: z.boolean(),
+    excludedTrailIds: z.array(z.string()).optional(),
     active: z.boolean(),
     after: z.string().date().optional(),
     privacy: z.enum(["original", "settings"])
@@ -16,6 +17,7 @@ const KomootSchema = z.object({
     password: z.string(),
     completed: z.boolean(),
     planned: z.boolean(),
+    excludedTrailIds: z.array(z.string()).optional(),
     active: z.boolean(),
     privacy: z.enum(["original", "settings"])
 })
