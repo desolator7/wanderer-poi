@@ -136,6 +136,7 @@
     let drawingActive = $state(false);
     let draggingMarker = false;
     let snapImportedRouteToValhalla = $state(false);
+    const enableGlobalRoutingRepair = false;
 
     let searchDropdownItems: SearchItem[] = $state([]);
 
@@ -1708,7 +1709,7 @@
         } catch (e) {
             console.error(e);
             show_toast({
-                text: "Error calculating route",
+                text: $_("error-calculating-route"),
                 icon: "close",
                 type: "error",
             });
@@ -2621,7 +2622,7 @@
         } catch (e) {
             console.error(e);
             show_toast({
-                text: "Error calculating route",
+                text: $_("error-calculating-route"),
                 icon: "close",
                 type: "error",
             });
@@ -2835,8 +2836,79 @@
             normalizeRouteTime();
         } catch (e) {
             console.error(e);
+            const waypoints = ($formData.expand?.waypoints_via_trail ??
+                []) as Waypoint[];
+            const affectedToIndices = [
+                anchorIndex > 0 ? anchorIndex : null,
+                anchorIndex < valhallaStore.anchors.length - 1
+                    ? anchorIndex + 1
+                    : null,
+            ].filter((toIndex): toIndex is number => toIndex !== null);
+
+            const originalKmlToIndices = affectedToIndices.filter(
+                (toIndex) => waypoints[toIndex]?.connectionMode === "original-kml",
+            );
+
+            const unresolvedToIndices: number[] = [];
+            for (const toIndex of originalKmlToIndices) {
+                const previousWaypoint = waypoints[toIndex - 1];
+                const currentWaypoint = waypoints[toIndex];
+                if (!previousWaypoint || !currentWaypoint) {
+                    unresolvedToIndices.push(toIndex);
+                    continue;
+                }
+                try {
+                    const repairedSegment =
+                        await calculateRouteSegmentBetweenEndpoints(
+                            previousWaypoint,
+                            currentWaypoint,
+                            {
+                                ...routingOptions,
+                                autoRouting: true,
+                            },
+                        );
+                    currentWaypoint.connectionMode = "snap";
+                    await editCalculatedRouteSegment(toIndex - 1, repairedSegment);
+                } catch (repairError) {
+                    console.error(repairError);
+                    unresolvedToIndices.push(toIndex);
+                }
+            }
+
+            for (const toIndex of unresolvedToIndices) {
+                const previousWaypoint = waypoints[toIndex - 1];
+                const currentWaypoint = waypoints[toIndex];
+                if (!previousWaypoint || !currentWaypoint) {
+                    continue;
+                }
+                await editCalculatedRouteSegment(
+                    toIndex - 1,
+                    createRouteCalculationResult(
+                        buildStraightFallbackSegment(
+                            previousWaypoint,
+                            currentWaypoint,
+                        ),
+                    ),
+                );
+            }
+            if (originalKmlToIndices.length > 0) {
+                normalizeRouteTime();
+                updateTrailWithRouteData();
+            }
+
+            if (
+                enableGlobalRoutingRepair &&
+                unresolvedToIndices.length > 0 &&
+                confirm($_("route-repair-switch-all-to-routing"))
+            ) {
+                for (let i = 1; i < waypoints.length; i++) {
+                    waypoints[i].connectionMode = "snap";
+                }
+                await recalculateRouteFromWaypoints({ showSuccessToast: false });
+            }
+
             show_toast({
-                text: "Error calculating route",
+                text: $_("error-calculating-route"),
                 icon: "close",
                 type: "error",
             });
@@ -2899,7 +2971,7 @@
         } catch (e) {
             console.error(e);
             show_toast({
-                text: "Error calculating route",
+                text: $_("error-calculating-route"),
                 icon: "close",
                 type: "error",
             });

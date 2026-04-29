@@ -175,6 +175,7 @@
   "error-reading-file": "Fehler beim Lesen der Datei",
   "error-saving-list": "Fehler beim Speichern der Liste",
   "error-saving-trail": "Fehler beim Speichern der Route",
+  "error-calculating-route": "Error calculating route",
   "error-setting-up-integration": "Fehler beim Einrichten der {provider}-Integration",
   "error-updating-hammerhead-integration": "Fehler bei Aktualisierung der Hammerhead-Integration",
   "error-updating-komoot-integration": "Fehler bei Aktualisierung der komoot-Integration",
@@ -578,5 +579,6 @@
   "public-admin-only": "Öffentlich (nur Admins)",
   "clear-pwa-cache": "PWA-Cache löschen",
   "pwa-cache-cleared": "PWA-Cache wurde gelöscht",
-  "error-clearing-pwa-cache": "Fehler beim Löschen des PWA-Cache"
+  "error-clearing-pwa-cache": "Fehler beim Löschen des PWA-Cache",
+  "route-repair-switch-all-to-routing": "Switch all connections to routing?"
 }

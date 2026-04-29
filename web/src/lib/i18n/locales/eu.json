@@ -157,6 +157,7 @@
   "error-reading-file": "Errorea fitxategia irakurtzean",
   "error-saving-list": "Errorea zerrenda gordetzean",
   "error-saving-trail": "Errorea ibilbidea gordetzean",
+  "error-calculating-route": "Error calculating route",
   "error-setting-up-integration": "Errorea {provider} integrazioa egitean",
   "error-updating-hammerhead-integration": "",
   "error-updating-komoot-integration": "",
@@ -472,5 +473,6 @@
   "width": "Zabalera",
   "wrong-username-or-password": "Erabiltzaile izena edo pasahitza okerrak dira",
   "you-can": "Hau egin dezakezu",
-  "quick-add-waypoint": "Quick add"
+  "quick-add-waypoint": "Quick add",
+  "route-repair-switch-all-to-routing": "Switch all connections to routing?"
 }
