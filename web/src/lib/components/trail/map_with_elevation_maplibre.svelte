@@ -1127,9 +1127,9 @@
 
     onMount(async () => {
         const initialState = {
-            lng: 0,
-            lat: 0,
-            zoom: 1,
+            lng: 10.4,
+            lat: 51.1,
+            zoom: 8,
         };
         const ElevationProfileControl = (
             await import(
