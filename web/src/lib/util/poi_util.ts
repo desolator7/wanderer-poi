@@ -189,7 +189,6 @@ export function parsePoisFromGeoJSON(
         category: string;
         isPublic: boolean;
         author: string;
-        icon?: string;
         attributeDefinitions?: PoiAttribute[];
     },
 ) {
@@ -219,7 +218,6 @@ export function parsePoisFromGeoJSON(
                 new Poi(coordinate[1], coordinate[0], {
                     name,
                     description,
-                    icon: normalizePoiIcon(options.icon),
                     color,
                     public: options.isPublic,
                     author: options.author,
@@ -242,7 +240,6 @@ export async function parsePoisFromKmlFile(
         category: string;
         isPublic: boolean;
         author: string;
-        icon?: string;
         attributeDefinitions?: PoiAttribute[];
     },
 ) {

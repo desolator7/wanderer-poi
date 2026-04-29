@@ -22,13 +22,13 @@
         pois_update,
     } from "$lib/stores/poi_store";
     import { show_toast } from "$lib/stores/toast_store.svelte";
-    import { defaultPoiIcon, poiIconOptions } from "$lib/util/icon_util";
+    import { defaultPoiIcon } from "$lib/util/icon_util";
     import { getPoiDisplayColor } from "$lib/util/poi_util";
     import type * as M from "maplibre-gl";
     import { _ } from "svelte-i18n";
     import type { PageProps } from "./$types";
 
-    type BulkPoiField = "public" | "category" | "icon" | "color";
+    type BulkPoiField = "public" | "category" | "color";
 
     let { data }: PageProps = $props();
     const poiCategories: PoiCategory[] = data.categories;
@@ -44,7 +44,6 @@
     let editingPoi = $state<Poi | undefined>(undefined);
     let poiModal: PoiModal;
     let importCategory = $state(poiCategories[0]?.id ?? "");
-    let importIcon: string = $state(defaultPoiIcon);
     let importPublic = $state(false);
     let importBusy = $state(false);
     let selectedPoiIds = $state<string[]>([]);
@@ -54,12 +53,10 @@
     let bulkPoiFieldValues = $state<{
         public: boolean;
         category: string;
-        icon: Poi["icon"];
         color: string;
     }>({
         public: false,
         category: poiCategories[0]?.id ?? "",
-        icon: defaultPoiIcon,
         color: "#6B7280",
     });
     let bulkAttributeKeys = $state<string[]>([]);
@@ -165,7 +162,6 @@
         params: {
             attributes?: Record<string, PoiAttributeValue>;
             category?: string;
-            icon?: Poi["icon"];
             color?: string;
             public?: boolean;
         },
@@ -175,7 +171,6 @@
             name: poi.name,
             description: poi.description,
             location: poi.location,
-            icon: params.icon ?? poi.icon,
             color: params.color ?? poi.color,
             public: params.public ?? poi.public,
             author: poi.author,
@@ -272,11 +267,6 @@
                 ...bulkPoiFieldValues,
                 public: value === true,
             };
-        } else if (field === "icon") {
-            bulkPoiFieldValues = {
-                ...bulkPoiFieldValues,
-                icon: value as Poi["icon"],
-            };
         } else if (field === "color") {
             bulkPoiFieldValues = {
                 ...bulkPoiFieldValues,
@@ -350,8 +340,7 @@
         editingPoi = new Poi(lat, lon, {
             name: "",
             category: poiCategories[0]?.id ?? "",
-            icon: defaultPoiIcon,
-            public: false,
+                public: false,
         });
         poiModal.openModal();
     }
@@ -362,7 +351,6 @@
             name: poi.name,
             description: poi.description,
             location: poi.location,
-            icon: poi.icon,
             color: poi.color,
             public: poi.public,
             author: poi.author,
@@ -393,8 +381,7 @@
                 name: poi.name,
                 description: poi.description,
                 location: poi.location,
-                icon: poi.icon,
-                color: poi.color,
+                    color: poi.color,
                 public: poi.public,
                 author: poi.author,
                 category: poi.category,
@@ -466,9 +453,6 @@
                         category: isBulkPoiFieldSelected("category")
                             ? bulkPoiFieldValues.category
                             : poi.category,
-                        icon: isBulkPoiFieldSelected("icon")
-                            ? bulkPoiFieldValues.icon
-                            : poi.icon,
                         color: isBulkPoiFieldSelected("color")
                             ? bulkPoiFieldValues.color
                             : poi.color,
@@ -576,7 +560,6 @@
                 const imported = await pois_import(file, {
                     category: importCategory,
                     isPublic: importPublic,
-                    icon: importIcon,
                 });
 
                 for (const poi of imported) {
@@ -674,14 +657,7 @@
                         value: category.id,
                     }))}
                 ></Select>
-                <Select
-                    bind:value={importIcon}
-                    label={$_("icon")}
-                    items={poiIconOptions.map((option) => ({
-                        text: $_(option.labelKey),
-                        value: option.value,
-                    }))}
-                ></Select>
+                
                 <Toggle
                     bind:value={importPublic}
                     label={importPublic ? $_("public") : $_("private")}
@@ -823,83 +799,7 @@
                                         setBulkPoiFieldValue("category", value)}
                                 ></Select>
                             </div>
-                            <div
-                                class="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-3 md:items-center"
-                            >
-                                <label
-                                    class="inline-flex items-center gap-2 text-sm"
-                                >
-                                    <input
-                                        type="checkbox"
-                                        checked={isBulkPoiFieldSelected("icon")}
-                                        onchange={(event) =>
-                                            toggleBulkPoiField(
-                                                "icon",
-                                                (
-                                                    event.currentTarget as HTMLInputElement
-                                                ).checked,
-                                            )}
-                                    />
-                                    {$_("overwrite")}
-                                </label>
-                                <Select
-                                    value={bulkPoiFieldValues.icon}
-                                    label={$_("icon")}
-                                    disabled={!isBulkPoiFieldSelected("icon")}
-                                    items={poiIconOptions.map((option) => ({
-                                        text: $_(option.labelKey),
-                                        value: option.value,
-                                    }))}
-                                    onchange={(value) =>
-                                        setBulkPoiFieldValue("icon", value)}
-                                ></Select>
-                            </div>
-                            <div
-                                class="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-3 md:items-center"
-                            >
-                                <label
-                                    class="inline-flex items-center gap-2 text-sm"
-                                >
-                                    <input
-                                        type="checkbox"
-                                        checked={isBulkPoiFieldSelected("color")}
-                                        onchange={(event) =>
-                                            toggleBulkPoiField(
-                                                "color",
-                                                (
-                                                    event.currentTarget as HTMLInputElement
-                                                ).checked,
-                                            )}
-                                    />
-                                    {$_("overwrite")}
-                                </label>
-                                <div>
-                                    <label class="text-sm font-medium pb-1">
-                                        {$_("color")}
-                                    </label>
-                                    <div class="flex items-center gap-3">
-                                        <input
-                                            class="h-10 w-12 rounded-md border border-input-border bg-input-background disabled:opacity-50"
-                                            type="color"
-                                            value={bulkPoiFieldValues.color}
-                                            disabled={!isBulkPoiFieldSelected(
-                                                "color",
-                                            )}
-                                            onchange={(event) =>
-                                                setBulkPoiFieldValue(
-                                                    "color",
-                                                    (
-                                                        event.currentTarget as HTMLInputElement
-                                                    ).value,
-                                                )}
-                                        />
-                                        <span class="text-sm text-gray-500">
-                                            {bulkPoiFieldValues.color}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+
 
                         {#if bulkAttributeDefinitions.length}
                             <div class="space-y-3">
@@ -1032,9 +932,7 @@
                                     <div>
                                         <h3 class="text-lg font-semibold">
                                             <i
-                                                class="fa fa-{poi.icon ??
-                                                    poi.expand?.category?.icon ??
-                                                    'location-dot'} mr-2"
+                                                class="fa fa-{poi.expand?.category?.icon ?? 'location-dot'} mr-2"
                                                 style={getPoiIconColor(poi)
                                                     ? `color: ${getPoiIconColor(poi)}`
                                                     : undefined}
@@ -1123,6 +1021,7 @@
             onclick={handleMapPoiCreate}
             showElevation={false}
             showTerrain={true}
+            crosshairCursor={mapInteractionMode}
         ></MapWithElevationMaplibre>
     </div>
 </main>
