@@ -9,8 +9,7 @@
     import Toggle from "../base/toggle.svelte";
     import Datepicker from "../base/datepicker.svelte";
     import { Poi } from "$lib/models/poi";
-    import { defaultPoiIcon, poiIconOptions } from "$lib/util/icon_util";
-    import { currentUser } from "$lib/stores/user_store";
+        import { currentUser } from "$lib/stores/user_store";
     import {
         canEditPoiAttributeValue,
         normalizePoiAttributesForSave,
@@ -42,7 +41,6 @@
                 name: source.name,
                 description: source.description,
                 location: source.location,
-                icon: source.icon,
                 color: source.color,
                 public: source.public,
                 category: source.category,
@@ -57,7 +55,6 @@
         return new Poi(0, 0, {
             name: "",
             category: categories[0]?.id ?? "",
-            icon: defaultPoiIcon,
             attributes: {},
         });
     }
@@ -115,7 +112,6 @@
                     name: draft.name.trim(),
                     description: draft.description,
                     location: draft.location,
-                    icon: draft.icon ?? defaultPoiIcon,
                     color: draft.color,
                     public: draft.public,
                     category: draft.category,
@@ -163,15 +159,7 @@
                 bind:value={draft.description}
                 label={$_("description")}
             ></Textarea>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Select
-                    bind:value={draft.icon}
-                    label={$_("icon")}
-                    items={poiIconOptions.map((option) => ({
-                        text: $_(option.labelKey),
-                        value: option.value,
-                    }))}
-                ></Select>
+            <div class="grid grid-cols-1 md:grid-cols-1 gap-4">
                 <div>
                     <label class="text-sm font-medium pb-1">{$_("color")}</label>
                     <div class="flex items-center gap-3">
@@ -207,8 +195,7 @@
                     <h4 class="text-lg font-semibold">{$_("attributes")}</h4>
                     {#if hasPrivateDefinitions}
                         <p class="text-xs text-gray-500">
-                            Hinweis: Von Admins als privat definierte Attribute
-                            werden privat gespeichert.
+                            Hinweis: "privat" definierte Attribute werden benutzerbezogen gespeichert.
                         </p>
                     {/if}
                     {#each selectedDefinitions as definition}

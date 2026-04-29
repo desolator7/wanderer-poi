@@ -37,7 +37,6 @@ describe("KMZ import", () => {
             category: "test-category",
             isPublic: true,
             author: "test-author",
-            icon: "map-pin",
             attributeDefinitions: [],
         });
 

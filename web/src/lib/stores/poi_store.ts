@@ -104,14 +104,12 @@ export async function pois_import(
     options: {
         category: string;
         isPublic: boolean;
-        icon: string;
     },
 ) {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("category", options.category);
     formData.append("public", options.isPublic ? "true" : "false");
-    formData.append("icon", options.icon);
 
     const r = await fetch("/api/v1/poi/import", {
         method: "PUT",
