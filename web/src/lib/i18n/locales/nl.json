@@ -158,6 +158,7 @@
   "error-reading-file": "Fout bij inlezen bestand",
   "error-saving-list": "Fout bij bewaren van lijst",
   "error-saving-trail": "Fout bij bewaren van route",
+  "error-calculating-route": "Error calculating route",
   "error-setting-up-integration": "Fout bij opzetten {provider} integratie",
   "error-updating-hammerhead-integration": "",
   "error-updating-komoot-integration": "",
@@ -473,5 +474,6 @@
   "width": "Breedte",
   "wrong-username-or-password": "Onjuiste gebruikersnaam of wachtwoord",
   "you-can": "Jij kunt",
-  "quick-add-waypoint": "Quick add"
+  "quick-add-waypoint": "Quick add",
+  "route-repair-switch-all-to-routing": "Switch all connections to routing?"
 }

@@ -157,6 +157,7 @@
   "error-reading-file": "读取文件错误",
   "error-saving-list": "保存列表失败",
   "error-saving-trail": "保存路线失败",
+  "error-calculating-route": "Error calculating route",
   "error-setting-up-integration": "Error setting up strava integration",
   "error-updating-hammerhead-integration": "",
   "error-updating-komoot-integration": "",
@@ -472,5 +473,6 @@
   "width": "宽度",
   "wrong-username-or-password": "用户名或密码无效",
   "you-can": "你可以",
-  "quick-add-waypoint": "Quick add"
+  "quick-add-waypoint": "Quick add",
+  "route-repair-switch-all-to-routing": "Switch all connections to routing?"
 }

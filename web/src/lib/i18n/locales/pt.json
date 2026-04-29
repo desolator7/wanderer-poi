@@ -157,6 +157,7 @@
   "error-reading-file": "Erro ao ler o arquivo",
   "error-saving-list": "Erro ao gravar lista",
   "error-saving-trail": "Erro ao gravar percurso",
+  "error-calculating-route": "Error calculating route",
   "error-setting-up-integration": "Error setting up strava integration",
   "error-updating-hammerhead-integration": "",
   "error-updating-komoot-integration": "",
@@ -472,5 +473,6 @@
   "width": "Width",
   "wrong-username-or-password": "Nome de utilizador ou palavra-passe errados",
   "you-can": "Podes",
-  "quick-add-waypoint": "Quick add"
+  "quick-add-waypoint": "Quick add",
+  "route-repair-switch-all-to-routing": "Switch all connections to routing?"
 }

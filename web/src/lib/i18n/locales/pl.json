@@ -157,6 +157,7 @@
   "error-reading-file": "Błąd wczytywania pliku",
   "error-saving-list": "Błąd przy zapisywaniu listy",
   "error-saving-trail": "Błąd podczas zapisywania szlaku",
+  "error-calculating-route": "Error calculating route",
   "error-setting-up-integration": "Error setting up strava integration",
   "error-updating-hammerhead-integration": "",
   "error-updating-komoot-integration": "",
@@ -472,5 +473,6 @@
   "width": "Szerokość",
   "wrong-username-or-password": "Zła nazwa użytkownika lub hasło",
   "you-can": "Możesz",
-  "quick-add-waypoint": "Quick add"
+  "quick-add-waypoint": "Quick add",
+  "route-repair-switch-all-to-routing": "Switch all connections to routing?"
 }

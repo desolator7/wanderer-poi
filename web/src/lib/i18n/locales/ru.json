@@ -157,6 +157,7 @@
   "error-reading-file": "Ошибка чтения файла",
   "error-saving-list": "Ошибка сохранения списка",
   "error-saving-trail": "Ошибка сохранения трека",
+  "error-calculating-route": "Error calculating route",
   "error-setting-up-integration": "Ошибка настройки {provider}",
   "error-updating-hammerhead-integration": "",
   "error-updating-komoot-integration": "",
@@ -472,5 +473,6 @@
   "width": "Ширина",
   "wrong-username-or-password": "Неверный логин или пароль",
   "you-can": "Вы можете",
-  "quick-add-waypoint": "Quick add"
+  "quick-add-waypoint": "Quick add",
+  "route-repair-switch-all-to-routing": "Switch all connections to routing?"
 }

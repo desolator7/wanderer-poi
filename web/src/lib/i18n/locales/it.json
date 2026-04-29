@@ -157,6 +157,7 @@
   "error-reading-file": "Errore durante la lettura del file",
   "error-saving-list": "Errore salvando la lista",
   "error-saving-trail": "Errore nel salvataggio del percorso",
+  "error-calculating-route": "Error calculating route",
   "error-setting-up-integration": "Error setting up strava integration",
   "error-updating-hammerhead-integration": "",
   "error-updating-komoot-integration": "",
@@ -472,5 +473,6 @@
   "width": "Width",
   "wrong-username-or-password": "Nome utente o password errati",
   "you-can": "Puoi",
-  "quick-add-waypoint": "Quick add"
+  "quick-add-waypoint": "Quick add",
+  "route-repair-switch-all-to-routing": "Switch all connections to routing?"
 }

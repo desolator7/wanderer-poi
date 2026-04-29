@@ -158,6 +158,7 @@
   "error-reading-file": "Soubor nelze načíst",
   "error-saving-list": "Chyba při ukládání seznamu",
   "error-saving-trail": "Chyba při ukládání trasy",
+  "error-calculating-route": "Error calculating route",
   "error-setting-up-integration": "Chyba během nastavování {provider} integrace",
   "error-updating-hammerhead-integration": "",
   "error-updating-komoot-integration": "",
@@ -473,5 +474,6 @@
   "width": "Šířka",
   "wrong-username-or-password": "Nesprávné uživatelské jméno nebo heslo",
   "you-can": "Můžete",
-  "quick-add-waypoint": "Quick add"
+  "quick-add-waypoint": "Quick add",
+  "route-repair-switch-all-to-routing": "Switch all connections to routing?"
 }

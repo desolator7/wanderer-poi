@@ -159,6 +159,7 @@
   "error-reading-file": "Feil ved lesing av fil",
   "error-saving-list": "Feil ved lagring av liste",
   "error-saving-trail": "Feil ved lagring av sti",
+  "error-calculating-route": "Error calculating route",
   "error-setting-up-integration": "Feil ved oppsett av {provider}-integrasjon",
   "error-updating-hammerhead-integration": "Feil ved oppdatering av Hammerhead-integrasjon",
   "error-updating-komoot-integration": "Feil ved oppdatering av Komoot-integrasjon",
@@ -474,5 +475,6 @@
   "width": "Bredde",
   "wrong-username-or-password": "Feil brukernavn eller passord",
   "you-can": "Du kan",
-  "quick-add-waypoint": "Quick add"
+  "quick-add-waypoint": "Quick add",
+  "route-repair-switch-all-to-routing": "Switch all connections to routing?"
 }
