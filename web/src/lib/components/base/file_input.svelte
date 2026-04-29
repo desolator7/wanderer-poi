@@ -28,7 +28,7 @@
         {name}
         {accept}
         bind:files
-        class="cursor-pointer bg-input-background border border-input-border rounded-md p-3 transition-colors focus:border-input-border-focus focus:outline-none focus:ring-0 w-full file:rounded-lg file:px-4 file:py-2 file:border file:border-input-border-focus file:font-medium file:mr-4"
+        class="cursor-pointer bg-input-background border border-input-border rounded-md p-3 text-base transition-colors focus:border-input-border-focus focus:outline-none focus:ring-0 w-full file:rounded-lg file:px-4 file:py-2 file:border file:border-input-border-focus file:font-medium file:mr-4"
         type="file"
         onchange={bubble('change')}
     />
