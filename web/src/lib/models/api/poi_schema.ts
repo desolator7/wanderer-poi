@@ -1,6 +1,5 @@
 import { z, type ZodType } from "zod";
 import type { Poi } from "../poi";
-import { normalizePoiIcon } from "$lib/util/icon_util";
 import { normalizePoiColor } from "$lib/util/poi_util";
 
 const PoiAttributeValueSchema = z.union([
@@ -13,12 +12,6 @@ const PoiPrivateAttributesSchema = z.record(
     z.record(z.string(), PoiAttributeValueSchema),
 );
 
-const PoiIconSchema = z
-    .string()
-    .max(64)
-    .regex(/^[a-z0-9-]+$/)
-    .transform((value) => normalizePoiIcon(value))
-    .optional();
 const PoiColorSchema = z
     .string()
     .regex(/^#[0-9a-fA-F]{6}$/)
@@ -32,7 +25,6 @@ export const PoiCreateSchema = z.object({
     location: z.string().optional(),
     lat: z.number({ coerce: true }).min(-90).max(90),
     lon: z.number({ coerce: true }).min(-180).max(180),
-    icon: PoiIconSchema,
     color: PoiColorSchema,
     public: z.boolean().optional().default(false),
     category: z.string().length(15),
@@ -47,7 +39,6 @@ export const PoiUpdateSchema = z.object({
     location: z.string().optional(),
     lat: z.number({ coerce: true }).min(-90).max(90).optional(),
     lon: z.number({ coerce: true }).min(-180).max(180).optional(),
-    icon: PoiIconSchema,
     color: PoiColorSchema,
     public: z.boolean().optional(),
     category: z.string().length(15).optional(),
