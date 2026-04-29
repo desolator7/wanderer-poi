@@ -2781,19 +2781,22 @@
         let nextRouteSegment;
         let previousRouteSegment;
         try {
-            if (anchorIndex < valhallaStore.anchors.length - 1) {
-                const nextAnchor = valhallaStore.anchors[anchorIndex + 1];
+            const waypoints = ($formData.expand?.waypoints_via_trail ??
+                []) as Waypoint[];
 
-                nextRouteSegment = calculateRouteSegmentBetweenEndpoints(
-                    anchor,
-                    nextAnchor,
+            if (
+                anchorIndex < valhallaStore.anchors.length - 1 &&
+                waypoints[anchorIndex + 1]
+            ) {
+                nextRouteSegment = calculateRouteSegmentForWaypointPair(
+                    waypoints,
+                    anchorIndex + 1,
                 );
             }
-            if (anchorIndex > 0) {
-                const previousAnchor = valhallaStore.anchors[anchorIndex - 1];
-                previousRouteSegment = calculateRouteSegmentBetweenEndpoints(
-                    previousAnchor,
-                    anchor,
+            if (anchorIndex > 0 && waypoints[anchorIndex]) {
+                previousRouteSegment = calculateRouteSegmentForWaypointPair(
+                    waypoints,
+                    anchorIndex,
                 );
             }
 
