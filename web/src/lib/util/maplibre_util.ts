@@ -402,7 +402,7 @@ export function createMarkerFromPoi(
         draggable?: boolean;
     },
 ): FontawesomeMarker {
-    const icon = poi.icon ?? poi.expand?.category?.icon ?? "location-dot";
+    const icon = poi.expand?.category?.icon ?? "location-dot";
     const color = getPoiDisplayColor(poi, attributeDefinitions);
     const marker = new FontawesomeMarker(
         {
@@ -450,7 +450,7 @@ export function createPopupFromPoi(
     const titleIcon = document.createElement("i");
     titleIcon.classList.add(
         "fa",
-        `fa-${normalizePoiIcon(poi.icon ?? poi.expand?.category?.icon ?? "location-dot")}`,
+        `fa-${normalizePoiIcon(poi.expand?.category?.icon ?? "location-dot")}`,
     );
     const color = getPoiDisplayColor(poi, attributeDefinitions);
     if (color) {
@@ -484,7 +484,7 @@ export function createPopupFromPoi(
             const privateHint = document.createElement("p");
             privateHint.className = "text-xs text-gray-500";
             privateHint.textContent =
-                "Hinweis: Von Admins als privat definierte Attribute werden privat gespeichert.";
+                'Hinweis: "privat" definierte Attribute werden benutzerbezogen gespeichert.';
             content.appendChild(privateHint);
         }
 
