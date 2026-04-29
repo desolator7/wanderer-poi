@@ -3523,12 +3523,12 @@
                                         void recalculateSingleWaypointSegment(i);
                                     }}
                                 >
-                                    <option value="snap">Valhalla-Snap</option>
-                                    <option value="straight">Luftlinie</option>
+                                    <option value="snap">{$_("connection-mode-routing")}</option>
+                                    <option value="straight">{$_("connection-mode-straight")}</option>
                                     <option
                                         value="original-kml"
                                         disabled={!importedOriginalRoute}
-                                        >KML-Original</option
+                                        >{$_("connection-mode-original")}</option
                                     >
                                 </select>
                             {:else}
