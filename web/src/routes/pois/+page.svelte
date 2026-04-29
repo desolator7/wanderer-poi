@@ -902,6 +902,7 @@
                         >
                             {$_("apply-to-selection")}
                         </Button>
+                    </div>
                     {/if}
             </div>
         {/if}
