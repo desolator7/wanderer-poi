@@ -1415,7 +1415,21 @@
         insertIndex: number,
     ) {
         setSegmentToDefaultConnectionMode(waypoints, insertIndex);
-        setSegmentToDefaultConnectionMode(waypoints, insertIndex + 1);
+    }
+
+    function mergeRecentUndoSteps(stepCount: number) {
+        if (stepCount <= 1 || valhallaStore.undoStack.length < stepCount) {
+            return;
+        }
+
+        const mergedSteps = valhallaStore.undoStack.slice(-stepCount);
+        const delta = mergedSteps[0].delta;
+        const reverseDelta = mergedSteps[stepCount - 1].reverseDelta;
+
+        valhallaStore.undoStack = [
+            ...valhallaStore.undoStack.slice(0, -stepCount),
+            { delta, reverseDelta },
+        ];
     }
 
     function snapSegmentRange(
@@ -2053,6 +2067,7 @@
                     previousSegment,
                 );
                 await insertCalculatedRouteSegment(nextSegment, insertIndex);
+                mergeRecentUndoSteps(2);
             }
             normalizeRouteTime();
             updateTrailWithRouteData();
