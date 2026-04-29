@@ -16,6 +16,7 @@
         poi_categories_update,
     } from "$lib/stores/poi_category_store";
     import { show_toast } from "$lib/stores/toast_store.svelte";
+    import { icons } from "$lib/util/icon_util";
     import { buildPoiAttributeKey } from "$lib/util/poi_util";
     import { _ } from "svelte-i18n";
 
@@ -168,7 +169,14 @@
         <h3 class="text-xl font-semibold">{$_("categories")}</h3>
         <div class="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-4">
             <TextField bind:value={categoryForm.name} label={$_("name")}></TextField>
-            <TextField bind:value={categoryForm.icon} label={$_("icon")}></TextField>
+            <Select
+                bind:value={categoryForm.icon}
+                label={$_("icon")}
+                items={icons.map((icon) => ({
+                    text: icon,
+                    value: icon,
+                }))}
+            ></Select>
             <Button primary={true} onclick={saveCategory}>{$_("save")}</Button>
         </div>
         <Textarea
