@@ -1414,7 +1414,24 @@
         waypoints: Waypoint[],
         insertIndex: number,
     ) {
-        setSegmentToDefaultConnectionMode(waypoints, insertIndex);
+        const previousSegmentMode =
+            insertIndex > 0 ? waypoints[insertIndex].connectionMode : undefined;
+        const hasPreviousSegment = insertIndex > 0;
+        const hasNextSegment = insertIndex < waypoints.length - 1;
+
+        if (hasPreviousSegment) {
+            waypoints[insertIndex].connectionMode =
+                previousSegmentMode ?? getDefaultWaypointConnectionMode();
+        }
+
+        if (hasPreviousSegment && hasNextSegment) {
+            waypoints[insertIndex + 1].connectionMode =
+                previousSegmentMode ?? getDefaultWaypointConnectionMode();
+        } else if (hasNextSegment) {
+            setSegmentToDefaultConnectionMode(waypoints, insertIndex + 1);
+        }
+
+        normalizeWaypointConnectionModes(waypoints);
     }
 
     function mergeRecentUndoSteps(stepCount: number) {
