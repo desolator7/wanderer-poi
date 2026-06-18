@@ -16,6 +16,7 @@ class Trail {
     date?: string;
     public: boolean;
     completed: boolean;
+    completed_by_current_user?: boolean;
     distance?: number;
     elevation_gain?: number;
     elevation_loss?: number;
@@ -35,6 +36,7 @@ class Trail {
     iri?: string;
     like_count: number;
     bounding_box_diagonal?: number;
+    external_provider?: string;
     expand?: {
         tags?: Tag[]
         category?: Category;
@@ -58,6 +60,7 @@ class Trail {
             date?: string,
             public?: boolean,
             completed?: boolean,
+            completed_by_current_user?: boolean,
             distance?: number,
             elevation_gain?: number,
             elevation_loss?: number,
@@ -77,7 +80,8 @@ class Trail {
             tags?: Tag[],
             description?: string,
             created?: string,
-            bounding_box_diagonal?: number
+            bounding_box_diagonal?: number,
+            external_provider?: string,
         }
 
     ) {
@@ -85,8 +89,9 @@ class Trail {
         this.name = name;
         this.location = params?.location;
         this.date = params?.date ?? new Date().toISOString().split('T')[0];
-        this.public = params?.public ?? false
-        this.completed = params?.completed ?? false,
+        this.public = params?.public ?? false;
+        this.completed = params?.completed ?? false;
+        this.completed_by_current_user = params?.completed_by_current_user ?? false;
         this.distance = params?.distance ?? 0;
         this.elevation_gain = params?.elevation_gain ?? 0;
         this.elevation_loss = params?.elevation_loss ?? 0;
@@ -99,6 +104,7 @@ class Trail {
         this.tags = [];
         this.gpx = params?.gpx;
         this.bounding_box_diagonal = params?.bounding_box_diagonal ?? 0;
+        this.external_provider = params?.external_provider;
         this.like_count = 0
         this.expand = {
             category: params?.category,
@@ -205,6 +211,8 @@ interface TrailSearchResult {
     difficulty: 0 | 1 | 2;
     category: string;
     completed: boolean;
+    completed_by?: string[];
+    external_provider?: string;
     date: number;
     created: number;
     public: boolean;
@@ -239,6 +247,8 @@ export const defaultTrailSearchAttributes = [
     "difficulty",
     "category",
     "completed",
+    "completed_by",
+    "external_provider",
     "date",
     "created",
     "public",
@@ -252,8 +262,15 @@ export const defaultTrailSearchAttributes = [
     "bounding_box_diagonal",
     "_geo",]
 
+export function isTrailPlanned(trail: Trail): boolean {
+    const summitLogs = trail.expand?.summit_logs_via_trail;
+    if (summitLogs) {
+        return summitLogs.length === 0;
+    }
+
+    return !trail.completed;
+}
 
 export { Trail };
 
 export type { TrailBoundingBox, TrailFilter, TrailFilterValues, TrailSearchResult };
-

@@ -259,13 +259,27 @@ func fetchStravaActivities(accessToken string, page int, after int64) ([]StravaA
 
 func syncTrailsWithRoutes(app core.App, client meilisearch.ServiceManager, ctx context.Context, i StravaIntegration, accessToken string, user string, actor *core.Record, routes []StravaRoute) error {
 	for _, route := range routes {
-		existingTrail, err := util.FindTrailByExternalReference(app, "strava", route.IDStr)
+		externalID := route.IDStr
+		if containsExternalID(i.ExcludedTrailIDs, externalID) {
+			continue
+		}
+
+		existingTrail, err := util.FindTrailByExternalReference(app, "strava", externalID)
 		if err != nil {
 			return err
 		}
 		if existingTrail != nil {
 			continue
 		}
+
+		synced, err := util.ExternalSourceExists(app, "strava", externalID)
+		if err != nil {
+			return err
+		}
+		if synced {
+			continue
+		}
+
 		gpx, err := fetchRouteGPX(route, accessToken)
 		if err != nil {
 			app.Logger().Warn(fmt.Sprintf("Unable to fetch GPX for route '%s': %v", route.Name, err))
@@ -274,11 +288,6 @@ func syncTrailsWithRoutes(app core.App, client meilisearch.ServiceManager, ctx c
 		trailid, err := createTrailFromRoute(app, route, gpx, user, actor.Id, i.Privacy)
 		if err != nil {
 			app.Logger().Warn(fmt.Sprintf("Unable to create trail for route '%s': %v", route.Name, err))
-			continue
-		}
-		err = createWaypointsFromRoute(app, route, actor.Id, trailid)
-		if err != nil {
-			app.Logger().Warn(fmt.Sprintf("Unable to create waypoints for route '%s': %v", route.Name, err))
 			continue
 		}
 		if err := trailmerge.TryAutoMergeImportedTrail(app, client, ctx, actor, trailid, i.Merge); err != nil {
@@ -403,6 +412,10 @@ func createTrailFromRoute(app core.App, route StravaRoute, gpx *filesystem.File,
 		return "", err
 	}
 
+	if err := util.CreateRouteWaypointsFromGPX(app, gpx, actor, trailid); err != nil {
+		return "", err
+	}
+
 	return trailid, err
 }
 
@@ -435,13 +448,30 @@ func createWaypointsFromRoute(app core.App, route StravaRoute, actor string, tra
 
 func syncTrailsWithActivities(app core.App, client meilisearch.ServiceManager, ctx context.Context, i StravaIntegration, accessToken string, user string, actor *core.Record, activities []StravaActivity) error {
 	for _, activity := range activities {
-		existingTrail, err := util.FindTrailByExternalReference(app, "strava", strconv.Itoa(int(activity.ID)))
+		externalID := strconv.Itoa(int(activity.ID))
+		if containsExternalID(i.ExcludedTrailIDs, externalID) {
+			continue
+		}
+
+		existingTrail, err := util.FindTrailByExternalReference(app, "strava", externalID)
 		if err != nil {
 			return err
 		}
 		if existingTrail != nil {
+			if err := attachActivityToExistingTrail(app, activity, accessToken, actor.Id, existingTrail); err != nil {
+				app.Logger().Warn(fmt.Sprintf("Unable to attach activity '%s' to existing trail: %v", activity.Name, err))
+			}
 			continue
 		}
+
+		synced, err := util.ExternalSourceExists(app, "strava", externalID)
+		if err != nil {
+			return err
+		}
+		if synced {
+			continue
+		}
+
 		detailedActivity, err := fetchDetailedActivity(activity, accessToken)
 		if err != nil {
 			app.Logger().Warn(fmt.Sprintf("Unable to fetch detailed activity '%s': %v", activity.Name, err))
@@ -463,6 +493,38 @@ func syncTrailsWithActivities(app core.App, client meilisearch.ServiceManager, c
 	}
 
 	return nil
+}
+
+func containsExternalID(ids []string, externalID string) bool {
+	for _, id := range ids {
+		if id == externalID {
+			return true
+		}
+	}
+	return false
+}
+
+func attachActivityToExistingTrail(app core.App, activity StravaActivity, accessToken string, actor string, trail *core.Record) error {
+	externalID := strconv.Itoa(int(activity.ID))
+	synced, err := summitLogExists(app, "strava", externalID)
+	if err != nil {
+		return err
+	}
+	if synced {
+		return nil
+	}
+
+	detailedActivity, err := fetchDetailedActivity(activity, accessToken)
+	if err != nil {
+		return err
+	}
+
+	gpx, err := generateActivityGPX(detailedActivity, accessToken)
+	if err != nil {
+		return err
+	}
+
+	return createSummitLogFromActivity(app, detailedActivity, gpx, actor, trail.Id)
 }
 
 func fetchDetailedActivity(activity StravaActivity, accessToken string) (*DetailedStravaActivity, error) {
@@ -612,7 +674,55 @@ func createTrailFromActivity(app core.App, activity *DetailedStravaActivity, gpx
 		return "", err
 	}
 
+	if err := util.CreateRouteWaypointsFromGPX(app, gpx, actor, record.Id); err != nil {
+		return "", err
+	}
+
+	if err := createSummitLogFromActivity(app, activity, gpx, actor, record.Id); err != nil {
+		return "", err
+	}
+
 	return record.Id, nil
+}
+
+func createSummitLogFromActivity(app core.App, activity *DetailedStravaActivity, gpx *filesystem.File, actor string, trailID string) error {
+	collection, err := app.FindCollectionByNameOrId("summit_logs")
+	if err != nil {
+		return err
+	}
+
+	summitLogRecord := core.NewRecord(collection)
+	summitLogRecord.Load(map[string]any{
+		"distance":          activity.Distance,
+		"elevation_gain":    activity.TotalElevationGain,
+		"duration":          activity.ElapsedTime,
+		"date":              activity.StartDate,
+		"external_provider": "strava",
+		"external_id":       strconv.Itoa(int(activity.ID)),
+		"author":            actor,
+		"trail":             trailID,
+	})
+	if gpx != nil {
+		summitLogRecord.Set("gpx", gpx)
+	}
+
+	return app.Save(summitLogRecord)
+}
+
+func summitLogExists(app core.App, provider string, externalID string) (bool, error) {
+	logs, err := app.FindRecordsByFilter(
+		"summit_logs",
+		"external_provider = {:provider} && external_id = {:id}",
+		"",
+		1,
+		0,
+		dbx.Params{"provider": provider, "id": externalID},
+	)
+	if err != nil {
+		return false, err
+	}
+
+	return len(logs) > 0, nil
 }
 
 func fetchPhotoFromURL(url string) (*filesystem.File, error) {

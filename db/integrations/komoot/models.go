@@ -12,6 +12,7 @@ type KomootIntegration struct {
 	Password  string                                  `json:"password"`
 	Planned   bool                                    `json:"planned"`
 	Completed bool                                    `json:"completed"`
+	ExcludedTrailIDs []string                         `json:"excludedTrailIds,omitempty"`
 	Privacy   string                                  `json:"privacy"`
 	Merge     trailmerge.IntegrationAutoMergeSettings `json:"merge"`
 }

@@ -611,6 +611,33 @@ export async function trails_delete(trail: Trail) {
 
 }
 
+export async function trails_move_to_summit_log(
+    sourceTrail: Trail,
+    targetTrail: Trail,
+    f: (url: RequestInfo | URL, config?: RequestInit) => Promise<Response> = fetch,
+) {
+    if (!sourceTrail.id || !targetTrail.id) {
+        throw new Error("Source and target trail must both have an id");
+    }
+
+    const r = await f(`/api/v1/trail/${sourceTrail.id}/move-to-summit-log`, {
+        method: "POST",
+        body: JSON.stringify({
+            targetTrail: targetTrail.id,
+        }),
+    });
+
+    if (!r.ok) {
+        const response = await r.json();
+        throw new APIError(r.status, response.message, response.detail)
+    }
+
+    const model: Trail = await r.json();
+    trail.set(model);
+
+    return model;
+}
+
 export async function trails_get_filter_values(f: (url: RequestInfo | URL, config?: RequestInit) => Promise<Response> = fetch): Promise<TrailFilterValues> {
     const r = await f('/api/v1/trail/filter', {
         method: 'GET',
@@ -687,6 +714,7 @@ export async function fetchGPX(trail: { gpx?: string } & Record<string, any>, f:
 
 export async function searchResultToTrailList(hits: Hits<TrailSearchResult>): Promise<Trail[]> {
     const trails: Trail[] = []
+    const user = get(currentUser)
     for (const h of hits) {
         const created = Number(h.created || 0);
         const date = Number(h.date || 0);
@@ -699,6 +727,7 @@ export async function searchResultToTrailList(hits: Hits<TrailSearchResult>): Pr
             photos: h.thumbnail ? [h.thumbnail] : [],
             public: h.public,
             completed: h.completed,
+            completed_by_current_user: Boolean(user?.actor && h.completed_by?.includes(user.actor)),
             summit_logs: [],
             waypoints: [],
             tags: h.tags ?? [],
@@ -718,6 +747,7 @@ export async function searchResultToTrailList(hits: Hits<TrailSearchResult>): Pr
             gpx: h.gpx,
             polyline: h.polyline,
             bounding_box_diagonal: h.bounding_box_diagonal ?? 0,
+            external_provider: h.external_provider,
             domain: h.domain,
             iri: h.iri,
             thumbnail: 0,

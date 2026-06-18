@@ -3,11 +3,16 @@
     import directionCaret from "$lib/assets/svgs/caret-right-solid.svg";
     import GPX from "$lib/models/gpx/gpx";
     import type { Trail } from "$lib/models/trail";
+    import type { Poi } from "$lib/models/poi";
+    import type { PoiAttribute } from "$lib/models/poi_attribute";
     import type { Waypoint } from "$lib/models/waypoint";
+    import { currentUser } from "$lib/stores/user_store";
     import { theme } from "$lib/stores/theme_store";
     import { findStartAndEndPoints } from "$lib/util/geojson_util";
     import {
         createMarkerFromWaypoint,
+        createMarkerFromPoi,
+        createPopupFromPoi,
         createPopupFromTrail,
         FontawesomeMarker,
     } from "$lib/util/maplibre_util";
@@ -31,13 +36,16 @@
 
     interface Props {
         trails?: Trail[];
-        serverClusters?: GeoJSON.FeatureCollection;
+        serverClusters?: FeatureCollection;
         gpx?: GPX;
         waypoints?: Waypoint[];
+        pois?: Poi[];
+        poiAttributeDefinitions?: PoiAttribute[];
         markers?: M.Marker[];
         map?: M.Map | null;
         drawing?: boolean;
         displayWaypoints?: boolean;
+        crosshairCursor?: boolean;
         showElevation?: boolean;
         showInfoPopup?: boolean;
         showGrid?: boolean;
@@ -74,16 +82,30 @@
         oninit?: (map: M.Map) => void;
         autoGeolocateOnDrawing?: boolean;
         buildPoiAnchorAction?: OverpassPopupActionFactory;
+        onpoiclick?: (poi: Poi) => void;
+        onpoisave?: (
+            poi: Poi,
+            attributes: Record<string, string | boolean | null>,
+        ) => Promise<void> | void;
+        caneditpoi?: (poi: Poi) => boolean;
+        canmovepoi?: (poi: Poi) => boolean;
+        onpoidragend?: (poi: Poi, marker: M.Marker) => void;
     }
+
+    let user = $derived($currentUser);
+    let isAdmin = $derived(Boolean((user as any)?.collectionName?.includes("super")));
 
     let {
         trails = [],
         serverClusters = undefined,
         waypoints = [],
+        pois = [],
+        poiAttributeDefinitions = [],
         markers = $bindable([]),
         map = $bindable(),
         drawing = false,
         displayWaypoints = true,
+        crosshairCursor = false,
         showElevation = true,
         showInfoPopup = false,
         showGrid = false,
@@ -109,6 +131,11 @@
         oninit,
         autoGeolocateOnDrawing = false,
         buildPoiAnchorAction = undefined,
+        onpoiclick,
+        onpoisave,
+        caneditpoi,
+        canmovepoi,
+        onpoidragend,
     }: Props = $props();
 
     let mapContainer: HTMLDivElement;
@@ -123,8 +150,9 @@
 
     let hoveringTrail: boolean = false;
 
-    let mapLoaded: boolean = $state(false);
+    let mapLoaded: boolean = false;
     let terrainEnabled: boolean | null = null;
+    let suppressClickUntil = 0;
 
     const trailColors = [
         "#3549bb", // blue
@@ -140,17 +168,11 @@
     ];
 
     let clusterPopup: M.Popup | null = null;
+    let poiMarkers: M.Marker[] = $state([]);
 
-    let mapData = $derived(getData(trails, serverClusters));
-    let gpxDataMap = $derived(mapData[0]);
-    let clusterData = $derived(mapData[1]);
-    let previewData = $derived(mapData[2]);
-
+    let [data, clusterData, previewData] = $derived(getData(trails, serverClusters));
     $effect(() => {
-        // Track dependencies for Svelte 5
-        mapData;
-
-        if (map && mapLoaded) {
+        if (data && map && mapLoaded) {
             untrack(() => initMap(map?.loaded() ?? false));
         }
     });
@@ -166,6 +188,14 @@
         } else if (map && layerManager) {
             untrack(() => stopDrawing());
         }
+    });
+    $effect(() => {
+        drawing;
+        crosshairCursor;
+        map;
+        untrack(() => {
+            updateCursor();
+        });
     });
     $effect(() => {
         if (showGrid) {
@@ -197,18 +227,22 @@
         displayWaypoints;
         untrack(() => {
             syncWaypointMarkers();
-            refreshElevationProfile();
+            void refreshElevationProfile();
+        });
+    });
+    $effect(() => {
+        pois;
+        poiAttributeDefinitions;
+        mapLoaded;
+        untrack(() => {
+            showPois();
         });
     });
 
     function getData(
         trails: Trail[],
-        serverClusters?: GeoJSON.FeatureCollection
-    ): [
-        Record<string, FeatureCollection>,
-        FeatureCollection,
-        FeatureCollection,
-    ] {
+        serverClusters?: FeatureCollection,
+    ): [FeatureCollection[], FeatureCollection, FeatureCollection] {
         let clusterData: FeatureCollection = serverClusters ?? {
             type: "FeatureCollection",
             features: [],
@@ -217,36 +251,21 @@
             type: "FeatureCollection",
             features: [],
         };
-        let gpxDataMap: Record<string, FeatureCollection> = {};
+        let r: FeatureCollection[] = [];
 
-        trails.forEach((t) => {
-            if (t.id) {
-                let fc: FeatureCollection | null = null;
-                if (t.expand?.gpx) {
-                    fc = t.expand.gpx.toGeoJSON();
-                } else if (t.expand?.gpx_data) {
-                    fc = GPX.parse(t.expand.gpx_data).toGeoJSON();
-                }
-
-                if (fc) {
-                    fc.features.forEach((f) => {
-                        if (f.properties) {
-                            f.properties.bounding_box_diagonal =
-                                t.bounding_box_diagonal;
-                        }
-                    });
-                    gpxDataMap[t.id] = fc;
-                }
+        trails.forEach((t, i) => {
+            if (t.expand?.gpx) {
+                r.push(t.expand.gpx.toGeoJSON());
+            } else if (t.expand?.gpx_data) {
+                r.push(GPX.parse(t.expand.gpx_data).toGeoJSON());
             }
-
             if (clusterTrails) {
-                if (!serverClusters && t.lat !== undefined && t.lon !== undefined) {
+                if (!serverClusters && t.lat !== null && t.lon !== null) {
                     clusterData.features.push({
                         id: t.id,
                         type: "Feature",
                         properties: {
                             trail: t.id,
-                            bounding_box_diagonal: t.bounding_box_diagonal,
                         },
                         geometry: {
                             type: "Point",
@@ -261,7 +280,6 @@
                         type: "Feature",
                         properties: {
                             trail: t.id,
-                            bounding_box_diagonal: t.bounding_box_diagonal,
                             color: trailColors[
                                 hashStringToIndex(
                                     t.id ?? "",
@@ -278,7 +296,7 @@
             }
         });
 
-        return [gpxDataMap, clusterData, previewData];
+        return [r, clusterData, previewData];
     }
 
     function initMap(mapLoaded: boolean) {
@@ -286,21 +304,21 @@
             return;
         }
 
-        refreshElevationProfile();
-        if (
-            showElevation &&
-            Object.keys(gpxDataMap).length &&
-            activeTrail !== null
-        ) {
+        if (showElevation && getActiveTrailDataIndex() !== null) {
             epc?.showProfile();
+            void refreshElevationProfile();
         } else {
             epc?.hideProfile();
         }
 
-        trails.forEach((t) => {
+        trails.forEach((t, i) => {
             const layerId = t.id!;
-            addTrailLayer(t, layerId, 0, gpxDataMap[layerId]);
+            addTrailLayer(t, layerId, i, data[i]);
         });
+        if (clusterTrails) {
+            addClusterLayer(clusterData);
+            addPreviewLayer(previewData);
+        }
 
         Object.entries(layerManager.layers).forEach(([id, layer]) => {
             if (!(layer instanceof TrailLayer)) {
@@ -313,32 +331,38 @@
             }
         });
 
-        if (clusterTrails) {
-            addPreviewLayer(previewData);
-            addClusterLayer(clusterData);
-        }
-
-        if (!drawing && fitBounds !== "off") {
-            const currentBboxes = Object.values(gpxDataMap)
-                .map((d) => d.bbox)
-                .filter((b) => b !== undefined);
-
-            if (
-                activeTrail !== null &&
-                trails[activeTrail] &&
-                mapLoaded &&
-                gpxDataMap[trails[activeTrail].id!]
-            ) {
-                focusTrail(trails[activeTrail]);
-            } else if (currentBboxes.length > 0) {
+        if (!drawing && fitBounds !== "off" && (data.some((d) => d.bbox !== undefined) || pois.length)) {
+            const trailIndex = getActiveTrailIndex();
+            if (trailIndex !== null && mapLoaded) {
+                focusTrail(trails[trailIndex]);
+            } else {
                 flyToBounds();
             }
-        } else if (drawing && activeTrail !== null && mapLoaded) {
-            const activeId = trails[activeTrail]?.id;
-            if (activeId && gpxDataMap[activeId]) {
-                addCaretLayer(gpxDataMap[activeId]);
+        } else if (drawing && mapLoaded) {
+            const dataIndex = getActiveTrailDataIndex();
+            if (dataIndex !== null) {
+                addCaretLayer(data[dataIndex]);
             }
         }
+    }
+
+    function getActiveTrailIndex() {
+        return typeof activeTrail === "number" &&
+            activeTrail >= 0 &&
+            trails[activeTrail] !== undefined
+            ? activeTrail
+            : null;
+    }
+
+    function getActiveTrailDataIndex() {
+        const trailIndex = getActiveTrailIndex();
+        return trailIndex !== null && data[trailIndex] !== undefined
+            ? trailIndex
+            : null;
+    }
+
+    function hasFiniteLngLat(lngLat: M.LngLat) {
+        return Number.isFinite(lngLat.lat) && Number.isFinite(lngLat.lng);
     }
 
     function syncHillshadingVisibility() {
@@ -360,11 +384,13 @@
         terrainEnabled = isTerrainEnabled;
     }
 
-    export function refreshElevationProfile() {
-        const activeId = activeTrail !== null ? trails[activeTrail]?.id : null;
-        if (activeId && gpxDataMap[activeId]) {
-            epc?.setData(gpxDataMap[activeId]!, waypoints);
+    export async function refreshElevationProfile() {
+        const dataIndex = getActiveTrailDataIndex();
+        if (!showElevation || dataIndex === null || !epc) {
+            return;
         }
+        epc.showProfile();
+        await epc.setData(data[dataIndex]!, waypoints);
     }
 
     function getBounds() {
@@ -373,13 +399,20 @@
             maxX = -Infinity,
             maxY = -Infinity;
 
-        for (const [xMin, yMin, xMax, yMax] of Object.values(gpxDataMap)
+        for (const [xMin, yMin, xMax, yMax] of data
             .filter((d) => d.bbox !== undefined)
             .map((d) => d.bbox!)) {
             minX = Math.min(minX, xMin);
             minY = Math.min(minY, yMin);
             maxX = Math.max(maxX, xMax);
             maxY = Math.max(maxY, yMax);
+        }
+
+        for (const poi of pois) {
+            minX = Math.min(minX, poi.lon);
+            minY = Math.min(minY, poi.lat);
+            maxX = Math.max(maxX, poi.lon);
+            maxY = Math.max(maxY, poi.lat);
         }
 
         if (
@@ -395,10 +428,9 @@
     }
 
     function flyToBounds() {
-        const activeId = activeTrail !== null ? trails[activeTrail]?.id : null;
         const bounds =
-            activeId && gpxDataMap[activeId]
-                ? (gpxDataMap[activeId].bbox as M.LngLatBoundsLike)
+            activeTrail !== null && data[activeTrail]
+                ? (data[activeTrail].bbox as M.LngLatBoundsLike)
                 : getBounds();
 
         if (!bounds || !map) {
@@ -421,6 +453,7 @@
     }
 
     function removeTrailLayer(id: string) {
+        removeStartEndMarkers(id);
         layerManager.removeLayer(id);
     }
 
@@ -428,31 +461,31 @@
         trail: Trail,
         id: string,
         index: number,
-        geojson: GeoJSON.FeatureCollection | null | undefined,
+        geojson: FeatureCollection | null | undefined,
     ) {
         if (!geojson || !map) {
             return;
         }
+        removeStartEndMarkers(id);
+
         const trailLayer = new TrailLayer(
             id,
             geojson,
             trailColors[
                 clusterTrails
                     ? hashStringToIndex(id ?? "", trailColors.length)
-                    : index % trailColors.length
+                    : 0
             ],
             {
-                listeners: {
-                    onEnter: (e) =>
-                        highlightTrail(id, trails[activeTrail ?? -1]?.id == id),
+                onEnter: (e) =>
+                    highlightTrail(id, trails[activeTrail ?? -1]?.id == id),
 
-                    onLeave: (e) => unHighlightTrail(id),
-                    onMouseUp: (e) => {
-                        activeTrail = trails.findIndex((t) => t.id == trail.id);
-                    },
-                    onMouseMove: moveCrosshairToCursorPosition,
-                    onMouseDown: (e) => handleDragStart(e, id),
+                onLeave: (e) => unHighlightTrail(id),
+                onMouseUp: (e) => {
+                    activeTrail = trails.findIndex((t) => t.id == trail.id);
                 },
+                onMouseMove: moveCrosshairToCursorPosition,
+                onMouseDown: (e) => handleDragStart(e, id),
             },
         );
 
@@ -467,20 +500,7 @@
         if (!geojson || !map || !map.style) {
             return;
         }
-        layerManager.addLayer(
-            "clusters",
-            new ClusterLayer(map, geojson, {
-                "unclustered-point": {
-                    onEnter: (e) => {
-                        if (map) map.getCanvas().style.cursor = "pointer";
-                        const id = (e as any).features[0].properties.id;
-                        const trail = trails.find((t) => t.id === id);
-                        if (!hasTrailDetails(trail)) return;
-                        highlightCluster(trail, e.lngLat);
-                    },
-                },
-            }),
-        );
+        layerManager.addLayer("clusters", new ClusterLayer(map, geojson));
     }
 
     function addPreviewLayer(geojson: FeatureCollection) {
@@ -490,19 +510,18 @@
         layerManager.addLayer(
             "preview",
             new PreviewLayer(map, geojson, {
-                showStartMarker: page.data.settings?.behavior?.showTrailStartMarker ?? false,
-                listeners: {
-                    preview: {
-                        onEnter: (e) => {
-                            if (map) map.getCanvas().style.cursor = "pointer";
-                            const trail = trails.find(
-                                (t) =>
-                                    t.id ===
-                                    (e as any).features[0].properties.trail,
-                            );
-                            if (!hasTrailDetails(trail)) return;
-                            highlightCluster(trail, e.lngLat);
-                        },
+                preview: {
+                    onEnter: (e) => {
+                        const trail = trails.find(
+                            (t) =>
+                                t.id ===
+                                (e as any).features[0].properties.trail,
+                        );
+                        if (!trail) return;
+                        highlightCluster(trail, e.lngLat);
+                    },
+                    onLeave: (e) => {
+                        // unHighlightCluster();
                     },
                 },
             }),
@@ -510,11 +529,17 @@
     }
 
     function moveCrosshairToCursorPosition(e: M.MapMouseEvent) {
+        if (!hasFiniteLngLat(e.lngLat)) {
+            return;
+        }
         epc?.moveCrosshair(e.lngLat.lat, e.lngLat.lng);
         moveElevationMarkerToCursorPosition(e);
     }
 
     function moveElevationMarkerToCursorPosition(e: M.MapMouseEvent) {
+        if (!hasFiniteLngLat(e.lngLat)) {
+            return;
+        }
         elevationMarker.setLngLat(e.lngLat);
     }
 
@@ -544,6 +569,7 @@
     function handleDragEnd(end: M.MapMouseEvent, start: M.MapMouseEvent) {
         map?.off("mousemove", moveElevationMarkerToCursorPosition);
         epc?.hideCrosshair();
+        suppressNextClick();
         const distanceDragged = Math.sqrt(
             Math.pow(end.originalEvent.x - start.originalEvent.x, 2) +
                 Math.pow(end.originalEvent.y - start.originalEvent.y, 2),
@@ -554,6 +580,10 @@
             onsegmentdragend?.({ segment: draggingSegment!, event: end });
         }
         draggingSegment = null;
+    }
+
+    function suppressNextClick(durationMs: number = 450) {
+        suppressClickUntil = Date.now() + durationMs;
     }
 
     function addCaretLayer(geojson: GeoJSON) {
@@ -603,15 +633,11 @@
         // map?.setPaintProperty(id, "line-color", "#648ad5");
     }
 
-    function hasTrailDetails(trail: Trail | undefined): trail is Trail {
-        return Boolean(trail?.name?.trim());
-    }
-
     export async function highlightCluster(
         trail: Trail,
         lnglat?: M.LngLatLike,
     ) {
-        if (!map || !map.style || !hasTrailDetails(trail)) {
+        if (!map || !map.style) {
             return;
         }
         clusterPopup?.remove();
@@ -620,19 +646,16 @@
         clusterPopup.on("close", () => {
             unHighlightCluster(false);
         });
-        map.on("mousemove", unHighlightClusterDistanceNotifier);
+        map.on("mousemove", unHighlightClusterDistanceNotifier)
     }
 
     function unHighlightClusterDistanceNotifier(e: M.MapMouseEvent) {
         if (!clusterPopup || !map) {
-            return;
+            return
         }
-        if (
-            map.project(clusterPopup.getLngLat()).dist(map.project(e.lngLat)) >
-            60
-        ) {
+        if (map.project(clusterPopup.getLngLat()).dist(map.project(e.lngLat)) > 60) {
             clusterPopup.remove();
-            map.off("mousemove", unHighlightClusterDistanceNotifier);
+            map.off("mousemove", unHighlightClusterDistanceNotifier)
         }
     }
 
@@ -651,7 +674,7 @@
             if (
                 !drawing &&
                 fitBounds !== "off" &&
-                Object.values(gpxDataMap).some((d) => d.bbox !== undefined)
+                data.some((d) => d.bbox !== undefined)
             ) {
                 untrack(() => focusTrail(trails[activeTrail]));
             }
@@ -669,14 +692,12 @@
         onselect?.(trail);
 
         try {
-            refreshElevationProfile();
             if (showElevation) {
                 epc?.showProfile();
             }
-            syncWaypointMarkers();
-            if (trail.id && gpxDataMap[trail.id]) {
-                addCaretLayer(gpxDataMap[trail.id]);
-            }
+            void refreshElevationProfile();
+            showWaypoints();
+            addCaretLayer(data[activeTrail]);
             flyToBounds();
         } catch (e) {
             console.warn(e);
@@ -703,8 +724,9 @@
         if (!map) {
             return;
         }
+        hideWaypoints();
         activeTrail ??= 0;
-        map.getCanvas().style.cursor = "crosshair";
+        updateCursor();
         if (trails[activeTrail]) {
             removeStartEndMarkers(trails[activeTrail].id);
         }
@@ -719,14 +741,13 @@
             return;
         }
         syncWaypointMarkers();
-        map.getCanvas().style.cursor = "inherit";
+        updateCursor();
 
         if (activeTrail !== null && trails[activeTrail] && !clusterTrails) {
-            const activeId = trails[activeTrail].id;
             addStartEndMarkers(
                 trails[activeTrail],
-                activeId,
-                activeId ? gpxDataMap[activeId] : null,
+                trails[activeTrail].id,
+                data[activeTrail],
             );
         }
     }
@@ -744,6 +765,8 @@
         ) {
             return;
         }
+
+        removeStartEndMarkers(id);
 
         const startMarker = new FontawesomeMarker(
             { icon: "fa fa-bullseye" },
@@ -788,36 +811,11 @@
     }
 
     function removeStartEndMarkers(id: string | undefined) {
-        if (!id) {
+        if (!id || !layerManager.layers[id]) {
             return;
         }
         layerManager.layers[id].markers?.start?.remove();
         layerManager.layers[id].markers?.end?.remove();
-    }
-
-    function showWaypoints() {
-        if (!map) {
-            return;
-        }
-
-        hideWaypoints();
-        for (const waypoint of waypoints) {
-            if (!markers.find((m) => m._element.id == waypoint.id)) {
-                const marker = createMarkerFromWaypoint(
-                    waypoint,
-                    onmarkerdragend,
-                );
-                marker.addTo(map);
-                markers.push(marker);
-            }
-        }
-        markers = markers.filter((marker) => {
-            if (!waypoints.find((w) => w.id == marker._element.id)) {
-                marker.remove();
-                return false;
-            }
-            return true;
-        });
     }
 
     function syncWaypointMarkers() {
@@ -825,6 +823,24 @@
             showWaypoints();
         } else {
             hideWaypoints();
+        }
+    }
+
+    function showWaypoints() {
+        if (!map || drawing) {
+            return;
+        }
+
+        hideWaypoints();
+        markers = [];
+        for (const [index, waypoint] of waypoints.entries()) {
+            const marker = createMarkerFromWaypoint(
+                waypoint,
+                onmarkerdragend,
+                index + 1,
+            );
+            marker.addTo(map);
+            markers.push(marker);
         }
     }
 
@@ -836,6 +852,108 @@
             m.remove();
         }
         markers = [];
+    }
+
+    function showPois() {
+        if (!map || !mapLoaded) {
+            return;
+        }
+
+        hidePois();
+        for (const poi of pois) {
+            const definitions = poiAttributeDefinitions.filter(
+                (definition) => definition.category === poi.category,
+            );
+            const marker = createMarkerFromPoi(poi, definitions, {
+                draggable: canmovepoi?.(poi) ?? false,
+            }).addTo(map);
+            const popup = onpoiclick
+                ? undefined
+                : createPopupFromPoi(
+                      poi,
+                      definitions,
+                      {
+                          editable: caneditpoi?.(poi) ?? false,
+                          onSave: async (attributes) => {
+                              await onpoisave?.(poi, attributes);
+                          },
+                          currentUserId: user?.id,
+                          isAdmin,
+                      },
+                  );
+
+            const handlePoiMarkerClick = (event: Event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                if (onpoiclick) {
+                    onpoiclick(poi);
+                    return;
+                }
+                if (popup?.isOpen()) {
+                    popup.remove();
+                } else {
+                    popup?.setLngLat([poi.lon, poi.lat]).addTo(map!);
+                }
+            };
+            marker.getElement().addEventListener("click", handlePoiMarkerClick);
+            if (canmovepoi?.(poi) && onpoidragend) {
+                marker.on("dragend", () => onpoidragend(poi, marker));
+            }
+            poiMarkers.push(marker);
+        }
+        updatePoiLabelVisibility();
+    }
+
+    function hidePois() {
+        for (const marker of poiMarkers) {
+            marker.remove();
+        }
+        poiMarkers = [];
+    }
+
+    function parseScaleMeters(value: string) {
+        const match = value.trim().match(/^([\d.,]+)\s*([a-zA-Z]+)$/);
+        if (!match) {
+            return undefined;
+        }
+
+        const numericValue = Number(
+            match[1].includes(".") && match[1].includes(",")
+                ? match[1].replaceAll(",", "")
+                : match[1].replace(",", "."),
+        );
+        if (Number.isNaN(numericValue)) {
+            return undefined;
+        }
+
+        switch (match[2].toLowerCase()) {
+            case "km":
+                return numericValue * 1000;
+            case "m":
+                return numericValue;
+            case "mi":
+                return numericValue * 1609.344;
+            case "ft":
+                return numericValue * 0.3048;
+            default:
+                return undefined;
+        }
+    }
+
+    function updatePoiLabelVisibility() {
+        const scaleText =
+            map?.getContainer()
+                .querySelector(".maplibregl-ctrl-scale")
+                ?.textContent?.trim() ?? "";
+        const scaleMeters = parseScaleMeters(scaleText);
+        const visible = scaleMeters !== undefined && scaleMeters <= 1000;
+
+        for (const marker of poiMarkers) {
+            marker
+                .getElement()
+                .querySelector(".poi-marker-label")
+                ?.classList.toggle("hidden", !visible);
+        }
     }
 
     function toggleEpcTheme() {
@@ -861,12 +979,196 @@
     }
 
     let geolocateControl: M.GeolocateControl;
+    let userHeadingIcon: SVGSVGElement | null = null;
+    let deviceCompassHeading: number | null = null;
+    let removeDeviceCompassPermissionClickListener: (() => void) | null = null;
+    type DeviceOrientationEventWithCompass = DeviceOrientationEvent & {
+        webkitCompassHeading?: number;
+    };
+    type DeviceOrientationEventConstructorWithPermission =
+        typeof DeviceOrientationEvent & {
+            requestPermission?: () => Promise<PermissionState>;
+        };
+
+    function createUserHeadingIcon() {
+        const svg = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "svg",
+        );
+        svg.setAttribute("viewBox", "0 0 40 40");
+        svg.setAttribute("aria-hidden", "true");
+        svg.classList.add("user-location-heading-icon");
+        svg.style.position = "absolute";
+        svg.style.left = "50%";
+        svg.style.top = "50%";
+        svg.style.width = "40px";
+        svg.style.height = "40px";
+        svg.style.pointerEvents = "none";
+        svg.style.transformOrigin = "center";
+        svg.style.filter = "drop-shadow(0 2px 4px rgb(0 0 0 / 0.35))";
+        svg.style.transition = "transform 150ms linear";
+
+        const arrow = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "path",
+        );
+        arrow.setAttribute("d", "M20 2 31 29 20 23 9 29 20 2Z");
+        arrow.setAttribute("fill", "rgb(var(--primary))");
+        arrow.setAttribute("stroke", "white");
+        arrow.setAttribute("stroke-width", "3");
+        arrow.setAttribute("stroke-linejoin", "round");
+
+        svg.appendChild(arrow);
+
+        return svg;
+    }
+
+    function updateUserHeadingMarkerRotation() {
+        if (deviceCompassHeading === null) {
+            return;
+        }
+
+        userHeadingIcon?.style.setProperty(
+            "transform",
+            `translate(-50%, -50%) rotate(${deviceCompassHeading - (map?.getBearing() ?? 0)}deg)`,
+        );
+    }
+
+    function hideUserHeadingMarker() {
+        const locationDot = map
+            ?.getContainer()
+            .querySelector(".maplibregl-user-location-dot") as HTMLElement | null;
+        locationDot?.classList.remove("wanderer-heading-marker");
+        locationDot?.style.removeProperty("overflow");
+        locationDot?.style.removeProperty("background");
+        locationDot?.style.removeProperty("border");
+        locationDot?.style.removeProperty("box-shadow");
+        userHeadingIcon?.remove();
+        userHeadingIcon = null;
+    }
+
+    function syncUserHeadingMarker(attempt: number = 0) {
+        if (deviceCompassHeading === null) {
+            hideUserHeadingMarker();
+            return;
+        }
+
+        if (!map) {
+            return;
+        }
+
+        const locationDot = map
+            .getContainer()
+            .querySelector(".maplibregl-user-location-dot") as HTMLElement | null;
+        if (!locationDot) {
+            if (attempt < 10) {
+                requestAnimationFrame(() => syncUserHeadingMarker(attempt + 1));
+            }
+            return;
+        }
+
+        locationDot.style.overflow = "visible";
+        locationDot.style.background = "transparent";
+        locationDot.style.border = "0";
+        locationDot.style.boxShadow = "none";
+        locationDot.classList.add("wanderer-heading-marker");
+        if (!userHeadingIcon || userHeadingIcon.parentElement !== locationDot) {
+            userHeadingIcon?.remove();
+            userHeadingIcon = createUserHeadingIcon();
+            locationDot.appendChild(userHeadingIcon);
+        }
+        updateUserHeadingMarkerRotation();
+    }
+
+    function getCompassHeading(event: DeviceOrientationEventWithCompass) {
+        if (
+            typeof event.webkitCompassHeading === "number" &&
+            Number.isFinite(event.webkitCompassHeading)
+        ) {
+            return event.webkitCompassHeading;
+        }
+
+        if (event.absolute && typeof event.alpha === "number") {
+            return (360 - event.alpha) % 360;
+        }
+
+        return null;
+    }
+
+    function handleDeviceOrientation(event: DeviceOrientationEvent) {
+        const heading = getCompassHeading(
+            event as DeviceOrientationEventWithCompass,
+        );
+        if (heading === null) {
+            return;
+        }
+
+        deviceCompassHeading = heading;
+        syncUserHeadingMarker();
+    }
+
+    function handleDeviceOrientationEvent(event: Event) {
+        handleDeviceOrientation(event as DeviceOrientationEvent);
+    }
+
+    function startDeviceCompass() {
+        if (typeof DeviceOrientationEvent === "undefined") {
+            return;
+        }
+
+        window.addEventListener(
+            "deviceorientationabsolute",
+            handleDeviceOrientationEvent,
+        );
+        window.addEventListener(
+            "deviceorientation",
+            handleDeviceOrientationEvent,
+        );
+    }
+
+    async function requestDeviceCompassPermission() {
+        if (typeof DeviceOrientationEvent === "undefined") {
+            return;
+        }
+
+        const OrientationEvent =
+            DeviceOrientationEvent as DeviceOrientationEventConstructorWithPermission;
+        if (!OrientationEvent.requestPermission) {
+            return;
+        }
+
+        try {
+            const permission = await OrientationEvent.requestPermission();
+            if (permission === "granted") {
+                startDeviceCompass();
+            }
+        } catch (error) {
+            console.warn("Error requesting device orientation permission", error);
+        }
+    }
+
+    function watchGeolocateButtonForCompassPermission() {
+        const button = map
+            ?.getContainer()
+            .querySelector(".maplibregl-ctrl-geolocate") as HTMLButtonElement | null;
+        if (!button) {
+            return;
+        }
+
+        const onClick = () => {
+            void requestDeviceCompassPermission();
+        };
+        button.addEventListener("click", onClick);
+        removeDeviceCompassPermissionClickListener = () => {
+            button.removeEventListener("click", onClick);
+        };
+    }
 
     onMount(async () => {
         const initialState = {
-            lng: 0,
-            lat: 0,
-            zoom: 1,
+            lng: 10.4,
+            lat: 51.1,
+            zoom: 8,
         };
         const ElevationProfileControl = (
             await import(
@@ -892,7 +1194,9 @@
         };
         map = new M.Map(finalMapOptions);
 
-        layerManager = new LayerManager(map, { overpassActionFactory: buildPoiAnchorAction });
+        layerManager = new LayerManager(map, {
+            overpassActionFactory: buildPoiAnchorAction,
+        });
 
         elevationMarker = new FontawesomeMarker(
             {
@@ -940,7 +1244,12 @@
             },
             trackUserLocation: true,
         });
+        geolocateControl.on("geolocate", () => syncUserHeadingMarker());
+        geolocateControl.on("trackuserlocationend", hideUserHeadingMarker);
+        geolocateControl.on("error", hideUserHeadingMarker);
         map.addControl(geolocateControl);
+        startDeviceCompass();
+        watchGeolocateButtonForCompassPermission();
 
         if (showStyleSwitcher) {
             map.addControl(switcherControl);
@@ -976,6 +1285,7 @@
             });
             toggleEpcTheme();
             map.addControl(epc);
+            void refreshElevationProfile();
         }
 
         if (showFullscreen) {
@@ -1004,8 +1314,8 @@
                         page.data.settings?.terrain?.hillshading,
                     ),
                 );
-                syncHillshadingVisibility();
             }
+            syncHillshadingVisibility();
         });
 
         map.on("render", () => {
@@ -1013,14 +1323,26 @@
         });
 
         map.on("moveend", (e) => {
+            updatePoiLabelVisibility();
             onmoveend?.(e.target);
         });
 
         map.on("zoom", (e) => {
+            updatePoiLabelVisibility();
             onzoom?.(e.target);
         });
+        map.on("rotate", updateUserHeadingMarkerRotation);
+
+        map.on("dragstart", () => suppressNextClick());
+        map.on("zoomstart", () => suppressNextClick(550));
+        map.on("rotatestart", () => suppressNextClick(550));
+        map.on("pitchstart", () => suppressNextClick(550));
+        map.on("touchstart", () => suppressNextClick(550));
 
         map.on("click", (e) => {
+            if (Date.now() < suppressClickUntil) {
+                return;
+            }
             if (hoveringTrail && drawing) {
                 return;
             }
@@ -1033,9 +1355,10 @@
 
         map.on("load", () => {
             layerManager.init();
-            initMap(true);
-            oninit?.(map!);
             mapLoaded = true;
+            initMap(true);
+            showPois();
+            oninit?.(map!);
         });
 
         syncWaypointMarkers();
@@ -1052,7 +1375,28 @@
         }
     }
 
+    function updateCursor() {
+        if (!map) {
+            return;
+        }
+        map.getCanvas().style.cursor =
+            drawing || crosshairCursor ? "crosshair" : "inherit";
+    }
+
     onDestroy(() => {
+        hidePois();
+        hideUserHeadingMarker();
+        removeDeviceCompassPermissionClickListener?.();
+        if (typeof window !== "undefined") {
+            window.removeEventListener(
+                "deviceorientationabsolute",
+                handleDeviceOrientationEvent,
+            );
+            window.removeEventListener(
+                "deviceorientation",
+                handleDeviceOrientationEvent,
+            );
+        }
         map?.remove();
     });
 
@@ -1090,9 +1434,8 @@
 
         if (e.key == "m") {
             if (trails.length === 1) {
-                const trailId = trails[0].id!;
-                addTrailLayer(trails[0], trailId, 0, gpxDataMap[trailId]);
-                addCaretLayer(gpxDataMap[trailId]);
+                addTrailLayer(trails[0], trails[0].id!, 0, data[0]);
+                addCaretLayer(data[0]);
             }
         } else if (e.key == "p") {
             if (showElevation) {
@@ -1121,6 +1464,7 @@
     #map {
         width: 100%;
         height: 100%;
+        touch-action: pan-x pan-y pinch-zoom;
     }
 
     :global(.maplibregl-popup-content) {
@@ -1141,4 +1485,18 @@
         ) {
         pointer-events: none;
     }
+
+    :global(.maplibregl-user-location-dot.wanderer-heading-marker) {
+        width: 40px;
+        height: 40px;
+        background: transparent !important;
+        border: 0 !important;
+        box-shadow: none !important;
+    }
+
+    :global(.maplibregl-user-location-dot.wanderer-heading-marker::before),
+    :global(.maplibregl-user-location-dot.wanderer-heading-marker::after) {
+        display: none !important;
+    }
+
 </style>

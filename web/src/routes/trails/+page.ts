@@ -29,7 +29,7 @@ export const load: ServerLoad = async ({ params, locals, url, fetch }) => {
         elevationLossMax: filterValues.max_elevation_loss,
         elevationLossLimit: filterValues.max_elevation_loss,
         sort: "created",
-        sortOrder: "+",
+        sortOrder: "-",
     };
     const paramCategory = url.searchParams.get("category");
     if (paramCategory) {

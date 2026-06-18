@@ -12,10 +12,11 @@ import (
 	"time"
 
 	"github.com/meilisearch/meilisearch-go"
+	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 )
 
-func documentFromTrailRecord(r *core.Record, author *core.Record, includeShares bool) (map[string]interface{}, error) {
+func documentFromTrailRecord(app core.App, r *core.Record, author *core.Record, includeShares bool) (map[string]interface{}, error) {
 	photos := r.GetStringSlice("photos")
 	thumbnail := ""
 	if len(photos) > 0 {
@@ -51,6 +52,11 @@ func documentFromTrailRecord(r *core.Record, author *core.Record, includeShares 
 		diagonal = HaversineDistance(bounds[0], bounds[2], bounds[1], bounds[3])
 	}
 
+	completedBy, err := completedByFromTrailRecord(app, r)
+	if err != nil {
+		return nil, err
+	}
+
 	document := map[string]any{
 		"id":                    r.Id,
 		"author":                author.Id,
@@ -65,7 +71,9 @@ func documentFromTrailRecord(r *core.Record, author *core.Record, includeShares 
 		"duration":              r.GetFloat("duration"),
 		"difficulty":            difficultyToNumber(r.GetString("difficulty")),
 		"category":              category,
-		"completed":             r.GetBool("completed"),
+		"completed":             r.GetBool("completed") || len(completedBy) > 0,
+		"completed_by":          completedBy,
+		"external_provider":     r.GetString("external_provider"),
 		"date":                  r.GetDateTime("date").Time().Unix(),
 		"created":               r.GetDateTime("created").Time().Unix(),
 		"public":                r.GetBool("public"),
@@ -118,6 +126,29 @@ func documentFromTrailRecord(r *core.Record, author *core.Record, includeShares 
 	}
 
 	return document, nil
+}
+
+func completedByFromTrailRecord(app core.App, r *core.Record) ([]string, error) {
+	logs, err := app.FindAllRecords(
+		"summit_logs",
+		dbx.NewExp("trail = {:trail}", dbx.Params{"trail": r.Id}),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	seen := map[string]bool{}
+	actorIDs := []string{}
+	for _, log := range logs {
+		actorID := log.GetString("author")
+		if actorID == "" || seen[actorID] {
+			continue
+		}
+		seen[actorID] = true
+		actorIDs = append(actorIDs, actorID)
+	}
+
+	return actorIDs, nil
 }
 
 func difficultyToNumber(difficulty string) int32 {
@@ -324,7 +355,7 @@ func IndexTrails(app core.App, trails []*core.Record, client meilisearch.Service
 
 		author := r.ExpandedOne("author")
 
-		doc, err := documentFromTrailRecord(r, author, true)
+		doc, err := documentFromTrailRecord(app, r, author, true)
 		if err != nil {
 			return err
 		}
@@ -349,7 +380,7 @@ func UpdateTrail(app core.App, r *core.Record, author *core.Record, client meili
 		return fmt.Errorf("meilisearch update trail: failed to expand category: %v", errs)
 	}
 
-	doc, err := documentFromTrailRecord(r, author, false)
+	doc, err := documentFromTrailRecord(app, r, author, false)
 	if err != nil {
 		return err
 	}

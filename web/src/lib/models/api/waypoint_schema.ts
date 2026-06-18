@@ -10,6 +10,7 @@ const WaypointCreateSchema = z.object({
     lon: z.number({ coerce: true }).min(-180).max(180),
     distance_from_start: z.number({ coerce: true }).min(0).optional(),
     icon: z.enum(icons).optional(),
+    connectionMode: z.enum(["snap", "straight", "original-kml"]).optional(),
     author: z.string().length(15),
     photos: z.array(z.string()).default([]),
     trail: z.string().length(15).optional()
@@ -22,6 +23,7 @@ const WaypointUpdateSchema = z.object({
     lon: z.number({ coerce: true }).min(-180).max(180).optional(),
     distance_from_start: z.number({ coerce: true }).min(0).optional(),
     icon: z.enum(icons).default("circle").optional(),
+    connectionMode: z.enum(["snap", "straight", "original-kml"]).optional(),
     photos: z.array(z.string()).optional(),
     "photos-": z.string().optional(),
     "photos+": z.string().optional(),

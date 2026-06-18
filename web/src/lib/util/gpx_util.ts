@@ -184,7 +184,11 @@ export function fromKML(kmlData: string) {
 export async function fromKMZ(kmzData: ArrayBuffer) {
     const zip = new JSZip()
     const zipContents = await zip.loadAsync(kmzData)
-    const kmlFile = await zip.file('doc.kml')?.async('string');
+    const fileNames = Object.keys(zipContents.files);
+    const docKmlPath = fileNames.find((fileName) => /(^|\/)doc\.kml$/i.test(fileName));
+    const fallbackKmlPath = fileNames.find((fileName) => fileName.toLowerCase().endsWith(".kml"));
+    const kmlPath = docKmlPath ?? fallbackKmlPath;
+    const kmlFile = await zip.file(kmlPath ?? "")?.async('string');
     return fromKML(kmlFile ?? "")
 }
 
