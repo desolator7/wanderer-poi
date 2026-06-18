@@ -19,7 +19,8 @@
         onchange,
     }: Props = $props();
 
-    function handleToggleChange() {
+    function handleToggleChange(event: Event) {
+        value = (event.currentTarget as HTMLInputElement).checked;
         onchange?.(value);
     }
 </script>

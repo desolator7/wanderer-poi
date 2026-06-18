@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { env } from "$env/dynamic/public";
     import Button from "$lib/components/base/button.svelte";
     import Datepicker from "$lib/components/base/datepicker.svelte";
     import Select from "$lib/components/base/select.svelte";
@@ -9,11 +10,7 @@
     import SummitLogModal from "$lib/components/summit_log/summit_log_modal.svelte";
     import MapWithElevationMaplibre from "$lib/components/trail/map_with_elevation_maplibre.svelte";
     import PhotoPicker from "$lib/components/trail/photo_picker.svelte";
-    import TrailAnchorList from "$lib/components/trail/trail_anchor_list.svelte";
     import WaypointCard from "$lib/components/waypoint/waypoint_card.svelte";
-    import WaypointMergeModal, {
-        type WaypointMergeOptions,
-    } from "$lib/components/waypoint/waypoint_merge_modal.svelte";
     import WaypointModal from "$lib/components/waypoint/waypoint_modal.svelte";
     import { SummitLogCreateSchema } from "$lib/models/api/summit_log_schema.js";
     import { TrailCreateSchema } from "$lib/models/api/trail_schema.js";
@@ -23,9 +20,13 @@
     import type { List } from "$lib/models/list";
     import { SummitLog } from "$lib/models/summit_log";
     import { Trail } from "$lib/models/trail";
-    import type { RoutingOptions, ValhallaAnchor } from "$lib/models/valhalla";
-    import type { OverpassPopupActionFactory } from "$lib/vendor/maplibre-layer-manager/overpass-layer";
-    import { type OverpassPopupAction } from "$lib/util/maplibre_util";
+    import type {
+        RouteCalculationResult,
+        RoutingOptions,
+        SacScaleSegment,
+        ValhallaAnchor,
+        ValhallaBicycleCostingOptions,
+    } from "$lib/models/valhalla";
     import { Waypoint } from "$lib/models/waypoint";
     import { categories } from "$lib/stores/category_store";
     import {
@@ -49,13 +50,10 @@
         insertIntoRoute,
         normalizeRouteTime,
         recalculateHeight,
-        resetRoute,
         reverseRoute,
         setRoute,
-        splitSegment,
         undo,
         redo,
-        revertRouteChange,
         clearUndoRedoStack,
     } from "$lib/stores/valhalla_store.svelte.js";
     import { waypoint } from "$lib/stores/waypoint_store";
@@ -65,7 +63,7 @@
         formatElevation,
         formatTimeHHMM,
     } from "$lib/util/format_util";
-    import { cropGPX, fromFile, gpx2trail } from "$lib/util/gpx_util";
+    import { fromFile, gpx2trail } from "$lib/util/gpx_util";
 
     import { page } from "$app/state";
     import emptyStateTrailDark from "$lib/assets/svgs/empty_states/empty_state_trail_dark.svg";
@@ -78,54 +76,64 @@
     import Search, {
         type SearchItem,
     } from "$lib/components/base/search.svelte";
+    import PoiFilterPanel from "$lib/components/poi/poi_filter_panel.svelte";
     import RouteEditor from "$lib/components/trail/route_editor.svelte";
     import { TagCreateSchema } from "$lib/models/api/tag_schema.js";
-    import { convertDMSToDD } from "$lib/models/gpx/utils.js";
+    import { convertDMSToDD, haversineDistance } from "$lib/models/gpx/utils.js";
     import { Tag } from "$lib/models/tag.js";
+    import { Poi } from "$lib/models/poi";
+    import type { OverpassPopupActionFactory } from "$lib/vendor/maplibre-layer-manager/overpass-layer";
     import {
         searchLocationReverse,
+        searchLocationReverseFeature,
         searchLocations,
     } from "$lib/stores/search_store.js";
     import { tags_index } from "$lib/stores/tag_store.js";
     import { theme } from "$lib/stores/theme_store.js";
     import { currentUser } from "$lib/stores/user_store.js";
+    import { APIError, getAPIErrorDetailMessage } from "$lib/util/api_util";
     import { getIconForLocation } from "$lib/util/icon_util.js";
     import {
         createAnchorMarker,
-        createEditTrailMapPopup,
-        FontawesomeMarker,
     } from "$lib/util/maplibre_util";
     import {
-        renderValhallaAnchorMarker,
-        valhallaAnchorTitle,
-    } from "$lib/util/valhalla_anchor_util";
+        buildImportedRouteSegments,
+        buildImportedRouteWaypoints,
+        createWaypointFromTap,
+        formatWaypointLocationName,
+        getDynamicImportMaxPoints,
+        getNumberedWaypointName,
+        getRoutingRoleByIndex,
+        getWaypointInsertIndexByNearestSegment,
+        isPlaceholderWaypointName,
+        shouldBuildImportedRouteWaypoints,
+        type GeoPoint,
+        type SimplifyPolylineOptions,
+    } from "$lib/util/waypoint_routing";
+    import { consumeRouteImportSession } from "$lib/util/route_import_util";
     import EXIF from "$lib/vendor/exif-js/exif.js";
     import { validator } from "@felte/validator-zod";
     import cryptoRandomString from "crypto-random-string";
     import { createForm } from "felte";
     import * as M from "maplibre-gl";
-    import { onMount, untrack } from "svelte";
+    import { onDestroy, onMount, tick, untrack } from "svelte";
     import { _ } from "svelte-i18n";
+    import { get } from "svelte/store";
     import { backInOut } from "svelte/easing";
-    import { fly } from "svelte/transition";
+    import { fly, slide } from "svelte/transition";
     import { z } from "zod";
     import Track from "$lib/models/gpx/track.js";
     import TrackSegment from "$lib/models/gpx/track-segment.js";
-    import ConfirmModal from "$lib/components/confirm_modal.svelte";
 
     let { data } = $props();
 
     let map: M.Map | undefined = $state();
-    let mapPopup: M.Popup | undefined;
     let mapTrail: Trail[] = $state([]);
     let lists = $state(untrack(() => data.lists));
 
     let waypointModal: WaypointModal;
-    let waypointMergeModal: WaypointMergeModal;
     let summitLogModal: SummitLogModal;
     let listSelectModal: ListSearchModal;
-    let markTrailAsCompletedModal: ConfirmModal;
-    let replaceRouteModal: ConfirmModal;
 
     let loading = $state(false);
 
@@ -136,30 +144,36 @@
     let gpxFile: File | Blob | null = null;
 
     let drawingActive = $state(false);
-    let showWaypointsWhileDrawing = $state(true);
-    let replacingRoute = $state(false);
-    let isNewTrail = $derived(page.params.id === "new");
-
-    function routeCalculationErrorText(error: unknown) {
-        if (error instanceof Error && error.message) {
-            return error.message;
-        }
-        return "Error calculating route";
-    }
-    let overwriteGPX = false;
     let draggingMarker = false;
-    
-    let pendingWaypointMerge:
-        | { incoming: Waypoint; existing: Waypoint }
-        | undefined = $state();
+    let snapImportedRouteToValhalla = $state(false);
+    let waypointNameReloading = $state(false);
+    let waypointNameReloadProgress = $state(0);
+    let waypointNameReloadTotal = $state(0);
+    const enableGlobalRoutingRepair = false;
+    const waypointNameReloadDelayMs = 1100;
 
     let searchDropdownItems: SearchItem[] = $state([]);
-    let selectedSearchLocation: SearchItem | null = $state(null);
 
-    let cropStartMarker: FontawesomeMarker;
-    let cropEndMarker: FontawesomeMarker;
-
-    let croppedGPX: GPX | null = null;
+    let routePlannerPois: Poi[] = $state(untrack(() => data.pois));
+    let includePublicPois = $state(true);
+    let includeOwnPois = $state(true);
+    let selectedPoiCategoryIds = $state(
+        data.poiCategories.map((category) => category.id!),
+    );
+    let filteredRoutePlannerPois = $derived(
+        routePlannerPois.filter((poi) => {
+            if (!selectedPoiCategoryIds.includes(poi.category)) {
+                return false;
+            }
+            if (!includePublicPois && poi.public) {
+                return false;
+            }
+            if (!includeOwnPois && poi.author === page.data.user?.id) {
+                return false;
+            }
+            return true;
+        }),
+    );
 
     const ClientTrailCreateSchema = TrailCreateSchema.extend({
         expand: z
@@ -172,6 +186,9 @@
                     .array(
                         WaypointCreateSchema.extend({
                             marker: z.any().optional(),
+                            connectionMode: z
+                                .enum(["snap", "straight", "original-kml"])
+                                .optional(),
                         }),
                     )
                     .optional(),
@@ -183,13 +200,449 @@
     let routingOptions: RoutingOptions = $state({
         autoRouting: true,
         modeOfTransport: "pedestrian",
+        pedestrianOptions: {
+            max_hiking_difficulty: 3,
+            walking_speed: 4,
+            use_hills: 0.5,
+            use_tracks: 1,
+            walkway_factor: 0.7,
+            sidewalk_factor: 1,
+            shortest: true,
+        },
+        bicycleOptions: {
+            bicycle_type: "Hybrid",
+            cycling_speed: 18,
+            use_roads: 0.4,
+            use_hills: 0.5,
+            avoid_bad_surfaces: 0.4,
+            shortest: true,
+        },
     });
-    let routeAnchorListUpdating = $state(false);
-    let routeSegments = $state<TrackSegment[]>([]);
+    const maxHikingDifficultyItems = $derived([
+        { text: `1 - ${$_("sac-scale-1-short")}`, value: 1 },
+        { text: `2 - ${$_("sac-scale-2-short")}`, value: 2 },
+        { text: `3 - ${$_("sac-scale-3-short")}`, value: 3 },
+        { text: `4 - ${$_("sac-scale-4-short")}`, value: 4 },
+        { text: `5 - ${$_("sac-scale-5-short")}`, value: 5 },
+        { text: `6 - ${$_("sac-scale-6-short")}`, value: 6 },
+    ]);
+    const walkingSpeedItems = $derived([
+        {
+            text: `1 - ${$_("walking-speed-very-slow")} (2 km/h)`,
+            value: 2,
+            description: $_("walking-speed-very-slow-description"),
+        },
+        {
+            text: `2 - ${$_("walking-speed-slow")} (3 km/h)`,
+            value: 3,
+            description: $_("walking-speed-slow-description"),
+        },
+        {
+            text: `3 - ${$_("walking-speed-normal")} (4 km/h)`,
+            value: 4,
+            description: $_("walking-speed-normal-description"),
+        },
+        {
+            text: `4 - ${$_("walking-speed-brisk")} (5 km/h)`,
+            value: 5,
+            description: $_("walking-speed-brisk-description"),
+        },
+        {
+            text: `5 - ${$_("walking-speed-very-brisk")} (6 km/h)`,
+            value: 6,
+            description: $_("walking-speed-very-brisk-description"),
+        },
+        {
+            text: `6 - ${$_("walking-speed-fast")} (7 km/h)`,
+            value: 7,
+            description: $_("walking-speed-fast-description"),
+        },
+    ]);
+    const hillPreferenceItems = $derived([
+        {
+            text: `1 - ${$_("hill-preference-avoid-strongly")}`,
+            value: 0,
+            description: $_("hill-preference-avoid-strongly-description"),
+        },
+        {
+            text: `2 - ${$_("hill-preference-avoid")}`,
+            value: 0.2,
+            description: $_("hill-preference-avoid-description"),
+        },
+        {
+            text: `3 - ${$_("hill-preference-balanced")}`,
+            value: 0.5,
+            description: $_("hill-preference-balanced-description"),
+        },
+        {
+            text: `4 - ${$_("hill-preference-accept")}`,
+            value: 0.7,
+            description: $_("hill-preference-accept-description"),
+        },
+        {
+            text: `5 - ${$_("hill-preference-like")}`,
+            value: 0.85,
+            description: $_("hill-preference-like-description"),
+        },
+        {
+            text: `6 - ${$_("hill-preference-direct")}`,
+            value: 1,
+            description: $_("hill-preference-direct-description"),
+        },
+    ]);
+    type BicycleRouteProfile = "bicycle" | "mountainbike" | "ebike";
+    let bicycleRouteProfile: BicycleRouteProfile = $state("bicycle");
+    const bicycleRouteProfiles: Record<
+        BicycleRouteProfile,
+        ValhallaBicycleCostingOptions
+    > = {
+        bicycle: {
+            bicycle_type: "Hybrid",
+            cycling_speed: 18,
+            use_roads: 0.4,
+            use_hills: 0.5,
+            avoid_bad_surfaces: 0.4,
+            shortest: true,
+        },
+        mountainbike: {
+            bicycle_type: "Mountain",
+            cycling_speed: 16,
+            use_roads: 0.1,
+            use_hills: 0.8,
+            avoid_bad_surfaces: 0,
+            shortest: true,
+        },
+        ebike: {
+            bicycle_type: "Hybrid",
+            cycling_speed: 22,
+            use_roads: 0.4,
+            use_hills: 1,
+            avoid_bad_surfaces: 0.4,
+            shortest: true,
+        },
+    };
+    const bicycleRouteProfileItems = $derived([
+        {
+            text: $_("bike-profile-bicycle"),
+            value: "bicycle",
+            description: $_("bike-profile-bicycle-description"),
+        },
+        {
+            text: $_("bike-profile-mountainbike"),
+            value: "mountainbike",
+            description: $_("bike-profile-mountainbike-description"),
+        },
+        {
+            text: $_("bike-profile-ebike"),
+            value: "ebike",
+            description: $_("bike-profile-ebike-description"),
+        },
+    ]);
+    let routeSacScaleSegments: SacScaleSegment[][] = $state([]);
+    type StoredTrailDifficulty = "easy" | "moderate" | "difficult";
+    type RouteDifficultyAssessment = {
+        label: string;
+        storedDifficulty: StoredTrailDifficulty;
+    };
+
+    function getFallbackDifficultyLabel(difficulty?: StoredTrailDifficulty) {
+        return $_(difficulty ?? "easy");
+    }
+
+    function getSacScaleLabel(sacScale: number) {
+        return $_(`sac-scale-${sacScale}-short`);
+    }
+
+    function getStoredDifficultyFromSacScale(sacScale: number): StoredTrailDifficulty {
+        if (sacScale >= 3) {
+            return "difficult";
+        }
+
+        if (sacScale === 2) {
+            return "moderate";
+        }
+
+        return "easy";
+    }
+
+    function calculateRouteDifficultyAssessment(
+        sacScaleSegments: SacScaleSegment[][],
+        fallbackDifficulty?: StoredTrailDifficulty,
+    ): RouteDifficultyAssessment {
+        const segments = sacScaleSegments.flatMap((segmentGroup) =>
+            Array.isArray(segmentGroup) ? segmentGroup : [],
+        );
+        const maxSacScale = Math.max(
+            0,
+            ...segments
+                .map((segment) => Number(segment?.sacScale))
+                .filter((sacScale) => Number.isFinite(sacScale)),
+        );
+
+        if (maxSacScale <= 0) {
+            return {
+                label: getFallbackDifficultyLabel(fallbackDifficulty),
+                storedDifficulty: fallbackDifficulty ?? "easy",
+            };
+        }
+
+        return {
+            label: getSacScaleLabel(maxSacScale),
+            storedDifficulty: getStoredDifficultyFromSacScale(maxSacScale),
+        };
+    }
+
+    let mapWaypointPopup: M.Popup | null = $state(null);
+    let pendingWaypointInsertIndex: number | null = null;
+    let importedOriginalRoute: GPX | null = $state(null);
+    let importedOriginalSegments: GPXWaypoint[][] = $state([]);
+    let waypointRecalcDebounceTimeout: ReturnType<typeof setTimeout> | null =
+        null;
+    let waypointRecalcInFlight = false;
+    let queuedWaypointRecalcOptions: RouteRecalculationOptions | null = null;
+    const waypointRecalcDebounceMs = 250;
+    const originalKmlImportSimplifyOptions = {
+        toleranceMeters: 8,
+        maxPoints: 150,
+    };
+    const valhallaSnapImportSimplifyOptions = {
+        toleranceMeters: 90,
+        maxPoints: 35,
+        minDistanceMeters: 120,
+    };
+    const valhallaSnapImportMaxPointsCap = 120;
+    const valhallaSnapImportGrowthStartKm = 40;
+    const valhallaSnapImportKmPerExtraWaypoint = 2;
 
     let savedAtLeastOnce = $state(false);
 
     let tagItems: ComboboxItem[] = $state([]);
+    type RouteSegmentEndpoint = { lat: number; lon: number };
+    type WaypointConnectionMode = "snap" | "straight" | "original-kml";
+    type LoopConnectionMode = "none" | "snap" | "straight";
+    type RouteSegmentCalculationOptions = {
+        fallbackOnError?: boolean;
+        markConnectionStraightOnFallback?: boolean;
+        onFallback?: () => void;
+    };
+    type RouteRecalculationOptions = RouteSegmentCalculationOptions & {
+        showSuccessToast?: boolean;
+        errorTranslationKey?: string;
+    };
+    type WaypointHistorySnapshot = {
+        waypoints: Waypoint[];
+        loopConnectionMode: LoopConnectionMode;
+    };
+
+    function createRouteCalculationResult(
+        waypoints: GPXWaypoint[],
+        sacScaleSegments: SacScaleSegment[] = [],
+    ): RouteCalculationResult {
+        return { waypoints, sacScaleSegments };
+    }
+
+    function showRouteCalculationError(
+        error: unknown,
+        translationKey = "error-calculating-route",
+    ) {
+        const errorDetail = getAPIErrorDetailMessage(error);
+        show_toast({
+            text: errorDetail ? `${$_(translationKey)}: ${errorDetail}` : $_(translationKey),
+            icon: "close",
+            type: "error",
+        });
+    }
+
+    function getCategoryKey(categoryId?: string) {
+        const category = $categories.find((entry) => entry.id === categoryId);
+        return (
+            category?.name
+                ?.toLowerCase()
+                .normalize("NFKD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .replace(/[^a-z0-9]+/g, "-")
+                .replace(/^-|-$/g, "") ?? null
+        );
+    }
+
+    function getRoutingModeForCategory(categoryId?: string) {
+        const categoryKey = getCategoryKey(categoryId);
+
+        if (!categoryKey) {
+            return null;
+        }
+
+        if (["hiking", "wandern"].includes(categoryKey)) {
+            return "pedestrian";
+        }
+
+        if (
+            [
+                "biking",
+                "cycling",
+                "radfahren",
+                "fahrrad",
+                "mountain-biking",
+                "mountainbike",
+                "mountain-bike",
+                "mtb",
+                "e-bike",
+                "ebike",
+                "pedelec",
+            ].includes(categoryKey)
+        ) {
+            return "bicycle";
+        }
+
+        return null;
+    }
+
+    function getBicycleProfileForCategory(
+        categoryId?: string,
+    ): BicycleRouteProfile | null {
+        const categoryKey = getCategoryKey(categoryId);
+
+        if (!categoryKey) {
+            return null;
+        }
+
+        if (["e-bike", "ebike", "pedelec"].includes(categoryKey)) {
+            return "ebike";
+        }
+
+        if (
+            ["mountain-biking", "mountainbike", "mountain-bike", "mtb"].includes(
+                categoryKey,
+            )
+        ) {
+            return "mountainbike";
+        }
+
+        if (
+            ["biking", "cycling", "radfahren", "fahrrad"].includes(categoryKey)
+        ) {
+            return "bicycle";
+        }
+
+        return null;
+    }
+
+    function applyRoutingForCategory(categoryId?: string, recalculate = false) {
+        const routingMode = getRoutingModeForCategory(categoryId);
+        if (!routingMode) {
+            return;
+        }
+
+        if (routingOptions.modeOfTransport !== routingMode) {
+            routingOptions.modeOfTransport = routingMode;
+        }
+
+        const bicycleProfile = getBicycleProfileForCategory(categoryId);
+        if (bicycleProfile) {
+            if (bicycleRouteProfile !== bicycleProfile) {
+                bicycleRouteProfile = bicycleProfile;
+            }
+
+            const profileOptions = bicycleRouteProfiles[bicycleProfile];
+            if (
+                routingOptions.bicycleOptions?.bicycle_type !==
+                    profileOptions.bicycle_type ||
+                routingOptions.bicycleOptions?.cycling_speed !==
+                    profileOptions.cycling_speed ||
+                routingOptions.bicycleOptions?.use_roads !==
+                    profileOptions.use_roads ||
+                routingOptions.bicycleOptions?.use_hills !==
+                    profileOptions.use_hills ||
+                routingOptions.bicycleOptions?.avoid_bad_surfaces !==
+                    profileOptions.avoid_bad_surfaces
+            ) {
+                routingOptions.bicycleOptions = {
+                    ...routingOptions.bicycleOptions,
+                    ...profileOptions,
+                };
+            }
+        }
+
+        if (recalculate) {
+            scheduleRoutingOptionRecalculation();
+        }
+    }
+
+    function getPreferredRouteCategoryId(preferredCategoryId?: string) {
+        if (getRoutingModeForCategory(preferredCategoryId)) {
+            return preferredCategoryId;
+        }
+
+        const hikingCategory = $categories.find(
+            (category) => getRoutingModeForCategory(category.id) === "pedestrian",
+        );
+        if (hikingCategory) {
+            return hikingCategory.id;
+        }
+
+        const bicycleCategory = $categories.find(
+            (category) => getRoutingModeForCategory(category.id) === "bicycle",
+        );
+        if (bicycleCategory) {
+            return bicycleCategory.id;
+        }
+
+        return undefined;
+    }
+
+    function getDefaultWaypointConnectionMode(): WaypointConnectionMode {
+        return routingOptions.autoRouting ? "snap" : "straight";
+    }
+
+    function cloneWaypoint(waypoint: Waypoint) {
+        const clonedWaypoint = new Waypoint(waypoint.lat, waypoint.lon, {
+            id: waypoint.id,
+            name: waypoint.name,
+            description: waypoint.description,
+            icon: waypoint.icon,
+            photos: [...(waypoint.photos ?? [])],
+            trail: waypoint.trail,
+            connectionMode: waypoint.connectionMode,
+        });
+        clonedWaypoint._photos = [...(waypoint._photos ?? [])];
+        clonedWaypoint.author = waypoint.author;
+        clonedWaypoint.distance_from_start = waypoint.distance_from_start;
+        return clonedWaypoint;
+    }
+
+    function cloneWaypointHistorySnapshot(
+        snapshot: WaypointHistorySnapshot,
+    ): WaypointHistorySnapshot {
+        return {
+            waypoints: snapshot.waypoints.map(cloneWaypoint),
+            loopConnectionMode: snapshot.loopConnectionMode,
+        };
+    }
+
+    function captureWaypointHistorySnapshot(): WaypointHistorySnapshot {
+        return {
+            waypoints: ($formData.expand!.waypoints_via_trail ?? []).map(
+                cloneWaypoint,
+            ),
+            loopConnectionMode,
+        };
+    }
+
+    function applyWaypointHistorySnapshot(snapshot: WaypointHistorySnapshot) {
+        $formData.expand!.waypoints_via_trail = snapshot.waypoints.map(
+            cloneWaypoint,
+        );
+        loopConnectionMode = snapshot.loopConnectionMode;
+        syncWaypointIconsWithRoutingRole();
+    }
+
+    function resetWaypointHistoryTracking() {
+        waypointUndoStack = [];
+        waypointRedoStack = [];
+        lastWaypointHistoryState = captureWaypointHistorySnapshot();
+        observedUndoDepth = valhallaStore.undoStack.length;
+        observedRedoDepth = valhallaStore.redoStack.length;
+    }
 
     const getInitialFormValues = () => ({
         ...data.trail,
@@ -197,10 +650,23 @@
             ? data.trail.public
             : page.data.settings?.privacy?.trails === "public",
         category:
-            data.trail.category ||
-            page.data.settings?.category ||
-            $categories[0].id,
+            getPreferredRouteCategoryId(data.trail.category) ||
+            getPreferredRouteCategoryId(page.data.settings?.category) ||
+            $categories[0]?.id,
     });
+
+    let loopConnectionMode: LoopConnectionMode = $state("none");
+    let editableRouteCategories = $derived(
+        $categories.filter((category) =>
+            Boolean(getRoutingModeForCategory(category.id)),
+        ),
+    );
+    let waypointUndoStack: WaypointHistorySnapshot[] = $state([]);
+    let waypointRedoStack: WaypointHistorySnapshot[] = $state([]);
+    let lastWaypointHistoryState: WaypointHistorySnapshot | null = $state(null);
+    let observedUndoDepth = $state(0);
+    let observedRedoDepth = $state(0);
+    let suppressWaypointHistorySync = false;
 
     const {
         form,
@@ -213,6 +679,9 @@
             schema: ClientTrailCreateSchema,
         }),
         onSubmit: async (form) => {
+            if (!canModifyTrail) {
+                return;
+            }
             loading = true;
             try {
                 const htmlForm = document.getElementById(
@@ -222,6 +691,10 @@
                 if (!formData.get("public")) {
                     form.public = false;
                 }
+                form.difficulty = calculateRouteDifficultyAssessment(
+                    routeSacScaleSegments,
+                    form.difficulty,
+                ).storedDifficulty;
                 form.photos = form.photos.filter(
                     (p) => !p.startsWith("data:image/svg+xml;base64"),
                 );
@@ -237,9 +710,17 @@
                     photoFiles = [new File([blob], "route")];
                 }
 
-                form.expand!.gpx_data = valhallaStore.route.toString();
-                if (form.expand!.gpx_data && overwriteGPX) {
-                    gpxFile = new Blob([form.expand!.gpx_data], {
+                const serializedRoute = valhallaStore.route.toString();
+                const hasRoutePoints = Boolean(
+                    valhallaStore.route.trk?.some((track) =>
+                        track.trkseg?.some(
+                            (segment) => (segment.trkpt?.length ?? 0) > 0,
+                        ),
+                    ),
+                );
+                form.expand!.gpx_data = serializedRoute;
+                if (hasRoutePoints) {
+                    gpxFile = new Blob([serializedRoute], {
                         type: "text/xml",
                     });
                 }
@@ -264,6 +745,8 @@
                         photoFiles,
                         gpxFile,
                     );
+                    createdTrail.expand ??= {};
+                    createdTrail.expand.gpx_data = serializedRoute;
                     setFields(createdTrail);
                     trail.set(createdTrail);
                 } else {
@@ -273,6 +756,8 @@
                         photoFiles,
                         gpxFile,
                     );
+                    updatedTrail.expand ??= {};
+                    updatedTrail.expand.gpx_data = serializedRoute;
                     setFields(updatedTrail);
                 }
                 photoFiles = [];
@@ -297,10 +782,193 @@
         },
     });
 
+    let computedRouteDifficulty = $derived(
+        calculateRouteDifficultyAssessment(
+            routeSacScaleSegments,
+            $formData.difficulty,
+        ),
+    );
+
+    function scheduleRoutingOptionRecalculation() {
+        if (($formData.expand?.waypoints_via_trail?.length ?? 0) > 1) {
+            scheduleRouteRecalculationFromWaypoints({ showSuccessToast: false });
+        }
+    }
+
+    function rerouteCurrentTrail() {
+        if (!canModifyTrail) {
+            return;
+        }
+
+        void recalculateRouteFromWaypoints({ showSuccessToast: true });
+    }
+
+    function setMaxHikingDifficulty(value: number | string) {
+        routingOptions.pedestrianOptions!.max_hiking_difficulty = Number(value);
+        scheduleRoutingOptionRecalculation();
+    }
+
+    function setWalkingSpeed(value: number | string) {
+        routingOptions.pedestrianOptions!.walking_speed = Number(value);
+        scheduleRoutingOptionRecalculation();
+    }
+
+    function setHillPreference(value: number | string) {
+        routingOptions.pedestrianOptions!.use_hills = Number(value);
+        scheduleRoutingOptionRecalculation();
+    }
+
+    function setBicycleRouteProfile(value: number | string) {
+        if (
+            value !== "bicycle" &&
+            value !== "mountainbike" &&
+            value !== "ebike"
+        ) {
+            return;
+        }
+
+        bicycleRouteProfile = value;
+        routingOptions.bicycleOptions = {
+            ...routingOptions.bicycleOptions,
+            ...bicycleRouteProfiles[bicycleRouteProfile],
+        };
+        scheduleRoutingOptionRecalculation();
+    }
+
+    function getSelectedWalkingSpeedDescription() {
+        const walkingSpeed = routingOptions.pedestrianOptions?.walking_speed;
+        return (
+            walkingSpeedItems.find(
+                (item) => Number(item.value) === Number(walkingSpeed),
+            )?.description ?? ""
+        );
+    }
+
+    function getSelectedHillPreferenceDescription() {
+        const hillPreference = routingOptions.pedestrianOptions?.use_hills;
+        return (
+            hillPreferenceItems.find(
+                (item) => Number(item.value) === Number(hillPreference),
+            )?.description ?? ""
+        );
+    }
+
+    function getSelectedBicycleRouteProfileDescription() {
+        return (
+            bicycleRouteProfileItems.find(
+                (item) => item.value === bicycleRouteProfile,
+            )?.description ?? ""
+        );
+    }
+
+    const isNewTrail = page.params.id === "new";
+
+    let trailCanBeEdited = $derived(
+        isNewTrail ||
+            (Boolean($currentUser) &&
+                ((data.trail.expand?.author?.id ?? data.trail.author) ===
+                    $currentUser?.actor ||
+                    Boolean(
+                        data.trail.expand?.trail_share_via_trail?.some(
+                            (share) => share.permission === "edit",
+                        ),
+                    ))),
+    );
+    let mapInteractionMode = $state(isNewTrail);
+    let canModifyTrail = $derived(trailCanBeEdited && mapInteractionMode);
+
+    $effect(() => {
+        if (!trailCanBeEdited && mapInteractionMode) {
+            mapInteractionMode = false;
+        }
+    });
+
+    $effect(() => {
+        const undoDepth = valhallaStore.undoStack.length;
+        const redoDepth = valhallaStore.redoStack.length;
+
+        if (suppressWaypointHistorySync) {
+            observedUndoDepth = undoDepth;
+            observedRedoDepth = redoDepth;
+            return;
+        }
+
+        if (undoDepth > observedUndoDepth) {
+            if (lastWaypointHistoryState) {
+                waypointUndoStack = [
+                    ...waypointUndoStack,
+                    cloneWaypointHistorySnapshot(lastWaypointHistoryState),
+                ];
+            }
+            waypointRedoStack = [];
+            lastWaypointHistoryState = captureWaypointHistorySnapshot();
+        } else if (
+            undoDepth === 0 &&
+            redoDepth === 0 &&
+            (observedUndoDepth !== 0 || observedRedoDepth !== 0)
+        ) {
+            resetWaypointHistoryTracking();
+            return;
+        }
+
+        observedUndoDepth = undoDepth;
+        observedRedoDepth = redoDepth;
+    });
+
+    $effect(() => {
+        editableRouteCategories;
+        const preferredCategoryId = getPreferredRouteCategoryId(
+            $formData.category,
+        );
+        if (preferredCategoryId && $formData.category !== preferredCategoryId) {
+            setFields("category", preferredCategoryId);
+            return;
+        }
+
+        untrack(() => applyRoutingForCategory(preferredCategoryId));
+    });
+
+    $effect(() => {
+        map;
+        if (canModifyTrail && map && !drawingActive) {
+            startDrawing();
+            return;
+        }
+
+        if (!canModifyTrail) {
+            editingBasicInfo = false;
+            closeWaypointActionPopup();
+
+            if (drawingActive) {
+                untrack(() => {
+                    void stopDrawing();
+                });
+            }
+        }
+    });
+
     onMount(async () => {
         clearAnchors();
         clearRoute();
         clearUndoRedoStack();
+        routeSacScaleSegments = [];
+
+        if (
+            page.params.id === "new" &&
+            page.url.searchParams.get("import") === "session"
+        ) {
+            const pendingImport = consumeRouteImportSession();
+            if (pendingImport?.gpxData) {
+                await applyImportedTrailData(
+                    pendingImport.gpxData,
+                    pendingImport.name ?? "route.gpx",
+                    new Blob([pendingImport.gpxData], {
+                        type: "application/gpx+xml",
+                    }),
+                );
+                return;
+            }
+        }
 
         if ($formData.expand!.gpx_data) {
             $formData.id ??= cryptoRandomString({ length: 15 });
@@ -320,98 +988,72 @@
                 }
 
                 setRoute(gpx);
-                initRouteAnchors(gpx);
+                if (
+                    ($formData.expand!.waypoints_via_trail ?? []).some(
+                        (waypoint, index) =>
+                            index > 0 &&
+                            waypoint.connectionMode === "original-kml",
+                    )
+                ) {
+                    importedOriginalRoute = gpx;
+                    importedOriginalSegments = buildOriginalSegmentsFromGPX(
+                        gpx,
+                        false,
+                    );
+                }
+                loopConnectionMode = inferLoopConnectionModeFromRoute(
+                    gpx,
+                    $formData.expand!.waypoints_via_trail ?? [],
+                );
+                syncVisibleRouteAnchors();
 
                 updateTrailOnMap();
-
-                if (!isNewTrail) {
-                    startDrawing();
-                }
+                resetWaypointHistoryTracking();
             }
         }
+
+        resetWaypointHistoryTracking();
     });
 
-    function fitCurrentRoute(initializedMap: M.Map) {
-        const bounds = valhallaStore.route.toGeoJSON().bbox;
-        if (!bounds) {
+    function openFileBrowser() {
+        if (!canModifyTrail) {
             return;
         }
-
-        initializedMap.fitBounds(bounds as M.LngLatBoundsLike, {
-            animate: false,
-            padding: {
-                top: 16,
-                left: 16,
-                right: 16,
-                bottom: 16,
-            },
-        });
-    }
-
-    function handleMapInit(initializedMap: M.Map) {
-        if (drawingActive) {
-            for (const anchor of valhallaStore.anchors) {
-                anchor.marker?.addTo(initializedMap);
-            }
-        }
-        if (!isNewTrail) {
-            fitCurrentRoute(initializedMap);
-        }
-    }
-
-    function openFileBrowser() {
         document.getElementById("fileInput")!.click();
     }
 
-    async function handleFileSelection() {
-        const selectedFile = (
-            document.getElementById("fileInput") as HTMLInputElement
-        ).files?.[0];
-
-        if (!selectedFile) {
-            return;
-        }
-
-        const replaceExistingRoute = replacingRoute && !isNewTrail;
-        if (!replaceExistingRoute) {
-            clearWaypoints();
-        }
+    async function applyImportedTrailData(
+        gpxData: string,
+        fileName: string,
+        file: File | Blob,
+    ) {
+        clearWaypoints();
         clearAnchors();
         clearUndoRedoStack();
         clearRoute();
+        routeSacScaleSegments = [];
         mapTrail = [];
         drawingActive = false;
-        overwriteGPX = false;
-
-        const { gpxData, gpxFile: file } = await fromFile(selectedFile);
+        loopConnectionMode = "none";
         gpxFile = file;
 
         try {
             const prevId = $formData.id;
-            const parseResult = await gpx2trail(gpxData, selectedFile.name);
-            if (replaceExistingRoute) {
-                setFields("lat", parseResult.trail.lat);
-                setFields("lon", parseResult.trail.lon);
-                setFields("distance", parseResult.trail.distance);
-                setFields("duration", parseResult.trail.duration);
-                setFields("elevation_gain", parseResult.trail.elevation_gain);
-                setFields("elevation_loss", parseResult.trail.elevation_loss);
-            } else {
-                setFields(parseResult.trail);
-            }
+            const parseResult = await gpx2trail(gpxData, fileName);
+            setFields(parseResult.trail);
             $formData.id = prevId ?? cryptoRandomString({ length: 15 });
             $formData.expand!.gpx_data = gpxData;
 
-            if (!replaceExistingRoute) {
-                setFields(
-                    "category",
-                    page.data.settings.category || $categories[0].id,
-                );
-                setFields(
-                    "public",
-                    page.data.settings?.privacy?.trails === "public",
-                );
-            }
+            setFields(
+                "category",
+                getPreferredRouteCategoryId(page.data.settings.category) ||
+                    getPreferredRouteCategoryId($formData.category) ||
+                    $categories[0]?.id,
+            );
+            setFields(
+                "public",
+                page.data.settings?.privacy?.trails === "public",
+            );
 
             // const log = new SummitLog(parseResult.trail.date as string, {
             //     distance: $formData.distance,
@@ -443,16 +1085,66 @@
                 parseResult.gpx.rte = undefined;
             }
             setRoute(parseResult.gpx);
-            initRouteAnchors(parseResult.gpx);
-            replacingRoute = false;
-            if (!isNewTrail) {
-                startDrawing();
-                if (map) {
-                    fitCurrentRoute(map);
-                }
+            const isOriginalRouteImport = /\.(kml|kmz)$/i.test(fileName);
+            if (
+                shouldBuildImportedRouteWaypoints(
+                    fileName,
+                    snapImportedRouteToValhalla,
+                )
+            ) {
+                const parsedOriginalRoute = isOriginalRouteImport
+                    ? GPX.parse(parseResult.gpx.toString())
+                    : parseResult.gpx;
+                importedOriginalRoute =
+                    isOriginalRouteImport && !(parsedOriginalRoute instanceof Error)
+                        ? parsedOriginalRoute
+                        : null;
+                importedOriginalSegments =
+                    parsedOriginalRoute instanceof Error
+                        ? []
+                        : buildOriginalSegmentsFromGPX(
+                              parsedOriginalRoute,
+                              snapImportedRouteToValhalla,
+                          );
+            } else {
+                importedOriginalRoute = null;
+                importedOriginalSegments = [];
             }
 
-            updateTrailOnMap();
+            const importedRouteWaypoints = buildRouteWaypointsFromOriginalSegments(
+                importedOriginalSegments,
+                snapImportedRouteToValhalla,
+            );
+            $formData.expand!.waypoints_via_trail = importedRouteWaypoints.length
+                ? importedRouteWaypoints
+                : (parseResult.trail.expand?.waypoints_via_trail ?? []).map(
+                      (waypoint, index) => ({
+                          ...waypoint,
+                          connectionMode:
+                              index === 0
+                                  ? waypoint.connectionMode
+                                  : waypoint.connectionMode ?? "snap",
+                      }),
+                  );
+            syncWaypointIconsWithRoutingRole();
+            if (
+                snapImportedRouteToValhalla &&
+                env.PUBLIC_VALHALLA_URL &&
+                ($formData.expand!.waypoints_via_trail?.length ?? 0) > 1
+            ) {
+                const recalculated = await recalculateRouteFromWaypoints({
+                    showSuccessToast: false,
+                });
+                if (!recalculated) {
+                    setRoute(parseResult.gpx);
+                    syncVisibleRouteAnchors();
+                    updateTrailOnMap();
+                }
+            } else {
+                syncVisibleRouteAnchors();
+                updateTrailOnMap();
+            }
+            resetWaypointHistoryTracking();
         } catch (e) {
             console.error(e);
 
@@ -461,13 +1153,31 @@
                 type: "error",
                 text: $_("error-reading-file"),
             });
-            return;
+            return false;
         }
         const r = await searchLocationReverse($formData.lat!, $formData.lon!);
 
         if (r) {
             setFields("location", r);
         }
+
+        return true;
+    }
+
+    async function handleFileSelection() {
+        if (!canModifyTrail) {
+            return;
+        }
+        const selectedFile = (
+            document.getElementById("fileInput") as HTMLInputElement
+        ).files?.[0];
+
+        if (!selectedFile) {
+            return;
+        }
+
+        const { gpxData, gpxFile: file } = await fromFile(selectedFile);
+        await applyImportedTrailData(gpxData, selectedFile.name, file);
     }
 
     function clearWaypoints() {
@@ -475,6 +1185,252 @@
             waypoint.marker?.remove();
         }
         $formData.expand!.waypoints_via_trail = [];
+        loopConnectionMode = "none";
+    }
+
+    function buildOriginalSegmentsFromGPX(
+        gpx: GPX | null,
+        snapToValhalla: boolean,
+    ): GPXWaypoint[][] {
+        if (!gpx) {
+            return [];
+        }
+        const segments: GPXWaypoint[][] = [];
+
+        for (const track of gpx.trk ?? []) {
+            for (const trkseg of track.trkseg ?? []) {
+                const points = trkseg.trkpt ?? [];
+                const segmentPoints = points.flatMap((point) =>
+                    typeof point.$.lat === "number" &&
+                    typeof point.$.lon === "number"
+                        ? [{ lat: point.$.lat, lon: point.$.lon }]
+                        : [],
+                );
+                const simplifyOptions: SimplifyPolylineOptions = snapToValhalla
+                    ? {
+                          ...valhallaSnapImportSimplifyOptions,
+                          maxPoints: getDynamicImportMaxPoints(
+                              segmentPoints,
+                              valhallaSnapImportSimplifyOptions.maxPoints,
+                              valhallaSnapImportMaxPointsCap,
+                              valhallaSnapImportGrowthStartKm,
+                              valhallaSnapImportKmPerExtraWaypoint,
+                          ),
+                      }
+                    : originalKmlImportSimplifyOptions;
+                segments.push(
+                    ...buildImportedRouteSegments(
+                        [segmentPoints],
+                        simplifyOptions,
+                    ).map((segment) =>
+                        segment.map(
+                            (point) =>
+                                new GPXWaypoint({
+                                    $: { lat: point.lat, lon: point.lon },
+                                }),
+                        ),
+                    ),
+                );
+            }
+        }
+        return segments;
+    }
+
+    function buildRouteWaypointsFromOriginalSegments(
+        segments: GPXWaypoint[][],
+        snapToValhalla: boolean,
+    ): Waypoint[] {
+        const routeSegments: GeoPoint[][] = segments.map((segment) =>
+            segment.flatMap((point) =>
+                typeof point.$.lat === "number" &&
+                typeof point.$.lon === "number"
+                    ? [{ lat: point.$.lat, lon: point.$.lon }]
+                    : [],
+            ),
+        );
+
+        return buildImportedRouteWaypoints(
+            routeSegments,
+            snapToValhalla,
+            () => cryptoRandomString({ length: 15 }),
+        );
+    }
+
+    function normalizeWaypointConnectionModes(waypoints: Waypoint[]) {
+        for (let i = 0; i < waypoints.length; i++) {
+            waypoints[i].connectionMode =
+                i === 0
+                    ? undefined
+                    : waypoints[i].connectionMode ??
+                      getDefaultWaypointConnectionMode();
+        }
+    }
+
+    function isLoopRouteActive() {
+        return (
+            loopConnectionMode !== "none" &&
+            ($formData.expand!.waypoints_via_trail?.length ?? 0) > 1
+        );
+    }
+
+    function waypointModeToLoopMode(
+        mode?: WaypointConnectionMode,
+    ): LoopConnectionMode {
+        if (mode === "straight") {
+            return "straight";
+        }
+
+        return "snap";
+    }
+
+    function normalizeLoopConnectionMode() {
+        if (($formData.expand!.waypoints_via_trail?.length ?? 0) < 2) {
+            loopConnectionMode = "none";
+        }
+    }
+
+    function inferLoopConnectionModeFromRoute(
+        gpx: GPX,
+        waypoints: Waypoint[],
+    ): LoopConnectionMode {
+        const segments = gpx.trk?.at(0)?.trkseg ?? [];
+        if (waypoints.length < 2 || segments.length < waypoints.length) {
+            return "none";
+        }
+
+        const firstSegmentPoints = segments[0]?.trkpt ?? [];
+        const closingSegmentPoints = segments.at(-1)?.trkpt ?? [];
+        const routeStart = firstSegmentPoints[0];
+        const routeEnd = closingSegmentPoints.at(-1);
+        const startWaypoint = waypoints[0];
+
+        if (!routeStart || !routeEnd) {
+            return "none";
+        }
+
+        const routeStartsAtFirstWaypoint =
+            haversineDistance(
+                routeStart.$.lat!,
+                routeStart.$.lon!,
+                startWaypoint.lat,
+                startWaypoint.lon,
+            ) < 5;
+        const routeClosesAtFirstWaypoint =
+            haversineDistance(
+                routeEnd.$.lat!,
+                routeEnd.$.lon!,
+                startWaypoint.lat,
+                startWaypoint.lon,
+            ) < 5;
+
+        if (!routeStartsAtFirstWaypoint || !routeClosesAtFirstWaypoint) {
+            return "none";
+        }
+
+        return closingSegmentPoints.length <= 2 ? "straight" : "snap";
+    }
+
+    async function updateLoopConnectionMode(value: LoopConnectionMode) {
+        if (!canModifyTrail) {
+            return;
+        }
+        loopConnectionMode = value;
+        await recalculateRouteFromWaypoints({ showSuccessToast: false });
+    }
+
+    function addAnchorsForWaypoints(
+        waypoints: Waypoint[],
+        addToMap: boolean = false,
+    ) {
+        for (let i = 0; i < waypoints.length; i++) {
+            const waypoint = waypoints[i];
+            addAnchor(waypoint.lat, waypoint.lon, i, addToMap);
+        }
+    }
+
+    function setSegmentToDefaultConnectionMode(
+        waypoints: Waypoint[],
+        toIndex: number,
+    ) {
+        if (toIndex > 0 && toIndex < waypoints.length) {
+            waypoints[toIndex].connectionMode =
+                getDefaultWaypointConnectionMode();
+        }
+    }
+
+    function snapSegmentsAroundWaypoint(
+        waypoints: Waypoint[],
+        waypointIndex: number,
+    ) {
+        setSegmentToDefaultConnectionMode(waypoints, waypointIndex);
+        setSegmentToDefaultConnectionMode(waypoints, waypointIndex + 1);
+    }
+
+    function snapSegmentsForInsertedWaypoint(
+        waypoints: Waypoint[],
+        insertIndex: number,
+    ) {
+        const previousSegmentMode =
+            insertIndex > 0 ? waypoints[insertIndex].connectionMode : undefined;
+        const hasPreviousSegment = insertIndex > 0;
+        const hasNextSegment = insertIndex < waypoints.length - 1;
+
+        if (hasPreviousSegment) {
+            waypoints[insertIndex].connectionMode =
+                previousSegmentMode ?? getDefaultWaypointConnectionMode();
+        }
+
+        if (hasPreviousSegment && hasNextSegment) {
+            waypoints[insertIndex + 1].connectionMode =
+                previousSegmentMode ?? getDefaultWaypointConnectionMode();
+        } else if (hasNextSegment) {
+            setSegmentToDefaultConnectionMode(waypoints, insertIndex + 1);
+        }
+
+        normalizeWaypointConnectionModes(waypoints);
+    }
+
+    function mergeRecentUndoSteps(stepCount: number) {
+        if (stepCount <= 1 || valhallaStore.undoStack.length < stepCount) {
+            return;
+        }
+
+        const mergedSteps = valhallaStore.undoStack.slice(-stepCount);
+        const delta = mergedSteps[0].delta;
+        const reverseDelta = mergedSteps[stepCount - 1].reverseDelta;
+
+        valhallaStore.undoStack = [
+            ...valhallaStore.undoStack.slice(0, -stepCount),
+            { delta, reverseDelta },
+        ];
+    }
+
+    function snapSegmentRange(
+        waypoints: Waypoint[],
+        startSegment: number,
+        endSegment: number,
+    ) {
+        for (
+            let segmentIndex = startSegment;
+            segmentIndex <= endSegment;
+            segmentIndex++
+        ) {
+            setSegmentToDefaultConnectionMode(waypoints, segmentIndex + 1);
+        }
+    }
+
+    function syncVisibleRouteAnchors() {
+        clearAnchors();
+
+        const addToMap = Boolean(map && drawingActive);
+        const waypoints = $formData.expand!.waypoints_via_trail ?? [];
+
+        if (waypoints.length > 0) {
+            addAnchorsForWaypoints(waypoints, addToMap);
+            return;
+        }
+
+        initRouteAnchors(valhallaStore.route, addToMap);
     }
 
     function initRouteAnchors(gpx: GPX, addToMap: boolean = false) {
@@ -507,248 +1463,1053 @@
         waypoint.marker?.togglePopup();
     }
 
+    async function setWaypointAsLoopStart(index: number) {
+        const waypoints = $formData.expand!.waypoints_via_trail ?? [];
+        if (!isLoopRouteActive() || index < 0 || index >= waypoints.length) {
+            return;
+        }
+
+        if (index === 0) {
+            syncWaypointIconsWithRoutingRole();
+            return;
+        }
+
+        const previousWaypoints = [...waypoints];
+        const previousLoopConnectionMode = loopConnectionMode;
+        const rotatedWaypoints = [
+            ...previousWaypoints.slice(index),
+            ...previousWaypoints.slice(0, index),
+        ];
+
+        for (let i = 0; i < rotatedWaypoints.length; i++) {
+            const originalIndex = (index + i) % previousWaypoints.length;
+            if (i === 0) {
+                rotatedWaypoints[i].connectionMode = undefined;
+            } else if (originalIndex === 0) {
+                rotatedWaypoints[i].connectionMode =
+                    previousLoopConnectionMode === "straight"
+                        ? "straight"
+                        : "snap";
+            } else {
+                rotatedWaypoints[i].connectionMode =
+                    previousWaypoints[originalIndex].connectionMode ??
+                    getDefaultWaypointConnectionMode();
+            }
+        }
+
+        loopConnectionMode = waypointModeToLoopMode(
+            previousWaypoints[index].connectionMode,
+        );
+        importedOriginalSegments = Array.from(
+            { length: rotatedWaypoints.length - 1 },
+            (_, offset) => {
+                const originalIndex =
+                    (index + offset + 1) % previousWaypoints.length;
+                return originalIndex === 0
+                    ? []
+                    : cloneRouteSegment(
+                          importedOriginalSegments[originalIndex - 1] ?? [],
+                      );
+            },
+        );
+
+        $formData.expand!.waypoints_via_trail = rotatedWaypoints;
+        syncWaypointIconsWithRoutingRole();
+        await recalculateRouteFromWaypoints({ showSuccessToast: false });
+    }
+
     function handleWaypointMenuClick(
         currentWaypoint: Waypoint,
         index: number,
         item: DropdownItem,
     ) {
+        if (!canModifyTrail) {
+            return;
+        }
         if (item.value === "edit") {
             waypoint.set(currentWaypoint);
             waypointModal.openModal();
         } else if (item.value === "delete") {
             currentWaypoint.marker?.remove();
             deleteWaypoint(index);
+        } else if (item.value === "set-as-start") {
+            void setWaypointAsLoopStart(index);
         }
-    }
-
-    function beforeWaypointModalOpen(lat?: number, lon?: number) {
-        if (!map) {
-            return;
-        }
-        const mapCenter = map.getCenter();
-        waypoint.set(new Waypoint(lat ?? mapCenter.lat, lon ?? mapCenter.lng));
-        waypointModal.openModal();
     }
 
     function deleteWaypoint(index: number) {
-        const wp = $formData.expand!.waypoints_via_trail?.splice(index, 1);
+        const waypoints = [...($formData.expand!.waypoints_via_trail ?? [])];
+        const wasLoopRouteActive = isLoopRouteActive();
+        const previousWaypointCount = waypoints.length;
+        waypoints.splice(index, 1);
 
-        if (!$formData.expand!.waypoints_via_trail?.length) {
-            $formData.expand!.waypoints_via_trail = [];
+        normalizeWaypointConnectionModes(waypoints);
+        $formData.expand!.waypoints_via_trail = waypoints;
+        syncWaypointIconsWithRoutingRole();
+        normalizeLoopConnectionMode();
+
+        if (wasLoopRouteActive) {
+            void recalculateRouteFromWaypoints({ showSuccessToast: false });
+            return;
         }
-        $formData.expand!.waypoints_via_trail =
-            $formData.expand!.waypoints_via_trail;
 
-        // updateTrailOnMap();
+        void deleteWaypointWithSegmentMerge(index, previousWaypointCount);
     }
 
-    function commitWaypoint(savedWaypoint: Waypoint) {
+    async function moveWaypoint(fromIndex: number, toIndex: number) {
+        if (!canModifyTrail) {
+            return;
+        }
+        const waypoints = $formData.expand!.waypoints_via_trail ?? [];
+        if (
+            toIndex < 0 ||
+            toIndex >= waypoints.length ||
+            fromIndex < 0 ||
+            fromIndex >= waypoints.length
+        ) {
+            return;
+        }
+
+        const [movedWaypoint] = waypoints.splice(fromIndex, 1);
+        waypoints.splice(toIndex, 0, movedWaypoint);
+        normalizeWaypointConnectionModes(waypoints);
+        syncWaypointIconsWithRoutingRole();
+        $formData.expand!.waypoints_via_trail = [...waypoints];
+
+        if (waypoints.length > 1) {
+            if (isLoopRouteActive()) {
+                await recalculateRouteFromWaypoints({ showSuccessToast: false });
+                return;
+            }
+            await moveWaypointWithSegmentMerge(fromIndex, toIndex);
+        }
+    }
+
+    async function recalculateRouteFromWaypoints(
+        options?: RouteRecalculationOptions,
+    ): Promise<boolean> {
+        const waypoints = $formData.expand!.waypoints_via_trail ?? [];
+        normalizeLoopConnectionMode();
+
+        clearAnchors();
+        clearUndoRedoStack();
+
+        addAnchorsForWaypoints(waypoints, drawingActive);
+
+        if (waypoints.length < 2) {
+            replaceRouteWithOrderedSegments([]);
+            updateTrailWithRouteData();
+            return true;
+        }
+
+        try {
+            const routeSegments: RouteCalculationResult[] = [];
+            for (let i = 1; i < waypoints.length; i++) {
+                routeSegments.push(
+                    await calculateRouteSegmentForWaypointPair(
+                        waypoints,
+                        i,
+                        options,
+                    ),
+                );
+            }
+            if (isLoopRouteActive()) {
+                routeSegments.push(
+                    await calculateRouteSegmentBetweenEndpoints(
+                        waypoints[waypoints.length - 1],
+                        waypoints[0],
+                        {
+                            ...routingOptions,
+                            autoRouting: loopConnectionMode === "snap",
+                        },
+                        {
+                            ...options,
+                            onFallback: () => {
+                                options?.onFallback?.();
+                                if (options?.markConnectionStraightOnFallback) {
+                                    loopConnectionMode = "straight";
+                                }
+                            },
+                        },
+                    ),
+                );
+            }
+            $formData.expand!.waypoints_via_trail = [...waypoints];
+            replaceRouteWithOrderedSegments(routeSegments);
+            normalizeRouteTime();
+            updateTrailWithRouteData();
+            if (options?.showSuccessToast !== false) {
+                show_toast({
+                    text: "Route recalculated from waypoint order",
+                    icon: "check",
+                    type: "success",
+                });
+            }
+            return true;
+        } catch (e) {
+            console.error(e);
+            showRouteCalculationError(e, options?.errorTranslationKey);
+            return false;
+        }
+    }
+
+    async function runQueuedWaypointRecalculation() {
+        if (waypointRecalcInFlight) {
+            return;
+        }
+        waypointRecalcInFlight = true;
+        const options = queuedWaypointRecalcOptions ?? { showSuccessToast: false };
+        queuedWaypointRecalcOptions = null;
+
+        try {
+            await recalculateRouteFromWaypoints(options);
+        } finally {
+            waypointRecalcInFlight = false;
+            if (queuedWaypointRecalcOptions) {
+                scheduleRouteRecalculationFromWaypoints(
+                    queuedWaypointRecalcOptions,
+                );
+            }
+        }
+    }
+
+    function scheduleRouteRecalculationFromWaypoints(
+        options?: RouteRecalculationOptions,
+    ) {
+        queuedWaypointRecalcOptions = {
+            showSuccessToast:
+                queuedWaypointRecalcOptions?.showSuccessToast ||
+                options?.showSuccessToast ||
+                false,
+            fallbackOnError:
+                options?.fallbackOnError ??
+                queuedWaypointRecalcOptions?.fallbackOnError,
+            errorTranslationKey:
+                options?.errorTranslationKey ??
+                queuedWaypointRecalcOptions?.errorTranslationKey,
+        };
+
+        if (waypointRecalcDebounceTimeout) {
+            clearTimeout(waypointRecalcDebounceTimeout);
+        }
+        waypointRecalcDebounceTimeout = setTimeout(() => {
+            waypointRecalcDebounceTimeout = null;
+            void runQueuedWaypointRecalculation();
+        }, waypointRecalcDebounceMs);
+    }
+
+    async function calculateRouteSegmentForWaypointPair(
+        waypoints: Waypoint[],
+        toIndex: number,
+        options?: RouteSegmentCalculationOptions,
+    ): Promise<RouteCalculationResult> {
+        const previousWaypoint = waypoints[toIndex - 1];
+        const currentWaypoint = waypoints[toIndex] as Waypoint & {
+            connectionMode?: WaypointConnectionMode;
+        };
+        const connectionMode =
+            currentWaypoint.connectionMode ?? getDefaultWaypointConnectionMode();
+
+        if (
+            connectionMode === "original-kml" &&
+            importedOriginalSegments[toIndex - 1]?.length
+        ) {
+            return createRouteCalculationResult(
+                ensureRouteSegmentEndpoints(
+                    cloneRouteSegment(importedOriginalSegments[toIndex - 1]),
+                    previousWaypoint,
+                    currentWaypoint,
+                ),
+            );
+        }
+
+        try {
+            return await calculateRouteSegmentBetweenEndpoints(
+                previousWaypoint,
+                currentWaypoint,
+                {
+                    ...routingOptions,
+                    autoRouting: connectionMode === "snap",
+                },
+                {
+                    ...options,
+                    onFallback: () => {
+                        options?.onFallback?.();
+                        if (options?.markConnectionStraightOnFallback) {
+                            currentWaypoint.connectionMode = "straight";
+                        }
+                    },
+                },
+            );
+        } catch (e) {
+            console.error(e);
+            if (options?.fallbackOnError === false) {
+                throw e;
+            }
+            options?.onFallback?.();
+            if (options?.markConnectionStraightOnFallback) {
+                currentWaypoint.connectionMode = "straight";
+            }
+            return createRouteCalculationResult(
+                buildStraightFallbackSegment(previousWaypoint, currentWaypoint),
+            );
+        }
+    }
+
+    function replaceRouteWithOrderedSegments(
+        routeSegments: RouteCalculationResult[],
+    ) {
+        routeSacScaleSegments = routeSegments.map(
+            (routeSegment) => routeSegment.sacScaleSegments ?? [],
+        );
+        valhallaStore.route = new GPX({
+            trk: [
+                new Track({
+                    trkseg: routeSegments.map(
+                        (routeSegment) =>
+                            new TrackSegment({ trkpt: routeSegment.waypoints }),
+                    ),
+                }),
+            ],
+        });
+    }
+
+    async function calculateRouteSegmentBetweenEndpoints(
+        previousWaypoint: RouteSegmentEndpoint,
+        currentWaypoint: RouteSegmentEndpoint,
+        options: RoutingOptions = routingOptions,
+        calculationOptions?: RouteSegmentCalculationOptions,
+    ) {
+        try {
+            const routeSegment = await calculateRouteBetween(
+                previousWaypoint.lat,
+                previousWaypoint.lon,
+                currentWaypoint.lat,
+                currentWaypoint.lon,
+                options,
+            );
+            return createRouteCalculationResult(
+                ensureRouteSegmentEndpoints(
+                    routeSegment.waypoints,
+                    previousWaypoint,
+                    currentWaypoint,
+                ),
+                routeSegment.sacScaleSegments,
+            );
+        } catch (e) {
+            console.error(e);
+            if (calculationOptions?.fallbackOnError === false) {
+                throw e;
+            }
+            calculationOptions?.onFallback?.();
+            return createRouteCalculationResult(
+                buildStraightFallbackSegment(previousWaypoint, currentWaypoint),
+            );
+        }
+    }
+
+    function cloneRouteSegment(routeWaypoints: GPXWaypoint[]) {
+        return routeWaypoints.map(
+            (point) =>
+                new GPXWaypoint({
+                    ...point,
+                    $: {
+                        lat: point.$.lat,
+                        lon: point.$.lon,
+                    },
+                }),
+        );
+    }
+
+    function findEndpointReference(
+        routeWaypoints: GPXWaypoint[],
+        fromStart: boolean,
+    ) {
+        const points = fromStart ? routeWaypoints : [...routeWaypoints].reverse();
+        return (
+            points.find((point) => Number.isFinite(point.ele)) ??
+            points.find((point) => point.time) ??
+            points[0]
+        );
+    }
+
+    function createRouteEndpointFromReference(
+        lat: number,
+        lon: number,
+        reference: GPXWaypoint | undefined,
+    ) {
+        return new GPXWaypoint({
+            ...(reference ?? {}),
+            $: { lat, lon },
+            ele: Number.isFinite(reference?.ele) ? reference?.ele : undefined,
+            time: reference?.time ? new Date(reference.time) : undefined,
+        });
+    }
+
+    function ensureRouteSegmentEndpoints(
+        routeWaypoints: GPXWaypoint[],
+        previousWaypoint: RouteSegmentEndpoint,
+        currentWaypoint: RouteSegmentEndpoint,
+    ) {
+        const segment = cloneRouteSegment(routeWaypoints);
+
+        if (!segment.length) {
+            return buildStraightFallbackSegment(previousWaypoint, currentWaypoint);
+        }
+
+        const first = segment[0];
+        const last = segment[segment.length - 1];
+
+        if (
+            first.$.lat !== previousWaypoint.lat ||
+            first.$.lon !== previousWaypoint.lon
+        ) {
+            segment.unshift(
+                createRouteEndpointFromReference(
+                    previousWaypoint.lat,
+                    previousWaypoint.lon,
+                    findEndpointReference(segment, true),
+                ),
+            );
+        }
+
+        if (
+            last.$.lat !== currentWaypoint.lat ||
+            last.$.lon !== currentWaypoint.lon
+        ) {
+            segment.push(
+                createRouteEndpointFromReference(
+                    currentWaypoint.lat,
+                    currentWaypoint.lon,
+                    findEndpointReference(segment, false),
+                ),
+            );
+        }
+
+        return segment;
+    }
+
+    function buildStraightFallbackSegment(
+        previousWaypoint: RouteSegmentEndpoint,
+        currentWaypoint: RouteSegmentEndpoint,
+    ) {
+        return [
+            new GPXWaypoint({
+                $: { lat: previousWaypoint.lat, lon: previousWaypoint.lon },
+            }),
+            new GPXWaypoint({
+                $: { lat: currentWaypoint.lat, lon: currentWaypoint.lon },
+            }),
+        ];
+    }
+
+    async function editCalculatedRouteSegment(
+        index: number,
+        routeSegment: RouteCalculationResult,
+    ) {
+        routeSacScaleSegments[index] = routeSegment.sacScaleSegments ?? [];
+        routeSacScaleSegments = [...routeSacScaleSegments];
+        await editRoute(index, routeSegment.waypoints);
+    }
+
+    async function insertCalculatedRouteSegment(
+        routeSegment: RouteCalculationResult,
+        index?: number,
+    ) {
+        if (index !== undefined) {
+            routeSacScaleSegments.splice(index, 0, routeSegment.sacScaleSegments ?? []);
+        } else {
+            routeSacScaleSegments.push(routeSegment.sacScaleSegments ?? []);
+        }
+        routeSacScaleSegments = [...routeSacScaleSegments];
+        await insertIntoRoute(routeSegment.waypoints, index);
+    }
+
+    function deleteCalculatedRouteSegment(index: number) {
+        routeSacScaleSegments.splice(index, 1);
+        routeSacScaleSegments = [...routeSacScaleSegments];
+        deleteFromRoute(index);
+    }
+
+    async function recalculateAdjacentWaypointSegments(
+        waypointIndex: number,
+        options?: { snapAffectedSegments?: boolean },
+    ): Promise<boolean> {
+        const waypoints = $formData.expand!.waypoints_via_trail ?? [];
+        if (waypointIndex < 0 || waypointIndex >= waypoints.length) {
+            return false;
+        }
+
+        if (options?.snapAffectedSegments) {
+            snapSegmentsAroundWaypoint(waypoints, waypointIndex);
+            $formData.expand!.waypoints_via_trail = [...waypoints];
+        }
+
+        if (isLoopRouteActive()) {
+            return await recalculateRouteFromWaypoints({
+                showSuccessToast: false,
+                fallbackOnError: !options?.snapAffectedSegments,
+                markConnectionStraightOnFallback: true,
+                errorTranslationKey: "error-calculating-route-after-waypoint-move",
+            });
+        }
+
+        const segmentsToRecalculate = new Set<number>();
+        if (waypointIndex > 0) {
+            segmentsToRecalculate.add(waypointIndex);
+        }
+        if (waypointIndex < waypoints.length - 1) {
+            segmentsToRecalculate.add(waypointIndex + 1);
+        }
+
+        if (!segmentsToRecalculate.size) {
+            return true;
+        }
+
+        try {
+            const segmentResults = await Promise.all(
+                [...segmentsToRecalculate].map(async (segmentToIndex) => ({
+                    segmentToIndex,
+                    routeWaypoints: await calculateRouteSegmentForWaypointPair(
+                        waypoints,
+                        segmentToIndex,
+                        {
+                            fallbackOnError: true,
+                            markConnectionStraightOnFallback: true,
+                        },
+                    ),
+                })),
+            );
+
+            $formData.expand!.waypoints_via_trail = [...waypoints];
+
+            for (const result of segmentResults) {
+                await editCalculatedRouteSegment(
+                    result.segmentToIndex - 1,
+                    result.routeWaypoints,
+                );
+            }
+
+            normalizeRouteTime();
+            updateTrailWithRouteData();
+            return true;
+        } catch (e) {
+            console.error(e);
+            showRouteCalculationError(
+                e,
+                "error-calculating-route-after-waypoint-move",
+            );
+            return false;
+        }
+    }
+
+    async function recalculateSingleWaypointSegment(toIndex: number) {
+        const waypoints = $formData.expand!.waypoints_via_trail ?? [];
+        if (toIndex <= 0 || toIndex >= waypoints.length) {
+            return;
+        }
+
+        try {
+            const routeWaypoints = await calculateRouteSegmentForWaypointPair(
+                waypoints,
+                toIndex,
+            );
+            await editCalculatedRouteSegment(toIndex - 1, routeWaypoints);
+            normalizeRouteTime();
+            updateTrailWithRouteData();
+        } catch (e) {
+            console.error(e);
+            scheduleRouteRecalculationFromWaypoints({ showSuccessToast: false });
+        }
+    }
+
+    async function insertWaypointWithSegmentMerge(insertIndex: number) {
+        const waypoints = $formData.expand!.waypoints_via_trail ?? [];
+        snapSegmentsForInsertedWaypoint(waypoints, insertIndex);
+        $formData.expand!.waypoints_via_trail = [...waypoints];
+
+        if (isLoopRouteActive()) {
+            await recalculateRouteFromWaypoints({ showSuccessToast: false });
+            return;
+        }
+
+        if (waypoints.length < 2) {
+            updateTrailWithRouteData();
+            return;
+        }
+
+        try {
+            if (insertIndex <= 0) {
+                const firstSegment = await calculateRouteSegmentForWaypointPair(
+                    waypoints,
+                    1,
+                );
+                await insertCalculatedRouteSegment(firstSegment, 0);
+            } else if (insertIndex >= waypoints.length - 1) {
+                const lastSegment = await calculateRouteSegmentForWaypointPair(
+                    waypoints,
+                    insertIndex,
+                );
+                await insertCalculatedRouteSegment(lastSegment);
+            } else {
+                const [previousSegment, nextSegment] = await Promise.all([
+                    calculateRouteSegmentForWaypointPair(waypoints, insertIndex),
+                    calculateRouteSegmentForWaypointPair(
+                        waypoints,
+                        insertIndex + 1,
+                    ),
+                ]);
+                await editCalculatedRouteSegment(
+                    insertIndex - 1,
+                    previousSegment,
+                );
+                await insertCalculatedRouteSegment(nextSegment, insertIndex);
+                mergeRecentUndoSteps(2);
+            }
+            normalizeRouteTime();
+            updateTrailWithRouteData();
+        } catch (e) {
+            console.error(e);
+            scheduleRouteRecalculationFromWaypoints({ showSuccessToast: false });
+        }
+    }
+
+    async function deleteWaypointWithSegmentMerge(
+        deletedIndex: number,
+        previousWaypointCount: number,
+    ) {
+        const waypoints = $formData.expand!.waypoints_via_trail ?? [];
+
+        if (waypoints.length === 0) {
+            clearRoute();
+            routeSacScaleSegments = [];
+            updateTrailWithRouteData();
+            return;
+        }
+
+        if (waypoints.length === 1) {
+            deleteCalculatedRouteSegment(0);
+            updateTrailWithRouteData();
+            return;
+        }
+
+        try {
+            if (deletedIndex <= 0) {
+                deleteCalculatedRouteSegment(0);
+            } else if (deletedIndex >= previousWaypointCount - 1) {
+                deleteCalculatedRouteSegment(previousWaypointCount - 2);
+            } else {
+                setSegmentToDefaultConnectionMode(waypoints, deletedIndex);
+                $formData.expand!.waypoints_via_trail = [...waypoints];
+                const mergedSegment = await calculateRouteSegmentForWaypointPair(
+                    waypoints,
+                    deletedIndex,
+                );
+                await editCalculatedRouteSegment(deletedIndex - 1, mergedSegment);
+                deleteCalculatedRouteSegment(deletedIndex);
+            }
+            normalizeRouteTime();
+            updateTrailWithRouteData();
+        } catch (e) {
+            console.error(e);
+            scheduleRouteRecalculationFromWaypoints({ showSuccessToast: false });
+        }
+    }
+
+    async function moveWaypointWithSegmentMerge(
+        fromIndex: number,
+        toIndex: number,
+    ) {
+        const waypoints = $formData.expand!.waypoints_via_trail ?? [];
+        if (waypoints.length < 2) {
+            updateTrailWithRouteData();
+            return;
+        }
+
+        const minIndex = Math.min(fromIndex, toIndex);
+        const maxIndex = Math.max(fromIndex, toIndex);
+        const startSegment = Math.max(0, minIndex - 1);
+        const endSegment = Math.min(waypoints.length - 2, maxIndex);
+        snapSegmentRange(waypoints, startSegment, endSegment);
+        $formData.expand!.waypoints_via_trail = [...waypoints];
+
+        try {
+            const segmentUpdates = await Promise.all(
+                Array.from(
+                    { length: endSegment - startSegment + 1 },
+                    (_, offset) => startSegment + offset,
+                ).map(async (segmentIndex) => ({
+                    segmentIndex,
+                    routeWaypoints: await calculateRouteSegmentForWaypointPair(
+                        waypoints,
+                        segmentIndex + 1,
+                    ),
+                })),
+            );
+
+            for (const update of segmentUpdates) {
+                await editCalculatedRouteSegment(
+                    update.segmentIndex,
+                    update.routeWaypoints,
+                );
+            }
+
+            normalizeRouteTime();
+            updateTrailWithRouteData();
+        } catch (e) {
+            console.error(e);
+            scheduleRouteRecalculationFromWaypoints({ showSuccessToast: false });
+        }
+    }
+
+    async function getWaypointNamingInfo(lat: number, lon: number) {
+        try {
+            const feature = await searchLocationReverseFeature(lat, lon);
+            const address = feature?.properties?.address;
+            const streetName =
+                address?.road ||
+                address?.footway ||
+                address?.path ||
+                address?.track ||
+                address?.pedestrian ||
+                address?.cycleway ||
+                address?.bridleway ||
+                "";
+            const houseNumber = address?.house_number || "";
+            const fallback =
+                feature?.properties?.display_name ||
+                getWaypointCoordinateName(lat, lon);
+            const primaryName = formatWaypointLocationName({
+                streetName,
+                houseNumber,
+                fallback,
+            });
+
+            return { streetName, houseNumber, primaryName, fallback };
+        } catch (e) {
+            if (isRateLimitError(e)) {
+                throw e;
+            }
+            return {
+                streetName: "",
+                houseNumber: "",
+                primaryName: "",
+                fallback: getWaypointCoordinateName(lat, lon),
+            };
+        }
+    }
+
+    function isRateLimitError(e: unknown) {
+        return e instanceof APIError && e.status === 429;
+    }
+
+    function sleep(ms: number) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    function applyWaypointNamingInfo(
+        waypoint: Waypoint,
+        index: number,
+        namingInfo: Awaited<ReturnType<typeof getWaypointNamingInfo>>,
+    ) {
+        const coordinateFallback = getWaypointCoordinateName(
+            waypoint.lat,
+            waypoint.lon,
+        );
+        const fallback =
+            namingInfo.fallback && namingInfo.fallback !== coordinateFallback
+                ? namingInfo.fallback
+                : "";
+        const name = formatWaypointLocationName({
+            streetName: namingInfo.streetName,
+            houseNumber: namingInfo.houseNumber,
+            fallback,
+            index: index + 1,
+        });
+        const numberedFallback = getNumberedWaypointName(index + 1);
+
+        waypoint.name = name === coordinateFallback ? numberedFallback : name;
+        waypoint.description =
+            fallback && fallback !== waypoint.name ? fallback : "";
+    }
+
+    async function reloadWaypointNames() {
+        if (waypointNameReloading || !canModifyTrail) {
+            return;
+        }
+
+        const waypoints = $formData.expand!.waypoints_via_trail ?? [];
+        const candidates = waypoints
+            .map((waypoint, index) => ({ waypoint, index }))
+            .filter(({ waypoint }) => isPlaceholderWaypointName(waypoint.name));
+
+        if (!candidates.length) {
+            show_toast({
+                type: "success",
+                icon: "check",
+                text: $_("waypoint-names-already-loaded"),
+            });
+            return;
+        }
+
+        waypointNameReloading = true;
+        waypointNameReloadProgress = 0;
+        waypointNameReloadTotal = candidates.length;
+
+        try {
+            for (const [candidateIndex, candidate] of candidates.entries()) {
+                const namingInfo = await getWaypointNamingInfo(
+                    candidate.waypoint.lat,
+                    candidate.waypoint.lon,
+                );
+                applyWaypointNamingInfo(
+                    candidate.waypoint,
+                    candidate.index,
+                    namingInfo,
+                );
+                waypointNameReloadProgress = candidateIndex + 1;
+                $formData.expand!.waypoints_via_trail = [...waypoints];
+                updateTrailOnMap();
+
+                if (candidateIndex < candidates.length - 1) {
+                    await sleep(waypointNameReloadDelayMs);
+                }
+            }
+
+            show_toast({
+                type: "success",
+                icon: "check",
+                text: $_("waypoint-names-reloaded"),
+            });
+        } catch (e) {
+            if (!isRateLimitError(e)) {
+                console.error(e);
+            }
+            show_toast({
+                type: "error",
+                icon: "close",
+                text: isRateLimitError(e)
+                    ? $_("waypoint-name-rate-limited")
+                    : $_("waypoint-name-reload-error"),
+            });
+        } finally {
+            waypointNameReloading = false;
+        }
+    }
+
+    function closeWaypointActionPopup() {
+        mapWaypointPopup?.remove();
+        mapWaypointPopup = null;
+    }
+
+    function showWaypointActionPopup(
+        lnglat: M.LngLat,
+        options?: { presetName?: string; insertIndex?: number | null },
+    ) {
+        if (!map || !canModifyTrail) {
+            return;
+        }
+        closeWaypointActionPopup();
+
+        const content = document.createElement("div");
+        content.className = "p-3 flex flex-col gap-2 min-w-48";
+
+        const addButton = document.createElement("button");
+        addButton.className = "btn-secondary text-sm";
+        addButton.textContent = get(_)("add-waypoint");
+        addButton.addEventListener("click", async () => {
+            await addWaypointFromTap(lnglat.lat, lnglat.lng, {
+                openEditor: false,
+                insertIndex: options?.insertIndex,
+                presetName: options?.presetName,
+            });
+            closeWaypointActionPopup();
+        });
+
+        const cancelButton = document.createElement("button");
+        cancelButton.className = "btn-secondary text-sm";
+        cancelButton.textContent = get(_)("cancel");
+        cancelButton.addEventListener("click", () => closeWaypointActionPopup());
+
+        content.appendChild(addButton);
+        content.appendChild(cancelButton);
+
+        mapWaypointPopup = new M.Popup({
+            closeButton: false,
+            closeOnClick: false,
+            offset: 20,
+        })
+            .setLngLat(lnglat)
+            .setDOMContent(content)
+            .addTo(map);
+    }
+
+    function showWaypointMovePopup(
+        marker: M.Marker,
+        waypointIndex: number,
+        originalPosition: RouteSegmentEndpoint,
+    ) {
+        if (!map || !canModifyTrail) {
+            marker.setLngLat([originalPosition.lon, originalPosition.lat]);
+            return;
+        }
+
+        closeWaypointActionPopup();
+
+        const movedPosition = marker.getLngLat();
+        const content = document.createElement("div");
+        content.className = "p-3 flex flex-col gap-2 min-w-48";
+
+        const confirmButton = document.createElement("button");
+        confirmButton.className = "btn-secondary text-sm";
+        confirmButton.textContent = "Verschieben";
+
+        let confirmed = false;
+
+        confirmButton.addEventListener("click", () => {
+            const editableWaypoint =
+                $formData.expand!.waypoints_via_trail?.[waypointIndex];
+            if (!editableWaypoint) {
+                marker.setLngLat([originalPosition.lon, originalPosition.lat]);
+                closeWaypointActionPopup();
+                return;
+            }
+
+            confirmed = true;
+            editableWaypoint.lat = movedPosition.lat;
+            editableWaypoint.lon = movedPosition.lng;
+            editableWaypoint.name =
+                editableWaypoint.name?.trim() ||
+                getWaypointCoordinateName(movedPosition.lat, movedPosition.lng);
+            $formData.expand!.waypoints_via_trail = [
+                ...($formData.expand!.waypoints_via_trail ?? []),
+            ];
+            syncVisibleRouteAnchors();
+            void recalculateAdjacentWaypointSegments(waypointIndex);
+            closeWaypointActionPopup();
+        });
+
+        const cancelButton = document.createElement("button");
+        cancelButton.className = "btn-secondary text-sm";
+        cancelButton.textContent = get(_)("cancel");
+        cancelButton.addEventListener("click", () => closeWaypointActionPopup());
+
+        content.appendChild(confirmButton);
+        content.appendChild(cancelButton);
+
+        mapWaypointPopup = new M.Popup({
+            closeButton: false,
+            closeOnClick: false,
+            offset: 20,
+        })
+            .setLngLat([movedPosition.lng, movedPosition.lat])
+            .setDOMContent(content)
+            .addTo(map);
+
+        mapWaypointPopup.on("close", () => {
+            if (!confirmed) {
+                marker.setLngLat([originalPosition.lon, originalPosition.lat]);
+            }
+        });
+    }
+
+    function getWaypointCoordinateName(lat: number, lon: number): string {
+        return `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+    }
+
+    function saveWaypoint(savedWaypoint: Waypoint) {
+        if (!canModifyTrail) {
+            return;
+        }
         let editedWaypointIndex =
             $formData.expand!.waypoints_via_trail?.findIndex(
                 (s) => s.id == savedWaypoint.id,
             ) ?? -1;
 
         if (editedWaypointIndex >= 0) {
-            $formData.expand!.waypoints_via_trail![editedWaypointIndex] =
-                savedWaypoint;
+            $formData.expand!.waypoints_via_trail![editedWaypointIndex] = savedWaypoint;
+            void recalculateAdjacentWaypointSegments(editedWaypointIndex);
         } else {
             savedWaypoint.id = cryptoRandomString({ length: 15 });
-            $formData.expand!.waypoints_via_trail = [
-                ...($formData.expand!.waypoints_via_trail ?? []),
-                savedWaypoint,
-            ];
-
-            // updateTrailOnMap();
-        }
-    }
-
-    function getExistingWaypointClusterInputs() {
-        return (
-            $formData.expand?.waypoints_via_trail
-                ?.filter((wp) => wp.id)
-                .map((wp) => ({
-                    id: wp.id!,
-                    lat: wp.lat,
-                    lon: wp.lon,
-                })) ?? []
-        );
-    }
-
-    async function saveWaypoint(savedWaypoint: Waypoint) {
-        const editedWaypointIndex =
-            $formData.expand!.waypoints_via_trail?.findIndex(
-                (s) => s.id == savedWaypoint.id,
-            ) ?? -1;
-
-        if (editedWaypointIndex >= 0) {
-            commitWaypoint(savedWaypoint);
-            return true;
+            savedWaypoint.connectionMode = getDefaultWaypointConnectionMode();
+            const updatedWaypoints = [...($formData.expand!.waypoints_via_trail ?? [])];
+            const insertIndex =
+                pendingWaypointInsertIndex === null
+                    ? updatedWaypoints.length
+                    : Math.max(0, Math.min(updatedWaypoints.length, pendingWaypointInsertIndex));
+            updatedWaypoints.splice(insertIndex, 0, savedWaypoint);
+            $formData.expand!.waypoints_via_trail = updatedWaypoints;
+            void insertWaypointWithSegmentMerge(insertIndex);
         }
 
-        const matchingWaypoint = await findMergeableWaypoint(savedWaypoint);
-        if (matchingWaypoint) {
-            pendingWaypointMerge = {
-                incoming: savedWaypoint,
-                existing: matchingWaypoint,
-            };
-            waypointModal.closeModal();
-            waypointMergeModal.openModal();
-            return false;
-        }
-
-        commitWaypoint(savedWaypoint);
-        return true;
-    }
-
-    async function findMergeableWaypoint(savedWaypoint: Waypoint) {
-        const existingWaypoints = getExistingWaypointClusterInputs();
-
-        if (!existingWaypoints.length) {
-            return;
-        }
-
-        try {
-            const clusterResponse = await clusterWaypointPhotos({
-                category: $formData.category,
-                photos: [
-                    {
-                        id: waypointMergeCheckPhotoId,
-                        lat: savedWaypoint.lat,
-                        lon: savedWaypoint.lon,
-                    },
-                ],
-                waypoints: existingWaypoints,
-            });
-
-            const matchingCluster = clusterResponse.clusters.find(
-                (cluster) =>
-                    cluster.waypoint &&
-                    cluster.photos.includes(waypointMergeCheckPhotoId),
-            );
-
-            if (!matchingCluster?.waypoint) {
-                return;
-            }
-
-            return $formData.expand?.waypoints_via_trail?.find(
-                (wp) => wp.id === matchingCluster.waypoint,
-            );
-        } catch (e) {
-            show_toast(
-                {
-                    type: "error",
-                    icon: "warning",
-                    text: $_("waypoint-cluster-error"),
-                },
-                10000,
-            );
-        }
-    }
-
-    function createPendingWaypointAnyway() {
-        if (!pendingWaypointMerge) {
-            return;
-        }
-
-        commitWaypoint(pendingWaypointMerge.incoming);
-        closeWaypointMergeModal();
-    }
-
-    function addPendingWaypointToExisting(options: WaypointMergeOptions) {
-        if (!pendingWaypointMerge) {
-            return;
-        }
-
-        const { incoming, existing } = pendingWaypointMerge;
-        const mergedWaypoint = {
-            ...existing,
-            icon: options.icon ? incoming.icon : existing.icon,
-            name: options.title
-                ? appendDistinctText(existing.name, incoming.name, " / ")
-                : existing.name,
-            description: options.description
-                ? appendDistinctText(
-                      existing.description,
-                      incoming.description,
-                      "\n\n",
-                  )
-                : existing.description,
-            photos: existing.photos ?? [],
-            _photos: options.photos
-                ? [
-                      ...((existing as Waypoint)._photos ?? []),
-                      ...(incoming._photos ?? []),
-                  ]
-                : (existing as Waypoint)._photos,
-        } as Waypoint;
-
-        closeWaypointMergeModal();
-        waypoint.set(mergedWaypoint);
-        waypointModal.openModal();
-    }
-
-    function appendDistinctText(
-        existing: string | undefined,
-        incoming: string | undefined,
-        separator: string,
-    ) {
-        const existingText = existing?.trim() ?? "";
-        const incomingText = incoming?.trim() ?? "";
-
-        if (!incomingText || existingText === incomingText) {
-            return existing ?? "";
-        }
-
-        if (!existingText) {
-            return incomingText;
-        }
-
-        return `${existingText}${separator}${incomingText}`;
-    }
-
-    function closeWaypointMergeModal() {
-        pendingWaypointMerge = undefined;
-        waypointMergeModal.closeModal();
-    }
-
-    function cancelPendingWaypointMerge() {
-        if (pendingWaypointMerge) {
-            waypoint.set(pendingWaypointMerge.incoming);
-        }
-
-        closeWaypointMergeModal();
-        waypointModal.openModal();
+        pendingWaypointInsertIndex = null;
     }
 
     function moveMarker(marker: M.Marker, wpId?: string) {
-        const position = marker.getLngLat();
-        const editableWaypointIndex =
-            $formData.expand!.waypoints_via_trail?.findIndex(
-                (w) => w.id == wpId,
-            ) ?? -1;
-        const editableWaypoint =
-            $formData.expand!.waypoints_via_trail![editableWaypointIndex];
-        if (!editableWaypoint) {
+        if (!canModifyTrail) {
             return;
         }
-        editableWaypoint.lat = position.lat;
-        editableWaypoint.lon = position.lng;
-        $formData.expand!.waypoints_via_trail = [
-            ...($formData.expand!.waypoints_via_trail ?? []),
-        ];
-        // updateTrailOnMap();
+        const editableWaypointIndex =
+            $formData.expand!.waypoints_via_trail?.findIndex((w) => w.id == wpId) ?? -1;
+        if (editableWaypointIndex < 0) {
+            return;
+        }
+        const editableWaypoint =
+            $formData.expand!.waypoints_via_trail![editableWaypointIndex];
+        showWaypointMovePopup(marker, editableWaypointIndex, {
+            lat: editableWaypoint.lat,
+            lon: editableWaypoint.lon,
+        });
+    }
+
+    function syncWaypointIconsWithRoutingRole() {
+        const waypoints = $formData.expand!.waypoints_via_trail ?? [];
+        for (let i = 0; i < waypoints.length; i++) {
+            const role = getRoutingRoleByIndex(i, waypoints.length);
+            waypoints[i].icon = role === "start" ? "play" : role === "goal" ? "flag-checkered" : "circle";
+        }
+        $formData.expand!.waypoints_via_trail = [...waypoints];
+    }
+
+    function createPrefilledSummitLog() {
+        const newSummitLog = new SummitLog(
+            ($formData.date || new Date().toISOString().split("T")[0]).substring(0, 10),
+            {
+                distance: $formData.distance,
+                elevation_gain: $formData.elevation_gain,
+                elevation_loss: $formData.elevation_loss,
+                duration: $formData.duration,
+            },
+        );
+        newSummitLog.author = $currentUser?.actor;
+        newSummitLog.trail = $formData.id;
+
+        const gpxData = $formData.expand?.gpx_data;
+        if (gpxData) {
+            newSummitLog.expand ??= {};
+            newSummitLog.expand.gpx_data = gpxData;
+            newSummitLog._gpx = new File(
+                [gpxData],
+                `${$formData.name || "route"}.gpx`,
+                { type: "text/xml" },
+            );
+        }
+
+        return newSummitLog;
     }
 
     function beforeSummitLogModalOpen() {
-        const newSummitLog = new SummitLog(
-            new Date().toISOString().split("T")[0],
-        );
-        newSummitLog.author = $currentUser?.actor;
-        summitLog.set(newSummitLog);
+        if (!canModifyTrail) {
+            return;
+        }
+        summitLog.set(createPrefilledSummitLog());
         summitLogModal.openModal();
     }
 
     function saveSummitLog(log: SummitLog) {
+        if (!canModifyTrail) {
+            return;
+        }
         let editedSummitLogIndex =
             $formData.expand!.summit_logs_via_trail?.findIndex(
                 (s) => s.id == log.id,
@@ -763,13 +2524,6 @@
                 log,
             ];
         }
-
-        if (
-            $formData.expand?.summit_logs_via_trail?.length == 1 &&
-            !$formData.completed
-        ) {
-            markTrailAsCompletedModal.openModal();
-        }
     }
 
     function handleSummitLogMenuClick(
@@ -777,18 +2531,23 @@
         index: number,
         item: DropdownItem,
     ) {
+        if (!canModifyTrail) {
+            return;
+        }
         if (item.value === "edit") {
             summitLog.set(currentSummitLog);
             summitLogModal.openModal();
         } else if (item.value === "delete") {
-            $formData.expand!.summit_logs_via_trail?.splice(index, 1);
-            $formData.expand!.summit_logs_via_trail =
-                $formData.expand!.summit_logs_via_trail;
+            const updatedSummitLogs = [
+                ...($formData.expand!.summit_logs_via_trail ?? []),
+            ];
+            updatedSummitLogs.splice(index, 1);
+            $formData.expand!.summit_logs_via_trail = updatedSummitLogs;
         }
     }
 
     async function handleListSelection(list: List) {
-        if (!$formData.id) {
+        if (!canModifyTrail || !$formData.id) {
             return;
         }
         try {
@@ -797,7 +2556,7 @@
             } else {
                 list = await lists_add_trail(list, $formData as Trail);
             }
-            const index = lists.items.findIndex((l: List) => l.id == list.id);
+            const index = lists.items.findIndex((l) => l.id == list.id);
             if (index >= 0) {
                 lists.items[index] = list;
             }
@@ -813,21 +2572,15 @@
     }
 
     function startDrawing() {
-        drawingActive = true;
-        routeSegments = [...(valhallaStore.route.trk?.at(0)?.trkseg ?? [])];
-
-        if (!map) {
+        if (!map || !canModifyTrail) {
             return;
         }
-
+        drawingActive = true;
+        if (!valhallaStore.route.trk?.at(0)?.trkseg?.at(0)?.trkpt?.length) {
+        }
         for (const anchor of valhallaStore.anchors) {
             anchor.marker?.addTo(map);
         }
-    }
-
-    function startReplacementDrawing() {
-        replacingRoute = false;
-        startDrawing();
     }
 
     async function stopDrawing() {
@@ -835,8 +2588,8 @@
         for (const anchor of valhallaStore.anchors) {
             anchor.marker?.remove();
         }
-        toggleCropMarkers(false);
         clearUndoRedoStack();
+        resetWaypointHistoryTracking();
 
         if (valhallaStore.route.trk?.at(0)?.trkseg?.at(0)?.trkpt?.at(0)) {
             $formData.lat = valhallaStore.route.trk
@@ -857,86 +2610,144 @@
         }
     }
 
-    function openWaypointActionPopup(lngLat: M.LngLat) {
-        mapPopup?.remove();
-
-        mapPopup = createEditTrailMapPopup(lngLat, () => {
-            mapPopup?.remove();
-            beforeWaypointModalOpen(lngLat.lat, lngLat.lng);
-        });
-        mapPopup.addTo(map!);
-    }
-
     async function handleMapClick(e: M.MapMouseEvent) {
-        if (!drawingActive) {
-            if (
-                (
-                    e.originalEvent.target as HTMLElement
-                ).tagName.toLowerCase() !== "canvas"
-            ) {
-                return;
-            }
-            openWaypointActionPopup(e.lngLat);
-        } else {
-            const anchorCount = valhallaStore.anchors.length;
-            if (anchorCount == 0) {
-                addAnchor(
-                    e.lngLat.lat,
-                    e.lngLat.lng,
-                    valhallaStore.anchors.length,
-                );
-            } else {
-                await addAnchorAndRecalculate(e.lngLat.lat, e.lngLat.lng);
-            }
-        }
-    }
-
-    function handleMapContextMenu(e: M.MapMouseEvent) {
-        if (!drawingActive || !showWaypointsWhileDrawing) {
+        if (!canModifyTrail) {
             return;
         }
         if (
-            (e.originalEvent.target as HTMLElement).tagName.toLowerCase() !==
-            "canvas"
+            (
+                e.originalEvent.target as HTMLElement
+            ).tagName.toLowerCase() !== "canvas"
         ) {
             return;
         }
-        e.preventDefault();
-        openWaypointActionPopup(e.lngLat);
+        showWaypointActionPopup(e.lngLat);
+    }
+
+    async function addWaypointFromTap(
+        lat: number,
+        lon: number,
+        options?: {
+            openEditor?: boolean;
+            presetName?: string;
+            insertIndex?: number | null;
+        },
+    ) {
+        if (!canModifyTrail) {
+            return;
+        }
+        const existingWaypoints = $formData.expand!.waypoints_via_trail ?? [];
+        const namingInfo = await getWaypointNamingInfo(lat, lon);
+        const waypointName =
+            options?.presetName?.trim() ||
+            namingInfo.primaryName ||
+            namingInfo.fallback ||
+            getWaypointCoordinateName(lat, lon);
+        const insertedWaypoint = createWaypointFromTap(lat, lon, {
+            name: waypointName,
+            description:
+                waypointName !== namingInfo.fallback && namingInfo.fallback
+                    ? namingInfo.fallback
+                    : "",
+        });
+        insertedWaypoint.connectionMode = getDefaultWaypointConnectionMode();
+        insertedWaypoint.id = cryptoRandomString({ length: 15 });
+
+        const insertIndex =
+            options?.insertIndex ??
+            getWaypointInsertIndexByNearestSegment(
+                existingWaypoints.map((waypoint) => ({
+                    lat: waypoint.lat,
+                    lon: waypoint.lon,
+                })),
+                { lat, lon },
+            );
+
+        const updatedWaypoints = [...existingWaypoints];
+        updatedWaypoints.splice(insertIndex, 0, insertedWaypoint);
+        normalizeWaypointConnectionModes(updatedWaypoints);
+
+        if (options?.openEditor) {
+            pendingWaypointInsertIndex = insertIndex;
+            insertedWaypoint.id = undefined;
+            waypoint.set(insertedWaypoint);
+            waypointModal.openModal();
+            return;
+        }
+
+        pendingWaypointInsertIndex = null;
+        $formData.expand!.waypoints_via_trail = updatedWaypoints;
+        syncVisibleRouteAnchors();
+
+        if (updatedWaypoints.length > 1) {
+            await insertWaypointWithSegmentMerge(insertIndex);
+        }
     }
 
     async function addAnchorAndRecalculate(lat: number, lon: number) {
         const previousAnchor =
             valhallaStore.anchors[valhallaStore.anchors.length - 1];
-        if (!previousAnchor) {
-            addAnchor(lat, lon, 0);
-            return;
-        }
-
         const anchor = addAnchor(lat, lon, valhallaStore.anchors.length);
-        startAnchorLoading(anchor);
+        const markerText = startAnchorLoading(anchor);
         try {
-            const routeWaypoints = await calculateRouteBetween(
-                previousAnchor.lat,
-                previousAnchor.lon,
-                lat,
-                lon,
-                routingOptions,
+            const routeWaypoints = await calculateRouteSegmentBetweenEndpoints(
+                previousAnchor,
+                { lat, lon },
             );
-            await insertIntoRoute(routeWaypoints);
-            normalizeRouteTime();
+            await insertCalculatedRouteSegment(routeWaypoints);
             updateTrailWithRouteData();
+            normalizeRouteTime();
         } catch (e) {
             console.error(e);
-            show_toast({
-                text: routeCalculationErrorText(e),
-                icon: "close",
-                type: "error",
-            });
+            showRouteCalculationError(e);
         } finally {
-            stopAnchorLoading(anchor);
+            stopAnchorLoading(anchor, markerText);
         }
     }
+
+    async function addPoiAsRoutePoint(poi: Poi) {
+        if (!canModifyTrail) {
+            return;
+        }
+        showWaypointActionPopup(new M.LngLat(poi.lon, poi.lat), {
+            insertIndex: null,
+            presetName: poi.name,
+        });
+    }
+
+    const buildPoiAnchorAction: OverpassPopupActionFactory = (
+        feature,
+        coordinates,
+    ) => {
+        const [lon, lat] = coordinates;
+        if (
+            typeof lat !== "number" ||
+            typeof lon !== "number" ||
+            !canModifyTrail
+        ) {
+            return null;
+        }
+
+        let presetName: string | undefined;
+        try {
+            const tags: Record<string, string> = JSON.parse(
+                feature.properties?.tags ?? "{}",
+            );
+            presetName = tags.name;
+        } catch {
+            presetName = undefined;
+        }
+
+        return {
+            label: $_("add-waypoint"),
+            icon: "fa fa-location-dot",
+            onClick: () =>
+                showWaypointActionPopup(new M.LngLat(lon, lat), {
+                    insertIndex: null,
+                    presetName,
+                }),
+        };
+    };
 
     function addAnchor(
         lat: number,
@@ -952,6 +2763,7 @@
         const marker = createAnchorMarker(
             lat,
             lon,
+            index + 1,
             () => {
                 removeAnchor(
                     valhallaStore.anchors.findIndex((a) => a.id == anchor.id),
@@ -982,6 +2794,16 @@
                 thisAnchor.lat = position.lat;
                 thisAnchor.lon = position.lng;
 
+                const waypoints = [...($formData.expand!.waypoints_via_trail ?? [])];
+                if (waypoints[anchorIndex]) {
+                    waypoints[anchorIndex].lat = position.lat;
+                    waypoints[anchorIndex].lon = position.lng;
+                    waypoints[anchorIndex].name =
+                        waypoints[anchorIndex].name?.trim() ||
+                        getWaypointCoordinateName(position.lat, position.lng);
+                    $formData.expand!.waypoints_via_trail = waypoints;
+                }
+
                 await recalculateRoute(anchorIndex);
 
                 draggingMarker = false;
@@ -992,7 +2814,6 @@
         }
         anchor.marker = marker;
         valhallaStore.anchors.splice(index, 0, anchor);
-        refreshAnchorLabels(Math.max(0, index - 1));
 
         return anchor;
     }
@@ -1000,15 +2821,18 @@
     function startAnchorLoading(anchor: ValhallaAnchor) {
         const markerIcon = anchor.marker?.getElement();
         if (!markerIcon) {
-            return;
+            return null;
         }
         markerIcon.classList.add("spinner", "spinner-light", "spinner-small");
-        markerIcon.replaceChildren();
+        const savedMarkerNumber = markerIcon.textContent;
+        markerIcon.textContent = "";
+
+        return savedMarkerNumber;
     }
 
-    function stopAnchorLoading(anchor: ValhallaAnchor) {
+    function stopAnchorLoading(anchor: ValhallaAnchor, index: string | null) {
         const markerIcon = anchor.marker?.getElement();
-        if (!markerIcon) {
+        if (!markerIcon || !index) {
             return;
         }
         markerIcon.classList.remove(
@@ -1016,240 +2840,181 @@
             "spinner-light",
             "spinner-small",
         );
-        refreshAnchorLabel(valhallaStore.anchors.findIndex((a) => a.id === anchor.id));
-    }
-
-    function refreshAnchorLabel(index: number) {
-        if (index < 0) {
-            return;
-        }
-
-        const anchor = valhallaStore.anchors[index];
-        const markerIcon = anchor.marker?.getElement();
-        if (markerIcon) {
-            renderValhallaAnchorMarker(
-                markerIcon,
-                index,
-                valhallaStore.anchors.length,
-            );
-            anchor
-                .marker!.getPopup()
-                ._content.getElementsByTagName("h5")[0].textContent =
-                valhallaAnchorTitle(index, valhallaStore.anchors.length, $_);
-        }
-    }
-
-    function refreshAnchorLabels(startIndex: number = 0) {
-        for (let i = startIndex; i < valhallaStore.anchors.length; i++) {
-            refreshAnchorLabel(i);
-        }
-    }
-
-    function highlightAnchorMarker(index: number | null) {
-        for (const anchor of valhallaStore.anchors) {
-            anchor.marker?.getElement().classList.remove("anchor-list-highlight");
-        }
-
-        if (index === null) {
-            return;
-        }
-
-        valhallaStore.anchors[index]?.marker
-            ?.getElement()
-            .classList.add("anchor-list-highlight");
+        markerIcon.textContent = index;
     }
 
     async function removeAnchor(anchorIndex: number) {
-        if (!drawingActive) {
+        if (!drawingActive || !canModifyTrail) {
             return;
         }
+        const wasLoopRouteActive = isLoopRouteActive();
         valhallaStore.anchors[anchorIndex]?.marker?.remove();
         valhallaStore.anchors.splice(anchorIndex, 1);
-        refreshAnchorLabels(anchorIndex);
+
+        const waypoints = [...($formData.expand!.waypoints_via_trail ?? [])];
+        waypoints.splice(anchorIndex, 1);
+        normalizeWaypointConnectionModes(waypoints);
+        $formData.expand!.waypoints_via_trail = waypoints;
+        syncWaypointIconsWithRoutingRole();
+        for (let i = anchorIndex; i < valhallaStore.anchors.length; i++) {
+            const anchor = valhallaStore.anchors[i];
+            const markerIcon = anchor.marker?.getElement();
+            if (markerIcon) {
+                const markerText = markerIcon.textContent ?? "0";
+                const markerIndex = parseInt(markerText);
+                const newIndex = markerIndex - 1;
+                markerIcon.textContent = newIndex + "";
+                anchor
+                    .marker!.getPopup()
+                    ._content.getElementsByTagName("h5")[0].textContent =
+                    $_("route-point") + " #" + newIndex;
+            }
+        }
+        normalizeLoopConnectionMode();
+        if (wasLoopRouteActive) {
+            await recalculateRouteFromWaypoints({ showSuccessToast: false });
+            return;
+        }
         if (anchorIndex == 0) {
-            deleteFromRoute(anchorIndex);
+            deleteCalculatedRouteSegment(anchorIndex);
             if ($formData.expand?.gpx_data) {
                 updateTrailWithRouteData();
             }
         } else if (anchorIndex == valhallaStore.anchors.length) {
-            deleteFromRoute(anchorIndex - 1);
+            deleteCalculatedRouteSegment(anchorIndex - 1);
             updateTrailWithRouteData();
         } else {
-            deleteFromRoute(anchorIndex - 1);
-            await recalculateRoute(anchorIndex, [anchorIndex - 1, anchorIndex]);
+            deleteCalculatedRouteSegment(anchorIndex - 1);
+            await recalculateRoute(anchorIndex);
         }
     }
 
-    async function recalculateRouteFromAnchors(fromIndex: number, toIndex: number) {
-        const anchors = valhallaStore.anchors;
-        const N = anchors.length;
-
-        if (N < 2) {
-            setRoute(new GPX({ trk: [new Track({ trkseg: [] })] }), true);
-            updateTrailWithRouteData();
+    async function recalculateRoute(anchorIndex: number) {
+        if (isLoopRouteActive()) {
+            await recalculateRouteFromWaypoints({ showSuccessToast: false });
+            draggingMarker = false;
             return;
         }
 
-        // Segments not touching the moved anchor are reused (shifted by ±1); only the 2–3 boundary segments are recalculated.
-        const oldSegments = valhallaStore.route.trk?.at(0)?.trkseg ?? [];
-        const newSegments: (TrackSegment | null)[] = new Array(N - 1).fill(null);
-        const toRecalc: number[] = [];
+        const markerText = startAnchorLoading(
+            valhallaStore.anchors[anchorIndex],
+        );
 
-        if (fromIndex < toIndex) {
-            for (let i = 0; i < fromIndex - 1; i++) newSegments[i] = oldSegments[i] ?? null;
-            for (let i = fromIndex; i <= toIndex - 2; i++) newSegments[i] = oldSegments[i + 1] ?? null;
-            for (let i = toIndex + 1; i < N - 1; i++) newSegments[i] = oldSegments[i] ?? null;
-            if (fromIndex > 0) toRecalc.push(fromIndex - 1);
-            toRecalc.push(toIndex - 1);
-            if (toIndex < N - 1) toRecalc.push(toIndex);
-        } else {
-            for (let i = 0; i < toIndex - 1; i++) newSegments[i] = oldSegments[i] ?? null;
-            for (let i = toIndex + 1; i <= fromIndex - 1; i++) newSegments[i] = oldSegments[i - 1] ?? null;
-            for (let i = fromIndex + 1; i < N - 1; i++) newSegments[i] = oldSegments[i] ?? null;
-            if (toIndex > 0) toRecalc.push(toIndex - 1);
-            toRecalc.push(toIndex);
-            if (fromIndex < N - 1) toRecalc.push(fromIndex);
-        }
-
-        const loadingAnchorIndexes = [...new Set(toRecalc.flatMap((i) => [i, i + 1]))];
-        for (const index of loadingAnchorIndexes) {
-            startAnchorLoading(anchors[index]);
-        }
-        try {
-            const recalcResults = await Promise.all(
-                toRecalc.map((i) =>
-                    calculateRouteBetween(
-                        anchors[i].lat,
-                        anchors[i].lon,
-                        anchors[i + 1].lat,
-                        anchors[i + 1].lon,
-                        routingOptions,
-                    ).then((pts) => ({ i, segment: new TrackSegment({ trkpt: pts }) })),
-                ),
-            );
-
-            for (const { i, segment } of recalcResults) {
-                newSegments[i] = segment;
-            }
-
-            setRoute(
-                new GPX({ trk: [new Track({ trkseg: newSegments.filter((s): s is TrackSegment => s !== null) })] }),
-                true,
-            );
-            normalizeRouteTime();
-            updateTrailWithRouteData();
-        } finally {
-            for (const index of loadingAnchorIndexes) {
-                stopAnchorLoading(anchors[index]);
-            }
-        }
-    }
-
-    async function moveAnchor(fromIndex: number, toIndex: number) {
-        if (
-            routeAnchorListUpdating ||
-            !drawingActive ||
-            fromIndex === toIndex ||
-            fromIndex < 0 ||
-            toIndex < 0 ||
-            fromIndex >= valhallaStore.anchors.length ||
-            toIndex >= valhallaStore.anchors.length
-        ) {
-            return;
-        }
-
-        const previousAnchors = [...valhallaStore.anchors];
-        const previousUndoStackLength = valhallaStore.undoStack.length;
-        const [anchor] = valhallaStore.anchors.splice(fromIndex, 1);
-        valhallaStore.anchors.splice(toIndex, 0, anchor);
-        refreshAnchorLabels(Math.min(fromIndex, toIndex));
-
-        routeAnchorListUpdating = true;
-        try {
-            await recalculateRouteFromAnchors(fromIndex, toIndex);
-            const lastEntry = valhallaStore.undoStack.at(-1);
-            if (lastEntry && valhallaStore.undoStack.length > previousUndoStackLength) {
-                lastEntry.anchorsBefore = previousAnchors;
-                lastEntry.anchorsAfter = [...valhallaStore.anchors];
-            }
-        } catch (e) {
-            while (valhallaStore.undoStack.length > previousUndoStackLength) {
-                revertRouteChange();
-            }
-            routeSegments = [...(valhallaStore.route.trk?.at(0)?.trkseg ?? [])];
-            valhallaStore.anchors = previousAnchors;
-            refreshAnchorLabels(Math.min(fromIndex, toIndex));
-            console.error(e);
-            show_toast({
-                text: routeCalculationErrorText(e),
-                icon: "close",
-                type: "error",
-            });
-        } finally {
-            routeAnchorListUpdating = false;
-        }
-    }
-
-    async function recalculateRoute(anchorIndex: number, loadingAnchorIndexes = [anchorIndex]) {
         const anchor = valhallaStore.anchors[anchorIndex];
         if (!anchor) {
             return;
         }
-        const anchors = valhallaStore.anchors;
-        const loadingAnchors = [
-            ...new Set(
-                loadingAnchorIndexes
-                    .map((index) => anchors[index])
-                    .filter((anchor): anchor is ValhallaAnchor => Boolean(anchor)),
-            ),
-        ];
-        for (const loadingAnchor of loadingAnchors) {
-            startAnchorLoading(loadingAnchor);
-        }
         let nextRouteSegment;
         let previousRouteSegment;
         try {
-            if (anchorIndex < anchors.length - 1) {
-                const nextAnchor = anchors[anchorIndex + 1];
+            const waypoints = ($formData.expand?.waypoints_via_trail ??
+                []) as Waypoint[];
 
-                nextRouteSegment = await calculateRouteBetween(
-                    anchor.lat,
-                    anchor.lon,
-                    nextAnchor.lat,
-                    nextAnchor.lon,
-                    routingOptions,
+            if (
+                anchorIndex < valhallaStore.anchors.length - 1 &&
+                waypoints[anchorIndex + 1]
+            ) {
+                nextRouteSegment = calculateRouteSegmentForWaypointPair(
+                    waypoints,
+                    anchorIndex + 1,
+                    {
+                        fallbackOnError: true,
+                        markConnectionStraightOnFallback: true,
+                    },
                 );
             }
-            if (anchorIndex > 0) {
-                const previousAnchor = anchors[anchorIndex - 1];
-                previousRouteSegment = await calculateRouteBetween(
-                    previousAnchor.lat,
-                    previousAnchor.lon,
-                    anchor.lat,
-                    anchor.lon,
-                    routingOptions,
+            if (anchorIndex > 0 && waypoints[anchorIndex]) {
+                previousRouteSegment = calculateRouteSegmentForWaypointPair(
+                    waypoints,
+                    anchorIndex,
+                    {
+                        fallbackOnError: true,
+                        markConnectionStraightOnFallback: true,
+                    },
                 );
             }
+
+            [nextRouteSegment, previousRouteSegment] = await Promise.all([
+                nextRouteSegment,
+                previousRouteSegment,
+            ]);
 
             if (nextRouteSegment) {
-                await editRoute(anchorIndex, nextRouteSegment);
+                await editCalculatedRouteSegment(anchorIndex, nextRouteSegment);
             }
             if (previousRouteSegment) {
-                await editRoute(anchorIndex - 1, previousRouteSegment);
+                await editCalculatedRouteSegment(
+                    anchorIndex - 1,
+                    previousRouteSegment,
+                );
             }
-            normalizeRouteTime();
+            $formData.expand!.waypoints_via_trail = [...waypoints];
             updateTrailWithRouteData();
+            normalizeRouteTime();
         } catch (e) {
             console.error(e);
-            show_toast({
-                text: routeCalculationErrorText(e),
-                icon: "close",
-                type: "error",
-            });
-        } finally {
-            for (const loadingAnchor of loadingAnchors) {
-                stopAnchorLoading(loadingAnchor);
+            const waypoints = ($formData.expand?.waypoints_via_trail ??
+                []) as Waypoint[];
+            const affectedToIndices = [
+                anchorIndex > 0 ? anchorIndex : null,
+                anchorIndex < valhallaStore.anchors.length - 1
+                    ? anchorIndex + 1
+                    : null,
+            ].filter((toIndex): toIndex is number => toIndex !== null);
+
+            const originalKmlToIndices = affectedToIndices.filter(
+                (toIndex) => waypoints[toIndex]?.connectionMode === "original-kml",
+            );
+
+            const unresolvedToIndices: number[] = [];
+            for (const toIndex of originalKmlToIndices) {
+                const previousWaypoint = waypoints[toIndex - 1];
+                const currentWaypoint = waypoints[toIndex];
+                if (!previousWaypoint || !currentWaypoint) {
+                    unresolvedToIndices.push(toIndex);
+                    continue;
+                }
+                try {
+                    const repairedSegment =
+                        await calculateRouteSegmentBetweenEndpoints(
+                            previousWaypoint,
+                            currentWaypoint,
+                            {
+                                ...routingOptions,
+                                autoRouting: true,
+                            },
+                            { fallbackOnError: false },
+                        );
+                    currentWaypoint.connectionMode = "snap";
+                    await editCalculatedRouteSegment(toIndex - 1, repairedSegment);
+                } catch (repairError) {
+                    console.error(repairError);
+                    unresolvedToIndices.push(toIndex);
+                }
             }
+
+            if (originalKmlToIndices.length > 0) {
+                normalizeRouteTime();
+                updateTrailWithRouteData();
+            }
+
+            if (
+                enableGlobalRoutingRepair &&
+                unresolvedToIndices.length > 0 &&
+                confirm($_("route-repair-switch-all-to-routing"))
+            ) {
+                for (let i = 1; i < waypoints.length; i++) {
+                    waypoints[i].connectionMode = "snap";
+                }
+                await recalculateRouteFromWaypoints({ showSuccessToast: false });
+            }
+
+            showRouteCalculationError(
+                e,
+                "error-calculating-route-after-waypoint-move",
+            );
+        } finally {
+            stopAnchorLoading(valhallaStore.anchors[anchorIndex], markerText);
         }
     }
 
@@ -1257,7 +3022,7 @@
         segment: number;
         event: M.MapMouseEvent;
     }) {
-        if (draggingMarker) {
+        if (draggingMarker || !canModifyTrail) {
             return;
         }
         const anchor = addAnchor(
@@ -1265,223 +3030,144 @@
             data.event.lngLat.lng,
             data.segment + 1,
         );
-        startAnchorLoading(anchor);
+        const insertedWaypoint = createWaypointFromTap(
+            data.event.lngLat.lat,
+            data.event.lngLat.lng,
+            {
+                name: getWaypointCoordinateName(
+                    data.event.lngLat.lat,
+                    data.event.lngLat.lng,
+                ),
+            },
+        );
+        insertedWaypoint.id = cryptoRandomString({ length: 15 });
+        insertedWaypoint.connectionMode = getDefaultWaypointConnectionMode();
 
-        const previousAnchor = valhallaStore.anchors[data.segment];
-        const nextAnchor = valhallaStore.anchors[data.segment + 2];
+        const waypoints = [...($formData.expand!.waypoints_via_trail ?? [])];
+        waypoints.splice(data.segment + 1, 0, insertedWaypoint);
+        normalizeWaypointConnectionModes(waypoints);
+        snapSegmentsForInsertedWaypoint(waypoints, data.segment + 1);
+        $formData.expand!.waypoints_via_trail = waypoints;
+        syncWaypointIconsWithRoutingRole();
+        if (isLoopRouteActive()) {
+            await recalculateRouteFromWaypoints({ showSuccessToast: false });
+            return;
+        }
+        const markerText = startAnchorLoading(anchor);
+        updateFollowingAnchors(data.segment);
 
         try {
-            const previousRouteSegment = await calculateRouteBetween(
-                previousAnchor.lat,
-                previousAnchor.lon,
-                anchor.lat,
-                anchor.lon,
-                routingOptions,
-            );
-            const nextRouteSegment = await calculateRouteBetween(
-                anchor.lat,
-                anchor.lon,
-                nextAnchor.lat,
-                nextAnchor.lon,
-                routingOptions,
-            );
+            const [previousRouteSegment, nextRouteSegment] = await Promise.all([
+                calculateRouteSegmentForWaypointPair(waypoints, data.segment + 1),
+                calculateRouteSegmentForWaypointPair(waypoints, data.segment + 2),
+            ]);
 
-            await editRoute(data.segment, previousRouteSegment);
-            await insertIntoRoute(nextRouteSegment, data.segment + 1);
+            await editCalculatedRouteSegment(data.segment, previousRouteSegment);
+            await insertCalculatedRouteSegment(
+                nextRouteSegment,
+                data.segment + 1,
+            );
             normalizeRouteTime();
             updateTrailWithRouteData();
         } catch (e) {
             console.error(e);
-            show_toast({
-                text: routeCalculationErrorText(e),
-                icon: "close",
-                type: "error",
-            });
+            showRouteCalculationError(e);
         } finally {
-            stopAnchorLoading(anchor);
+            stopAnchorLoading(anchor, markerText);
         }
+    }
+
+    function updateFollowingAnchors(segment: number) {
+        for (let i = segment + 2; i < valhallaStore.anchors.length; i++) {
+            const anchor = valhallaStore.anchors[i];
+            const markerIcon = anchor.marker?.getElement();
+            if (markerIcon) {
+                const markerText = markerIcon.textContent ?? "0";
+                const markerIndex = parseInt(markerText);
+                const newIndex = markerIndex + 1;
+                markerIcon.textContent = newIndex + "";
+                anchor
+                    .marker!.getPopup()
+                    ._content.getElementsByTagName("h5")[0].textContent =
+                    $_("route-point") + " #" + newIndex;
+            }
+        }
+    }
+
+    function reverseWaypointOrder() {
+        const waypoints = [...($formData.expand!.waypoints_via_trail ?? [])];
+        if (waypoints.length < 2) {
+            return;
+        }
+
+        const reversedWaypoints = [...waypoints].reverse();
+        for (let i = 0; i < reversedWaypoints.length; i++) {
+            reversedWaypoints[i].connectionMode =
+                i === 0
+                    ? undefined
+                    : waypoints[waypoints.length - i].connectionMode ??
+                      getDefaultWaypointConnectionMode();
+        }
+
+        $formData.expand!.waypoints_via_trail = reversedWaypoints;
+        syncWaypointIconsWithRoutingRole();
     }
 
     async function handleSegmentClick(data: {
         segment: number;
         event: M.MapMouseEvent;
     }) {
-        addAnchor(
-            data.event.lngLat.lat,
-            data.event.lngLat.lng,
-            data.segment + 1,
-        );
-
-        await splitSegment(data.segment, data.event.lngLat);
-        updateTrailWithRouteData();
+        if (!canModifyTrail) {
+            return;
+        }
+        showWaypointActionPopup(data.event.lngLat, {
+            insertIndex: data.segment + 1,
+        });
     }
 
     function reverseTrail() {
+        if (!canModifyTrail) {
+            return;
+        }
+        reverseWaypointOrder();
         reverseRoute();
+        routeSacScaleSegments = [...routeSacScaleSegments].reverse();
 
-        updateTrailWithRouteData();
-    }
-
-    function resetTrail() {
-        resetRoute();
-
-        updateTrailWithRouteData();
-    }
-
-    function requestReplaceRoute() {
-        replaceRouteModal.openModal();
-    }
-
-    function replaceRoute() {
-        resetRoute();
-        clearUndoRedoStack();
-        gpxFile = null;
-        overwriteGPX = true;
-        replacingRoute = true;
-        drawingActive = false;
-        routeSegments = [];
-        $formData.expand!.gpx_data = undefined;
         updateTrailWithRouteData();
     }
 
     async function recalculateElevationData() {
+        if (!canModifyTrail) {
+            return;
+        }
         await recalculateHeight();
 
         updateTrailWithRouteData();
     }
 
-    function toggleCropMarkers(active: boolean) {
-        if (active) {
-            cropStartMarker?.setOpacity("1");
-            cropEndMarker?.setOpacity("1");
-        } else {
-            cropStartMarker?.setOpacity("0");
-            cropEndMarker?.setOpacity("0");
-
-            updateTotals(valhallaStore.route);
-        }
-    }
-
-    function updateCropMarkers(range: [start: number, end: number]) {
-        if (!cropStartMarker || !cropEndMarker) {
-            cropStartMarker = new FontawesomeMarker(
-                {
-                    id: "crop-start-marker",
-                    icon: "fa-regular fa-circle",
-                    fontSize: "xs",
-                    style: "w-6",
-                    width: 4,
-                    backgroundColor: "bg-primary",
-                    fontColor: "white",
-                },
-                {},
-            );
-            cropEndMarker = new FontawesomeMarker(
-                {
-                    id: "crop-end-marker",
-                    icon: "fa fa-flag-checkered",
-                    fontSize: "xs",
-                    style: "w-6",
-                    width: 4,
-                    backgroundColor: "bg-primary",
-                    fontColor: "white",
-                },
-                {},
-            );
-
-            cropStartMarker.setLngLat([0, 0]).addTo(map!);
-            cropEndMarker.setLngLat([0, 0]).addTo(map!);
-        }
-        const [start, end] = range;
-
-        const flatRoute = valhallaStore.route.flatten();
-
-        const targetStartDistance =
-            valhallaStore.route.features.distance * (start / 100);
-        const [startLon, startLat, startIndex] = getCoordinateAtDistance(
-            flatRoute,
-            valhallaStore.route.features.cumulativeDistance,
-            targetStartDistance,
-        );
-
-        const targetEndDistance =
-            valhallaStore.route.features.distance * (end / 100);
-        const [endLon, endLat, endIndex] = getCoordinateAtDistance(
-            flatRoute,
-            valhallaStore.route.features.cumulativeDistance,
-            targetEndDistance,
-        );
-
-        cropStartMarker.setLngLat([startLon, startLat]);
-        cropEndMarker.setLngLat([endLon, endLat]);
-
-        croppedGPX = cropGPX(
-            flatRoute[startIndex],
-            flatRoute[endIndex],
-            valhallaStore.route,
-        );
-
-        updateTotals(croppedGPX);
-    }
-
-    function confirmCrop() {
-        if (!croppedGPX) {
-            return;
-        }
-        setRoute(croppedGPX, true);
-        updateTrailWithRouteData();
-        clearAnchors();
-        initRouteAnchors(croppedGPX, true);
-    }
-
-    function getCoordinateAtDistance(
-        points: GPXWaypoint[],
-        cumulative: number[],
-        target: number,
-    ) {
-        let low = 0,
-            high = cumulative.length - 1;
-
-        while (low < high) {
-            const mid = Math.floor((low + high) / 2);
-            if (cumulative[mid] < target) low = mid + 1;
-            else high = mid;
-        }
-
-        const i = Math.max(1, low);
-        const prevDist = cumulative[i - 1];
-        const nextDist = cumulative[i];
-        const ratio = (target - prevDist) / (nextDist - prevDist);
-
-        const prev = points[i - 1];
-        const next = points[i];
-
-        return [
-            prev.$.lon! + (next.$.lon! - prev.$.lon!) * ratio,
-            prev.$.lat! + (next.$.lat! - prev.$.lat!) * ratio,
-            i,
-        ];
-    }
-
     function updateTrailWithRouteData() {
-        overwriteGPX = true;
-        routeSegments = [...(valhallaStore.route.trk?.at(0)?.trkseg ?? [])];
         updateTotals(valhallaStore.route);
 
         if (!$formData.id) {
             $formData.id = cryptoRandomString({ length: 15 });
         }
+        syncVisibleRouteAnchors();
         updateTrailOnMap();
     }
 
     function updateTotals(gpx: GPX) {
         const totals = gpx.features;
+        const routeDifficulty = calculateRouteDifficultyAssessment(
+            routeSacScaleSegments,
+            $formData.difficulty,
+        ).storedDifficulty;
         formData.set({
             ...$formData,
             distance: totals.distance,
             duration: totals.duration / 1000,
             elevation_gain: totals.elevationGain,
             elevation_loss: totals.elevationLoss,
+            difficulty: routeDifficulty,
         });
     }
 
@@ -1497,42 +3183,6 @@
             zoom: 13,
             animate: false,
         });
-        selectedSearchLocation = item;
-    }
-
-    function clearSelectedSearchLocation() {
-        selectedSearchLocation = null;
-    }
-
-    const buildPoiAnchorAction: OverpassPopupActionFactory = (
-        _feature,
-        coordinates,
-    ) => {
-        const [lon, lat] = coordinates;
-        if (typeof lat !== "number" || typeof lon !== "number") {
-            return null;
-        }
-        if (!drawingActive) {
-            return null;
-        }
-        return {
-            label: $_("add-as-endpoint"),
-            icon: "fa fa-flag-checkered",
-            onClick: () => addAnchorAndRecalculate(lat, lon),
-        } satisfies OverpassPopupAction;
-    };
-
-    async function addSelectedLocationAsEndpoint() {
-        if (!selectedSearchLocation) {
-            return;
-        }
-        const { lat, lon } = selectedSearchLocation.value;
-        if (valhallaStore.anchors.length === 0) {
-            addAnchor(lat, lon, 0);
-        } else {
-            await addAnchorAndRecalculate(lat, lon);
-        }
-        selectedSearchLocation = null;
     }
 
     async function searchCities(q: string) {
@@ -1555,6 +3205,9 @@
     }
 
     function setTrailTags(items: ComboboxItem[]) {
+        if (!canModifyTrail) {
+            return;
+        }
         $formData.expand!.tags = items.map((i) =>
             i.value ? i.value : new Tag(i.text),
         );
@@ -1566,62 +3219,16 @@
     }
 
     function openPhotoBrowser() {
+        if (!canModifyTrail) {
+            return;
+        }
         document.getElementById("waypoint-photo-input")!.click();
     }
 
-    interface GPXCoord {
-        id: string;
-        longitude: number;
-        latitude: number;
-        file: File;
-    }
-
-    interface WaypointPhotoCluster {
-        lat: number;
-        lon: number;
-        waypoint?: string;
-        photos: string[];
-    }
-
-    interface WaypointPhotoClusterResponse {
-        mergeEnabled: boolean;
-        mergeRadius: number;
-        clusters: WaypointPhotoCluster[];
-    }
-
-    interface WaypointClusterPoint {
-        id: string;
-        lat: number;
-        lon: number;
-    }
-
-    interface WaypointPhotoClusterRequest {
-        category?: string;
-        photos: WaypointClusterPoint[];
-        waypoints: WaypointClusterPoint[];
-    }
-
-    async function clusterWaypointPhotos(
-        data: WaypointPhotoClusterRequest,
-    ): Promise<WaypointPhotoClusterResponse> {
-        const response = await fetch("/api/v1/waypoint/cluster", {
-            method: "POST",
-            headers: {
-                "content-type": "application/json",
-            },
-            body: JSON.stringify(data),
-        });
-
-        if (!response.ok) {
-            throw await response.json();
-        }
-
-        return (await response.json()) as WaypointPhotoClusterResponse;
-    }
-
-    const waypointMergeCheckPhotoId = "__waypoint_merge_check__";
-
     async function handleWaypointPhotoSelection() {
+        if (!canModifyTrail) {
+            return;
+        }
         const files = (
             document.getElementById("waypoint-photo-input") as HTMLInputElement
         ).files;
@@ -1630,10 +3237,8 @@
             return;
         }
 
-        const photoCoords: GPXCoord[] = [];
-
-        for (const [index, file] of Array.from(files).entries()) {
-            const coords = await new Promise<GPXCoord | undefined>((resolve) => {
+        for (const file of files) {
+            const coords = await new Promise<number[]>((resolve) => {
                 EXIF.getData(file, function (p) {
                     const lat = EXIF.getTag(p, "GPSLatitude");
                     const latDir = EXIF.getTag(p, "GPSLatitudeRef");
@@ -1641,19 +3246,22 @@
                     const lonDir = EXIF.getTag(p, "GPSLongitudeRef");
 
                     if (lat && lon) {
-                        resolve({
-                            id: index.toString(),
-                            latitude: convertDMSToDD(lat, latDir),
-                            longitude: convertDMSToDD(lon, lonDir),
-                            file,
-                        });
+                        resolve([
+                            convertDMSToDD(lat, latDir),
+                            convertDMSToDD(lon, lonDir),
+                        ]);
                     } else {
-                        resolve(undefined);
+                        resolve([]);
                     }
                 });
             });
-
-            if (!coords) {
+            if (coords.length) {
+                const wp: Waypoint = new Waypoint(coords[0], coords[1], {
+                    icon: "image",
+                });
+                wp._photos = [file];
+                saveWaypoint(wp);
+            } else {
                 show_toast(
                     {
                         type: "warning",
@@ -1662,104 +3270,69 @@
                     },
                     10000,
                 );
-                continue;
             }
-
-            photoCoords.push(coords);
-        }
-
-        let clusterResponse: WaypointPhotoClusterResponse;
-        try {
-            clusterResponse = await clusterWaypointPhotos({
-                category: $formData.category,
-                photos: photoCoords.map((coords) => ({
-                    id: coords.id,
-                    lat: coords.latitude,
-                    lon: coords.longitude,
-                })),
-                waypoints: getExistingWaypointClusterInputs(),
-            });
-        } catch (e) {
-            show_toast(
-                {
-                    type: "error",
-                    icon: "warning",
-                    text: $_("waypoint-cluster-error"),
-                },
-                10000,
-            );
-            return;
-        }
-
-        const fileMap = new Map(photoCoords.map((coords) => [coords.id, coords.file]));
-
-        for (const cluster of clusterResponse.clusters) {
-            const photos = cluster.photos
-                .map((id) => fileMap.get(id))
-                .filter((file): file is File => file != null);
-
-            if (!photos.length) {
-                continue;
-            }
-
-            if (cluster.waypoint) {
-                const existingWaypoint =
-                    $formData.expand?.waypoints_via_trail?.find(
-                        (wp) => wp.id === cluster.waypoint,
-                    );
-
-                if (existingWaypoint) {
-                    const existingWaypointPhotos =
-                        (existingWaypoint as Waypoint)._photos ?? [];
-
-                    commitWaypoint({
-                        ...existingWaypoint,
-                        photos: existingWaypoint.photos ?? [],
-                        _photos: [...existingWaypointPhotos, ...photos],
-                    } as Waypoint);
-                    continue;
-                }
-            }
-
-            const wp: Waypoint = new Waypoint(
-                cluster.lat,
-                cluster.lon,
-                {
-                    icon: photos.length > 1 ? "images" : "image",
-                },
-            );
-            wp._photos = photos;
-            commitWaypoint(wp);
         }
     }
 
     function undoRouteEdit() {
-        const entry = undo();
-        if (entry?.anchorsBefore) {
-            valhallaStore.anchors = entry.anchorsBefore;
-            refreshAnchorLabels();
-        } else {
-            clearAnchors();
-            initRouteAnchors(valhallaStore.route, true);
+        if (!canModifyTrail) {
+            return;
         }
+        const snapshot = waypointUndoStack.at(-1);
+        const currentSnapshot = captureWaypointHistorySnapshot();
+        suppressWaypointHistorySync = true;
+        undo();
+        if (snapshot) {
+            waypointUndoStack = waypointUndoStack.slice(0, -1);
+            waypointRedoStack = [
+                ...waypointRedoStack,
+                cloneWaypointHistorySnapshot(currentSnapshot),
+            ];
+            applyWaypointHistorySnapshot(snapshot);
+            lastWaypointHistoryState = cloneWaypointHistorySnapshot(snapshot);
+        } else {
+            lastWaypointHistoryState = captureWaypointHistorySnapshot();
+        }
+        observedUndoDepth = valhallaStore.undoStack.length;
+        observedRedoDepth = valhallaStore.redoStack.length;
+        suppressWaypointHistorySync = false;
+        syncVisibleRouteAnchors();
         updateTrailWithRouteData();
     }
 
     function redoRouteEdit() {
-        const entry = redo();
-        if (entry?.anchorsAfter) {
-            valhallaStore.anchors = entry.anchorsAfter;
-            refreshAnchorLabels();
-        } else {
-            clearAnchors();
-            initRouteAnchors(valhallaStore.route, true);
+        if (!canModifyTrail) {
+            return;
         }
+        const snapshot = waypointRedoStack.at(-1);
+        const currentSnapshot = captureWaypointHistorySnapshot();
+        suppressWaypointHistorySync = true;
+        redo();
+        if (snapshot) {
+            waypointRedoStack = waypointRedoStack.slice(0, -1);
+            waypointUndoStack = [
+                ...waypointUndoStack,
+                cloneWaypointHistorySnapshot(currentSnapshot),
+            ];
+            applyWaypointHistorySnapshot(snapshot);
+            lastWaypointHistoryState = cloneWaypointHistorySnapshot(snapshot);
+        } else {
+            lastWaypointHistoryState = captureWaypointHistorySnapshot();
+        }
+        observedUndoDepth = valhallaStore.undoStack.length;
+        observedRedoDepth = valhallaStore.redoStack.length;
+        suppressWaypointHistorySync = false;
+        syncVisibleRouteAnchors();
         updateTrailWithRouteData();
     }
 
-    function markTrailAsCompleted() {
-        setFields("completed", true);
-    }
+    onDestroy(() => {
+        if (waypointRecalcDebounceTimeout) {
+            clearTimeout(waypointRecalcDebounceTimeout);
+        }
+        closeWaypointActionPopup();
+    });
+
 </script>
 
 <svelte:head>
@@ -1773,101 +3346,77 @@
 <main class="grid grid-cols-1 md:grid-cols-[400px_1fr]">
     <form
         id="trail-form"
-        class="overflow-y-auto overflow-x-hidden flex flex-col gap-4 px-8 order-1 md:order-0 mt-8 md:mt-0"
+        class="overflow-y-auto overflow-x-hidden flex flex-col gap-4 px-8 order-1 md:order-none mt-8 md:mt-0"
         use:form
     >
+        <div class="sticky top-0 z-20 -mx-8 border-b border-input-border bg-background/95 px-8 py-4 backdrop-blur">
+            <div class="flex items-center justify-between gap-4">
+                <div>
+                    <p class="text-xs font-medium uppercase tracking-[0.18em] text-gray-500">
+                        {$_("map")} / {$_("edit")}
+                    </p>
+                    <p class="text-sm text-gray-500">
+                        {#if mapInteractionMode}
+                            {$_("edit")}
+                        {:else}
+                            <i class="fa fa-lock mr-2"></i>Ansicht gesperrt
+                        {/if}
+                    </p>
+                </div>
+                <div class="inline-flex items-center gap-1 rounded-full border border-input-border bg-input-background p-1">
+                    <button
+                        type="button"
+                        class="flex h-10 w-10 items-center justify-center rounded-full transition-colors"
+                        class:bg-primary={!mapInteractionMode}
+                        class:text-white={!mapInteractionMode}
+                        aria-label="Locked view"
+                        title="Locked view"
+                        onclick={() => (mapInteractionMode = false)}
+                    >
+                        <i class="fa fa-lock"></i>
+                    </button>
+                    <button
+                        type="button"
+                        class="flex h-10 w-10 items-center justify-center rounded-full transition-colors"
+                        class:bg-primary={mapInteractionMode}
+                        class:text-white={mapInteractionMode}
+                        aria-label={$_("edit")}
+                        title={$_("edit")}
+                        disabled={!trailCanBeEdited}
+                        onclick={() => (mapInteractionMode = true)}
+                    >
+                        <i class="fa fa-pen"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
         <Search
             onupdate={(q) => searchCities(q)}
             onclick={(item) => handleSearchClick(item)}
             placeholder="{$_('search-places')}..."
             items={searchDropdownItems}
         ></Search>
-        {#if selectedSearchLocation && drawingActive}
-            <div
-                class="rounded-xl border border-input-border bg-menu-item-background px-4 py-3 flex flex-col gap-3"
-            >
-                <div class="flex items-start gap-3">
-                    <button
-                        type="button"
-                        class="flex h-9 w-9 shrink-0 items-center justify-center self-start rounded-full p-0 text-xl text-content hover:bg-secondary-hover"
-                        aria-label={$_("add-as-endpoint")}
-                        title={$_("add-as-endpoint")}
-                        onclick={addSelectedLocationAsEndpoint}
-                    >
-                        <i class="fa fa-flag-checkered"></i>
-                    </button>
-                    <div class="flex-1">
-                        <p class="font-semibold">
-                            {selectedSearchLocation.text}
-                        </p>
-                        {#if selectedSearchLocation.description}
-                            <p class="text-sm text-gray-500">
-                                {selectedSearchLocation.description}
-                            </p>
-                        {/if}
-                    </div>
-                    <button
-                        type="button"
-                        class="btn-icon"
-                        aria-label={$_("clear-all")}
-                        onclick={clearSelectedSearchLocation}
-                    >
-                        <i class="fa fa-close text-sm"></i>
-                    </button>
-                </div>
-            </div>
-        {/if}
         <hr class="border-input-border" />
-        {#if isNewTrail || replacingRoute || drawingActive || $formData.expand?.gpx_data}
-            {#if isNewTrail || replacingRoute}
-                <h3 class="text-xl font-semibold">{$_("pick-a-trail")}</h3>
-            {/if}
-            <button
-                class="btn-primary"
-                type="button"
-                onclick={async () => {
-                    if (drawingActive) {
-                        await stopDrawing();
-                    } else if (replacingRoute) {
-                        startReplacementDrawing();
-                    } else {
-                        startDrawing();
-                    }
-                }}
-            >
-                {$formData.expand?.gpx_data
-                    ? drawingActive
-                        ? $_("stop-editing")
-                        : $_("edit-route")
-                    : drawingActive
-                        ? $_("stop-drawing")
-                        : $_("draw-a-route")}</button
-            >
-        {/if}
-        {#if drawingActive && valhallaStore.anchors.length}
-            <TrailAnchorList
-                anchors={valhallaStore.anchors}
-                segments={routeSegments}
-                disabled={routeAnchorListUpdating}
-                onMove={moveAnchor}
-                onDelete={removeAnchor}
-                onHover={highlightAnchorMarker}
-            ></TrailAnchorList>
-        {/if}
-        {#if !drawingActive && (isNewTrail || replacingRoute)}
-        <div class="flex gap-4 items-center w-full">
-            <hr class="basis-full border-input-border" />
-            <span class="text-gray-500 uppercase">{$_("or")}</span>
-            <hr class="basis-full border-input-border" />
-        </div>
+        <h3 class="text-xl font-semibold">{$_("pick-a-trail")}</h3>
         <Button
             primary={true}
             type="button"
+            disabled={!canModifyTrail}
             onclick={openFileBrowser}
             >{$formData.expand?.gpx_data
                 ? $_("upload-new-file")
                 : $_("upload-file")}</Button
         >
+        {#if env.PUBLIC_VALHALLA_URL}
+            <label class="flex items-start gap-2 text-sm font-medium">
+                <input
+                    type="checkbox"
+                    class="mt-1"
+                    bind:checked={snapImportedRouteToValhalla}
+                    disabled={!canModifyTrail}
+                />
+                <span>{$_("snap-imported-route-to-valhalla")}</span>
+            </label>
         {/if}
         <input
             type="file"
@@ -1885,6 +3434,7 @@
                 type="button"
                 class="btn-icon"
                 style="font-size: 0.9rem"
+                disabled={!canModifyTrail}
                 onclick={() => (editingBasicInfo = !editingBasicInfo)}
                 ><i class="fa fa-{editingBasicInfo ? 'check' : 'pen'}"
                 ></i></button
@@ -1900,20 +3450,24 @@
                     bind:value={$formData.distance}
                     name="distance"
                     label={$_("distance")}
+                    disabled={!canModifyTrail}
                 ></TextField>
                 <TextField
                     bind:value={$formData.duration}
                     name="duration"
                     label={$_("est-duration")}
+                    disabled={!canModifyTrail}
                 ></TextField><TextField
                     bind:value={$formData.elevation_gain}
                     name="elevation_gain"
                     label={$_("elevation-gain")}
+                    disabled={!canModifyTrail}
                 ></TextField>
                 <TextField
                     bind:value={$formData.elevation_loss}
                     name="elevation_loss"
                     label={$_("elevation-loss")}
+                    disabled={!canModifyTrail}
                 ></TextField>
             {:else}
                 <div>
@@ -1962,88 +3516,329 @@
                 </div>
             {/if}
         </fieldset>
-        <TextField name="name" label={$_("name")} error={$errors.name}
+        <TextField
+            name="name"
+            label={$_("name")}
+            error={$errors.name}
+            disabled={!canModifyTrail}
         ></TextField>
         <TextField
             name="location"
             label={$_("location")}
             error={$errors.location}
+            disabled={!canModifyTrail}
         ></TextField>
-        <Datepicker label={$_("date")} bind:value={$formData.date}></Datepicker>
-        <Editor
-            extraClasses="min-h-24"
-            bind:value={$formData.description}
-            label={$_("describe-your-trail")}
-        ></Editor>
-        <Combobox
-            bind:value={getTrailTags, setTrailTags}
-            onupdate={searchTags}
-            items={tagItems}
-            label={$_("tags")}
-            multiple
-            chips
-        ></Combobox>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-y-4">
-            <Select
-                name="difficulty"
-                label={$_("difficulty")}
-                items={[
-                    { text: $_("easy"), value: "easy" },
-                    { text: $_("moderate"), value: "moderate" },
-                    { text: $_("difficult"), value: "difficult" },
-                ]}
-            ></Select>
+        <Datepicker
+            label={$_("date")}
+            bind:value={$formData.date}
+            disabled={!canModifyTrail}
+        ></Datepicker>
+        {#if canModifyTrail}
+            <Editor
+                extraClasses="min-h-24"
+                bind:value={$formData.description}
+                label={$_("describe-your-trail")}
+            ></Editor>
+            <Combobox
+                bind:value={getTrailTags, setTrailTags}
+                onupdate={searchTags}
+                items={tagItems}
+                label={$_("tags")}
+                multiple
+                chips
+            ></Combobox>
+        {:else}
+            <div>
+                <p class="text-sm font-medium pb-1">{$_("describe-your-trail")}</p>
+                <article
+                    class="min-h-24 rounded-md border border-input-border bg-input-background p-3 text-sm prose dark:prose-invert"
+                >
+                    {@html $formData.description || ""}
+                </article>
+            </div>
+            <div>
+                <p class="text-sm font-medium pb-1">{$_("tags")}</p>
+                <div class="flex min-h-12 flex-wrap gap-2 rounded-md border border-input-border bg-input-background p-3">
+                    {#if ($formData.expand?.tags?.length ?? 0) > 0}
+                        {#each $formData.expand?.tags ?? [] as tag}
+                            <span class="rounded-full bg-secondary px-3 py-1 text-sm">
+                                {tag.name}
+                            </span>
+                        {/each}
+                    {:else}
+                        <span class="text-sm text-gray-500">-</span>
+                    {/if}
+                </div>
+            </div>
+        {/if}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <p class="text-sm font-medium pb-1">{$_("difficulty")}</p>
+                <div class="flex min-h-10 items-center">
+                    <span
+                        class="inline-flex min-h-8 items-center rounded-full bg-secondary px-3 py-1 text-sm font-semibold"
+                    >
+                        {computedRouteDifficulty.label}
+                    </span>
+                </div>
+            </div>
+            {#if routingOptions.modeOfTransport === "pedestrian" && routingOptions.pedestrianOptions}
+                <Select
+                    label={$_("max-hiking-difficulty")}
+                    items={maxHikingDifficultyItems}
+                    disabled={!canModifyTrail}
+                    onchange={setMaxHikingDifficulty}
+                    bind:value={routingOptions.pedestrianOptions
+                        .max_hiking_difficulty}
+                ></Select>
+            {/if}
             <Select
                 name="category"
                 label={$_("category")}
-                items={$categories.map((c) => ({
+                items={editableRouteCategories.map((c) => ({
                     text: $_(c.name),
                     value: c.id,
                 }))}
+                disabled={!canModifyTrail}
+                bind:value={$formData.category}
+                onchange={(value) => {
+                    const categoryId = String(value);
+                    setFields("category", categoryId);
+                    applyRoutingForCategory(categoryId, true);
+                }}
             ></Select>
+            {#if routingOptions.modeOfTransport === "pedestrian" && routingOptions.pedestrianOptions}
+                <Select
+                    label={$_("walking-speed")}
+                    items={walkingSpeedItems}
+                    disabled={!canModifyTrail}
+                    onchange={setWalkingSpeed}
+                    bind:value={routingOptions.pedestrianOptions.walking_speed}
+                ></Select>
+                <div>
+                    <Select
+                        label={$_("use-hills")}
+                        items={hillPreferenceItems}
+                        disabled={!canModifyTrail}
+                        onchange={setHillPreference}
+                        bind:value={routingOptions.pedestrianOptions.use_hills}
+                    ></Select>
+                    <p class="mt-1 text-xs text-gray-500">
+                        {$_("valhalla-use-hills-value", {
+                            values: {
+                                value:
+                                    routingOptions.pedestrianOptions.use_hills,
+                            },
+                        })}
+                    </p>
+                </div>
+                <p class="-mt-3 text-xs text-gray-500 md:col-span-1">
+                    {getSelectedWalkingSpeedDescription()}
+                </p>
+                <p class="-mt-3 text-xs text-gray-500 md:col-span-1">
+                    {getSelectedHillPreferenceDescription()}
+                </p>
+            {/if}
+            {#if routingOptions.modeOfTransport === "bicycle" && routingOptions.bicycleOptions}
+                <Select
+                    label={$_("bike-profile")}
+                    items={bicycleRouteProfileItems}
+                    disabled={!canModifyTrail}
+                    onchange={setBicycleRouteProfile}
+                    bind:value={bicycleRouteProfile}
+                ></Select>
+                <p class="self-end text-xs text-gray-500">
+                    {getSelectedBicycleRouteProfileDescription()}
+                </p>
+            {/if}
+            {#if routingOptions.modeOfTransport === "pedestrian" || routingOptions.modeOfTransport === "bicycle"}
+                <Button
+                    secondary
+                    type="button"
+                    disabled={!canModifyTrail ||
+                        ($formData.expand?.waypoints_via_trail?.length ?? 0) < 2}
+                    onclick={rerouteCurrentTrail}
+                    ><i class="fa fa-route mr-2"></i>{$_("reroute")}</Button
+                >
+            {/if}
         </div>
 
         <Toggle
-            name="completed"
-            label={$formData.completed ? $_("completed") : $_("not-completed")}
-            icon={$formData.completed ? "flag-checkered" : "compass-drafting"}
-        ></Toggle>
-        <Toggle
             name="public"
+            bind:value={$formData.public}
             label={$formData.public ? $_("public") : $_("private")}
             icon={$formData.public ? "globe" : "lock"}
+            disabled={!canModifyTrail}
         ></Toggle>
         <hr class="border-separator" />
-        <h3 class="text-xl font-semibold">
-            {$_("waypoints", { values: { n: 2 } })}
-        </h3>
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <h3 class="text-xl font-semibold">
+                {$_("waypoints", { values: { n: 2 } })}
+            </h3>
+            {#if canModifyTrail && ($formData.expand?.waypoints_via_trail?.length ?? 0) > 0}
+                <Button
+                    secondary
+                    type="button"
+                    disabled={waypointNameReloading}
+                    onclick={reloadWaypointNames}
+                >
+                    <i class="fa fa-location-dot mr-2"></i>
+                    {#if waypointNameReloading}
+                        {$_("reload-waypoint-names-progress", {
+                            values: {
+                                current: waypointNameReloadProgress,
+                                total: waypointNameReloadTotal,
+                            },
+                        })}
+                    {:else}
+                        {$_("reload-waypoint-names")}
+                    {/if}
+                </Button>
+            {/if}
+        </div>
         <ul>
             {#each $formData.expand?.waypoints_via_trail ?? [] as waypoint, i}
                 <li
                     onmouseenter={() => openMarkerPopup(waypoint)}
                     onmouseleave={() => openMarkerPopup(waypoint)}
                 >
+                    {#if i > 0}
+                        <div
+                            class="mx-2 flex items-center gap-2 py-1 text-xs text-gray-500"
+                        >
+                            <span class="shrink-0 font-medium">
+                                Verbindung {i} → {i + 1}
+                            </span>
+                            <span class="h-px flex-1 bg-input-border"></span>
+                            {#if canModifyTrail}
+                                <select
+                                    name={`waypoint-connection-mode-${waypoint.id ?? i}`}
+                                    class="h-8 max-w-40 rounded-md bg-input-background px-2 text-xs outline outline-1 outline-input-border focus:outline-input-border-focus"
+                                    value={waypoint.connectionMode ??
+                                        getDefaultWaypointConnectionMode()}
+                                    onchange={(event) => {
+                                        const value = (
+                                            event.currentTarget as HTMLSelectElement
+                                        ).value as WaypointConnectionMode;
+                                        if (
+                                            value === "original-kml" &&
+                                            !importedOriginalRoute
+                                        ) {
+                                            return;
+                                        }
+                                        waypoint.connectionMode = value;
+                                        $formData.expand!.waypoints_via_trail = [
+                                            ...($formData.expand!.waypoints_via_trail ??
+                                                []),
+                                        ];
+                                        void recalculateSingleWaypointSegment(i);
+                                    }}
+                                >
+                                    <option value="snap">{$_("connection-mode-routing")}</option>
+                                    <option value="straight">{$_("connection-mode-straight")}</option>
+                                    <option
+                                        value="original-kml"
+                                        disabled={!importedOriginalRoute}
+                                        >{$_("connection-mode-original")}</option
+                                    >
+                                </select>
+                            {:else}
+                                <span class="rounded-full bg-input-background px-3 py-1 text-xs font-medium capitalize">
+                                    {waypoint.connectionMode ??
+                                        getDefaultWaypointConnectionMode()}
+                                </span>
+                            {/if}
+                        </div>
+                    {/if}
                     <WaypointCard
                         {waypoint}
-                        mode="edit"
+                        waypointNumber={i + 1}
+                        canMoveUp={canModifyTrail && i > 0}
+                        canMoveDown={canModifyTrail && i <
+                            ($formData.expand?.waypoints_via_trail?.length ??
+                                0) -
+                                1}
+                        onMoveUp={() => moveWaypoint(i, i - 1)}
+                        onMoveDown={() => moveWaypoint(i, i + 1)}
+                        canSetAsStart={canModifyTrail && isLoopRouteActive()}
+                        routingRole={getRoutingRoleByIndex(
+                            i,
+                            $formData.expand?.waypoints_via_trail?.length ?? 0,
+                        )}
+                        mode={canModifyTrail ? "edit" : "show"}
                         onchange={(item) =>
                             handleWaypointMenuClick(waypoint, i, item)}
                     ></WaypointCard>
+                    {#if i === ($formData.expand?.waypoints_via_trail?.length ?? 0) - 1 && ($formData.expand?.waypoints_via_trail?.length ?? 0) > 1}
+                        <div
+                            class="mx-2 flex items-center gap-2 py-1 text-xs text-gray-500"
+                        >
+                            <span class="shrink-0 font-medium">
+                                {$_("roundtrip-connection-label", {
+                                    values: {
+                                        from: i + 1,
+                                        to: 1,
+                                    },
+                                })}
+                            </span>
+                            <span class="h-px flex-1 bg-input-border"></span>
+                            {#if canModifyTrail}
+                                <select
+                                    name="loop-connection-mode"
+                                    class="h-8 max-w-56 rounded-md bg-input-background px-2 text-xs outline outline-1 outline-input-border focus:outline-input-border-focus"
+                                    value={loopConnectionMode}
+                                    onchange={(event) => {
+                                        void updateLoopConnectionMode(
+                                            (
+                                                event.currentTarget as HTMLSelectElement
+                                            ).value as LoopConnectionMode,
+                                        );
+                                    }}
+                                >
+                                    <option value="none"
+                                        >{$_("roundtrip-mode-none")}</option
+                                    >
+                                    <option value="snap"
+                                        >{$_("roundtrip-mode-snap")}</option
+                                    >
+                                    <option value="straight"
+                                        >{$_("roundtrip-mode-straight")}</option
+                                    >
+                                </select>
+                            {:else}
+                                <span class="rounded-full bg-input-background px-3 py-1 text-xs font-medium">
+                                    {loopConnectionMode}
+                                </span>
+                            {/if}
+                        </div>
+                    {/if}
                 </li>
             {/each}
         </ul>
+        {#if canModifyTrail}
+            <button
+                class="btn-secondary"
+                type="button"
+                onclick={reverseTrail}
+                ><i class="fa fa-arrow-right-arrow-left mr-2"></i
+                >{$_("reverse-direction")}</button
+            >
+        {/if}
         <button
             class="btn-secondary"
             type="button"
-            onclick={() => beforeWaypointModalOpen()}
-            ><i class="fa fa-plus mr-2"></i>{$_("add-waypoint")}</button
-        >
-        <button
-            class="btn-secondary"
-            type="button"
+            disabled={!canModifyTrail}
             onclick={() => openPhotoBrowser()}
             ><i class="fa fa-image mr-2"></i>{$_("from-photos")}</button
         >
+        <PoiFilterPanel
+            categories={data.poiCategories}
+            bind:selectedCategoryIds={selectedPoiCategoryIds}
+            bind:includePublic={includePublicPois}
+            bind:includeOwn={includeOwnPois}
+            title={$_("poi-routing-panel-title")}
+        ></PoiFilterPanel>
+        <p class="text-sm text-gray-500">{$_("poi-routing-panel-hint")}</p>
         <input
             type="file"
             id="waypoint-photo-input"
@@ -2054,13 +3849,15 @@
         />
         <hr class="border-separator" />
         <h3 class="text-xl font-semibold">{$_("photos")}</h3>
-        <PhotoPicker
-            id="trail"
-            parent={$formData}
-            bind:photos={$formData.photos}
-            bind:thumbnail={$formData.thumbnail}
-            bind:photoFiles
-        ></PhotoPicker>
+        <div class:readonly-edit-block={!canModifyTrail}>
+            <PhotoPicker
+                id="trail"
+                parent={$formData}
+                bind:photos={$formData.photos}
+                bind:thumbnail={$formData.thumbnail}
+                bind:photoFiles
+            ></PhotoPicker>
+        </div>
         <hr class="border-separator" />
         <h3 class="text-xl font-semibold">{$_("summit-book")}</h3>
         <ul>
@@ -2068,7 +3865,8 @@
                 <li>
                     <SummitLogCard
                         {log}
-                        mode={log.author == $currentUser?.actor
+                        mode={canModifyTrail &&
+                        log.author == $currentUser?.actor
                             ? "edit"
                             : "show"}
                         onchange={(item) =>
@@ -2080,6 +3878,7 @@
         <button
             class="btn-secondary"
             type="button"
+            disabled={!canModifyTrail}
             onclick={beforeSummitLogModalOpen}
             ><i class="fa fa-plus mr-2"></i>{$_("add-entry")}</button
         >
@@ -2112,23 +3911,29 @@
             <Button
                 secondary={true}
                 tooltip={$_("save-your-trail-first")}
-                disabled={page.params.id == "new" && !savedAtLeastOnce}
+                disabled={
+                    !canModifyTrail ||
+                    (page.params.id == "new" && !savedAtLeastOnce)
+                }
                 type="button"
                 onclick={() => listSelectModal.openModal()}
                 ><i class="fa fa-plus mr-2"></i>{$_("add-to-list")}</Button
             >
         {/if}
         <hr class="border-separator" />
-        <Button
-            primary={true}
-            large={true}
-            type="submit"
-            extraClasses="mb-2"
-            {loading}>{$_("save-trail")}</Button
-        >
+        {#if trailCanBeEdited}
+            <Button
+                primary={true}
+                large={true}
+                type="submit"
+                disabled={!canModifyTrail}
+                extraClasses="mb-2"
+                {loading}>{$_("save-trail")}</Button
+            >
+        {/if}
     </form>
     <div class="relative">
-        {#if drawingActive}
+        {#if drawingActive && canModifyTrail}
             <div
                 in:fly={{ easing: backInOut, x: -30 }}
                 out:fly={{ easing: backInOut, x: -30 }}
@@ -2136,17 +3941,9 @@
             >
                 <RouteEditor
                     bind:options={routingOptions}
-                    onReverse={reverseTrail}
-                    onReset={isNewTrail ? resetTrail : requestReplaceRoute}
-                    resetLabel="reset-route"
-                    resetAriaLabel="reset-route"
-                    onCropToggle={toggleCropMarkers}
-                    onCrop={confirmCrop}
-                    onUpdateCropRange={updateCropMarkers}
                     onRecalculateElevationData={recalculateElevationData}
                     onUndo={undoRouteEdit}
                     onRedo={redoRouteEdit}
-                    bind:showWaypoints={showWaypointsWhileDrawing}
                 ></RouteEditor>
             </div>
         {/if}
@@ -2154,18 +3951,25 @@
             <MapWithElevationMaplibre
                 trails={mapTrail}
                 waypoints={$formData.expand?.waypoints_via_trail}
-                drawing={drawingActive}
-                displayWaypoints={!drawingActive || showWaypointsWhileDrawing}
+                drawing={canModifyTrail && drawingActive}
+                crosshairCursor={canModifyTrail}
                 showTerrain={true}
                 autoGeolocateOnDrawing={page.params.id === "new"}
-                onmarkerdragend={moveMarker}
+                onmarkerdragend={canModifyTrail ? moveMarker : undefined}
                 activeTrail={0}
+                pois={filteredRoutePlannerPois}
+                poiAttributeDefinitions={data.poiAttributeDefinitions}
+                onpoiclick={canModifyTrail ? addPoiAsRoutePoint : undefined}
                 bind:map
-                oninit={handleMapInit}
-                onclick={(target) => handleMapClick(target)}
-                oncontextmenu={(target) => handleMapContextMenu(target)}
-                onsegmentclick={(data) => handleSegmentClick(data)}
-                onsegmentdragend={(data) => handleSegmentDragEnd(data)}
+                onclick={canModifyTrail
+                    ? (target) => handleMapClick(target)
+                    : undefined}
+                onsegmentclick={canModifyTrail
+                    ? (data) => handleSegmentClick(data)
+                    : undefined}
+                onsegmentdragend={canModifyTrail
+                    ? (data) => handleSegmentDragEnd(data)
+                    : undefined}
                 mapOptions={{ preserveDrawingBuffer: true }}
                 {buildPoiAnchorAction}
             ></MapWithElevationMaplibre>
@@ -2173,13 +3977,6 @@
     </div>
 </main>
 <WaypointModal bind:this={waypointModal} onsave={saveWaypoint}></WaypointModal>
-<WaypointMergeModal
-    merge={pendingWaypointMerge}
-    bind:this={waypointMergeModal}
-    oncreate={createPendingWaypointAnyway}
-    onmerge={addPendingWaypointToExisting}
-    oncancel={cancelPendingWaypointMerge}
-></WaypointMergeModal>
 <SummitLogModal bind:this={summitLogModal} onsave={(log) => saveSummitLog(log)}
 ></SummitLogModal>
 <ListSearchModal
@@ -2187,41 +3984,21 @@
     bind:this={listSelectModal}
     onchange={(e) => handleListSelection(e)}
 ></ListSearchModal>
-<ConfirmModal
-    id="mark-trail-as-completed-modal"
-    title={$_("mark-trail-as-completed")}
-    text={$_("mark-trail-as-completed-modal-text")}
-    action={$_("yes")}
-    deny={$_("no")}
-    bind:this={markTrailAsCompletedModal}
-    onconfirm={markTrailAsCompleted}
-></ConfirmModal>
-<ConfirmModal
-    id="replace-route-modal"
-    title={$_("reset-route")}
-    text={$_("reset-route-confirm")}
-    action="reset-route"
-    deny="cancel"
-    bind:this={replaceRouteModal}
-    onconfirm={replaceRoute}
-></ConfirmModal>
 
 <style>
     #trail-map {
         height: calc(50vh);
     }
+
+    .readonly-edit-block {
+        opacity: 0.65;
+        pointer-events: none;
+    }
+
     @media only screen and (min-width: 768px) {
         #trail-map,
         form {
             height: calc(100vh - 124px);
         }
-    }
-
-    :global(.route-anchor.anchor-list-highlight) {
-        border-color: rgb(255 255 255);
-        box-shadow:
-            0 0 0 4px rgba(var(--primary), 0.35),
-            0 0 0 8px rgba(var(--primary), 0.16);
-        z-index: 1;
     }
 </style>

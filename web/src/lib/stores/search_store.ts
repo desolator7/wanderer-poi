@@ -48,6 +48,13 @@ type Feature = {
 type Address = {
     amenity: string
     road: string
+    footway?: string
+    path?: string
+    track?: string
+    pedestrian?: string
+    cycleway?: string
+    bridleway?: string
+    house_number?: string
     neighbourhood: string
     suburb: string
     city_district?: string
@@ -177,6 +184,26 @@ export async function searchLocationReverseStructured(
         return getReverseLocationResult(response.features[0].properties.address, options);
     }
     return null
+}
+
+export async function searchLocationReverseFeature(
+    lat: number,
+    lon: number,
+    options: ReverseGeocodingOptions = {},
+    f: FetchFunction = fetch,
+): Promise<Feature | null> {
+    const params = new URLSearchParams({
+        lat: String(lat),
+        lon: String(lon),
+    });
+    const r = await fetchGeocoding("reverse", params, f, options.signal);
+    if (!r.ok) {
+        const response = await r.json();
+        throw new APIError(r.status, response.message, response.detail)
+    }
+    const response: NominatimResponse = await r.json();
+
+    return response.features?.at(0) ?? null;
 }
 
 function getReverseLocationResult(

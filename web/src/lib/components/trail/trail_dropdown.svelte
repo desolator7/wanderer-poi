@@ -16,6 +16,7 @@
     import { show_toast } from "$lib/stores/toast_store.svelte";
     import {
         trails_delete,
+        trails_move_to_summit_log,
         trails_show,
         trails_update,
     } from "$lib/stores/trail_store";
@@ -34,6 +35,7 @@
     import TrailExportModal from "./trail_export_modal.svelte";
     import TrailSendModal from "./trail_send_modal.svelte";
     import TrailShareModal from "./trail_share_modal.svelte";
+    import TrailSummitLogAssignModal from "./trail_summit_log_assign_modal.svelte";
     import {
         mergeStore,
         processMergeQueue,
@@ -58,15 +60,26 @@
         onShare?: () => void;
         onUpdate?: () => void;
         onMerge?: (result: MergeResult) => void;
+        showMapEditAction?: boolean;
     }
 
-    let { trails, mode, toggle, onDelete, onShare, onUpdate, onMerge }: Props = $props();
+    let {
+        trails,
+        mode,
+        toggle,
+        onDelete,
+        onShare,
+        onUpdate,
+        onMerge,
+        showMapEditAction = true,
+    }: Props = $props();
 
     let confirmModal: ConfirmModal;
     let listSelectModal: ListSearchModal;
     let trailExportModal: TrailExportModal;
     let trailShareModal: TrailShareModal;
     let trailMergeModal: TrailMergeModal;
+    let trailSummitLogAssignModal: TrailSummitLogAssignModal;
     let trailSendModal: TrailSendModal;
 
     const hammerheadIntegration = $derived(
@@ -152,14 +165,6 @@
         }
 
         return [...trails][0];
-    }
-
-    function allowEdit(): boolean {
-        return (
-            hasTrail() &&
-            !isMultiselectMode() &&
-            canEditTrail(trail())
-        );
     }
 
     function allowMerge(): boolean {
@@ -297,19 +302,26 @@
         }
 
         return [
+            ...(hasTrail() && showMapEditAction
+                ? [
+                      {
+                          text: `${$_("map")} / ${$_("edit")}`,
+                          value: "map-edit",
+                          icon: "map-location-dot",
+                      },
+                  ]
+                : []),
+            ...(hasTrail() && mode !== "overview"
+                ? [
+                      {
+                          text: $_("show-in-overview"),
+                          value: "show",
+                          icon: "table-columns",
+                      },
+                  ]
+                : []),
             ...(hasTrail()
                 ? [
-                      mode == "overview" || mode == "multi-select"
-                          ? {
-                                text: $_("show-on-map"),
-                                value: "show",
-                                icon: "map",
-                            }
-                          : {
-                                text: $_("show-in-overview"),
-                                value: "show",
-                                icon: "table-columns",
-                            },
                       {
                           text: $_("directions"),
                           value: "direction",
@@ -317,17 +329,8 @@
                       },
                   ]
                 : []),
-            ...((hasTrail() && (allowEdit() || allowFindSimilarTrails() || allowCopy()))
+            ...((hasTrail() && (allowFindSimilarTrails() || allowCopy()))
                 ? [separator("sep-single-edit")]
-                : []),
-            ...(allowEdit()
-                ? [
-                      {
-                          text: $_("edit"),
-                          value: "edit",
-                          icon: "pen",
-                      },
-                  ]
                 : []),
             ...(allowFindSimilarTrails()
                 ? [{
@@ -336,12 +339,21 @@
                     icon: "link",
                 }]
                 : []),
-                ...(allowCopy()
-                    ? [
+            ...(allowCopy()
+                ? [
                       {
                           text: $_("duplicate"),
                           value: "copy",
                           icon: "copy",
+                      },
+                  ]
+                : []),
+            ...(allowAssignToSummitLog()
+                ? [
+                      {
+                          text: $_("assign-to-planned-tour"),
+                          value: "assign-to-summit-log",
+                          icon: "book",
                       },
                   ]
                 : []),
@@ -480,6 +492,14 @@
         return isFromCurrentUser();
     }
 
+    function allowAssignToSummitLog(): boolean {
+        return (
+            !isMultiselectMode() &&
+            isFromCurrentUser() &&
+            Boolean(trail()?.completed_by_current_user)
+        );
+    }
+
     function allowDeleteTrail(dTrail?: Trail): boolean {
         return isFromCurrentUser(dTrail);
     }
@@ -493,12 +513,21 @@
 
         const ddVal = item.value as string;
 
-        if (ddVal == "show") {
+        if (ddVal == "map-edit") {
             if (hasTrail()) {
-                const url =
-                    mode == "overview" || mode == "multi-select"
-                        ? `/map/trail/${handle}/${trailId()}`
-                        : `/trail/view/${handle}/${trailId()}`;
+                const searchParams = new URLSearchParams();
+                const shareToken = page.url.searchParams.get("share");
+                if (shareToken) {
+                    searchParams.set("share", shareToken);
+                }
+
+                goto(
+                    `/trail/edit/${trailId()}${searchParams.size ? `?${searchParams.toString()}` : ""}`,
+                );
+            }
+        } else if (ddVal == "show") {
+            if (hasTrail()) {
+                const url = `/trail/view/${handle}/${trailId()}`;
 
                 goto(url + "?" + page.url.searchParams);
             }
@@ -530,14 +559,12 @@
             trailShareModal.openModal();
         } else if (ddVal == "download") {
             trailExportModal.openModal();
-        } else if (ddVal == "edit") {
-            if (hasTrail()) {
-                goto(`/trail/edit/${trailId()}`);
-            }
         } else if (ddVal == "copy") {
             if (hasTrail()) {
                 goto("/trail/edit/new?orig=" + trail()?.id);
             }
+        } else if (ddVal == "assign-to-summit-log") {
+            trailSummitLogAssignModal.openModal();
         } else if (ddVal == "publish") {
             updateTrailsVisibility();
         } else if (ddVal == "delete") {
@@ -795,6 +822,34 @@
         await trails_delete(dTrail);
     }
 
+    async function handleMoveToSummitLog(targetTrail: Trail) {
+        const sourceTrail = trail();
+        if (!sourceTrail) {
+            return;
+        }
+
+        loading = true;
+        try {
+            await trails_move_to_summit_log(sourceTrail, targetTrail);
+            show_toast({
+                type: "success",
+                icon: "check",
+                text: $_("trail-moved-to-summit-book"),
+            });
+            onDelete?.();
+            onUpdate?.();
+        } catch (e) {
+            console.error(e);
+            show_toast({
+                type: "error",
+                icon: "close",
+                text: $_("error-moving-trail-to-summit-book"),
+            });
+        } finally {
+            loading = false;
+        }
+    }
+
     async function handleShareUpdate() {
         onShare?.();
     }
@@ -921,6 +976,11 @@
     bind:this={trailExportModal}
     onexport={(settings) => exportTrails(settings)}
 ></TrailExportModal>
+<TrailSummitLogAssignModal
+    sourceTrail={trail()}
+    bind:this={trailSummitLogAssignModal}
+    onassign={handleMoveToSummitLog}
+></TrailSummitLogAssignModal>
 <TrailShareModal
     trail={trail()}
     onsave={handleShareUpdate}

@@ -4,6 +4,7 @@
     import Modal from "$lib/components/base/modal.svelte";
     import type { SelectItem } from "$lib/components/base/select.svelte";
     import Select from "$lib/components/base/select.svelte";
+    import Textarea from "$lib/components/base/textarea.svelte";
     import TextField from "$lib/components/base/text_field.svelte";
     import Toggle from "$lib/components/base/toggle.svelte";
     import { StravaSchema } from "$lib/models/api/integration_schema";
@@ -42,6 +43,8 @@
         clientSecret: integration?.strava?.clientSecret ?? "",
         routes: integration?.strava?.routes ?? true,
         activities: integration?.strava?.activities ?? true,
+        excludedTrailIds: integration?.strava?.excludedTrailIds ?? [],
+        excludedTrailIdsText: (integration?.strava?.excludedTrailIds ?? []).join("\n"),
         active: integration?.strava?.active ?? false,
         after: integration?.strava?.after,
         privacy: integration?.strava?.privacy ?? "original",
@@ -61,6 +64,10 @@
         }),
         onSubmit: async (form) => {
             form.active = integration?.strava?.active ?? form.active;
+            form.excludedTrailIds = (($formData as any).excludedTrailIdsText ?? "")
+                .split(/[\n,]+/)
+                .map((id) => id.trim())
+                .filter((id, index, all) => id.length > 0 && all.indexOf(id) === index);
             onsave?.(form);
             modal.closeModal();
         },
@@ -102,6 +109,15 @@
                     label={$_("activity", { values: { n: 2 } })}
                 ></Toggle>
             </div>
+            <Textarea
+                name="excludedTrailIdsText"
+                label="Excluded external IDs"
+                rows={4}
+                placeholder="One ID per line (or comma-separated)"
+            ></Textarea>
+            <p class="text-xs text-gray-500 max-w-lg">
+                Trails deleted from this provider are added here automatically and won't be imported again.
+            </p>
 
             <Select
                 label={$_("privacy")}

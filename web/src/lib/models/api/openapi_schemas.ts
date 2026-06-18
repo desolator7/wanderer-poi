@@ -184,6 +184,9 @@
  *           format: date
  *         public:
  *           type: boolean
+ *         completed_by_current_user:
+ *           type: boolean
+ *           description: Whether the authenticated user has a summit log for this trail
  *         difficulty:
  *           type: string
  *           enum: [easy, moderate, difficult]
@@ -278,6 +281,11 @@
  *           type: number
  *         duration:
  *           type: number
+ *         external_provider:
+ *           type: string
+ *           enum: [strava, komoot, hammerhead]
+ *         external_id:
+ *           type: string
  *         photos:
  *           type: array
  *           items:
@@ -331,6 +339,11 @@
  *           type: number
  *         duration:
  *           type: number
+ *         external_provider:
+ *           type: string
+ *           enum: [strava, komoot, hammerhead]
+ *         external_id:
+ *           type: string
  *         photos:
  *           type: array
  *           items:
@@ -434,6 +447,11 @@
  *           type: number
  *         duration:
  *           type: number
+ *         external_provider:
+ *           type: string
+ *           enum: [strava, komoot, hammerhead]
+ *         external_id:
+ *           type: string
  *         photos:
  *           type: array
  *           items:
@@ -539,6 +557,9 @@
  *         icon:
  *           type: string
  *           description: Icon identifier
+ *         connectionMode:
+ *           type: string
+ *           enum: [snap, straight, original-kml]
  *         author:
  *           type: string
  *           description: Author user ID (15 chars)
@@ -582,6 +603,9 @@
  *           type: number
  *         icon:
  *           type: string
+ *         connectionMode:
+ *           type: string
+ *           enum: [snap, straight, original-kml]
  *         author:
  *           type: string
  *           description: Author user ID (15 chars)
@@ -612,6 +636,9 @@
  *           type: number
  *         icon:
  *           type: string
+ *         connectionMode:
+ *           type: string
+ *           enum: [snap, straight, original-kml]
  *         photos:
  *           type: array
  *           items:

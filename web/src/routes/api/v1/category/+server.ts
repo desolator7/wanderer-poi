@@ -42,6 +42,15 @@ import { json, type RequestEvent } from "@sveltejs/kit";
 
 export async function GET(event: RequestEvent) {
     try {
+        const allowedCategoryFilter = "name='Hiking'||name='Biking'";
+        const existingFilter = event.url.searchParams.get("filter");
+        event.url.searchParams.set(
+            "filter",
+            existingFilter
+                ? `(${existingFilter}) && (${allowedCategoryFilter})`
+                : allowedCategoryFilter,
+        );
+
         const r = await list<Category>(event, Collection.categories);
         return json(r)
     } catch (e) {

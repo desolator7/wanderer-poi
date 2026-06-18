@@ -8,18 +8,12 @@
     import { _ } from "svelte-i18n";
     import { slide } from "svelte/transition";
     import Button from "../base/button.svelte";
-    import DoubleSlider from "../base/double_slider.svelte";
     import Select, { type SelectItem } from "../base/select.svelte";
     import Slider from "../base/slider.svelte";
     import Toggle from "../base/toggle.svelte";
-    import { tick } from "svelte";
     interface Props {
         options: RoutingOptions;
-        onReverse: () => void;
         onReset: () => void;
-        onCropToggle: (active: boolean) => void;
-        onUpdateCropRange: (data: [number, number]) => void;
-        onCrop: () => void;
         onRecalculateElevationData: () => void;
         onUndo: () => void;
         onRedo: () => void;
@@ -30,11 +24,7 @@
 
     let {
         options = $bindable(),
-        onReverse,
         onReset,
-        onCropToggle,
-        onUpdateCropRange,
-        onCrop,
         onRecalculateElevationData,
         onUndo,
         onRedo,
@@ -42,12 +32,6 @@
         resetLabel = "reset",
         resetAriaLabel = "reset-route",
     }: Props = $props();
-
-    const modesOfTransport: SelectItem[] = [
-        { text: $_("hiking"), value: "pedestrian" },
-        { text: $_("cycling"), value: "bicycle" },
-        { text: $_("driving"), value: "auto" },
-    ];
 
     const bikeTypes: SelectItem[] = [
         { text: $_("hybrid"), value: "Hybrid" },
@@ -58,43 +42,35 @@
 
     if (!options.pedestrianOptions) {
         options.pedestrianOptions = {
-            max_hiking_difficulty: 6,
-            walking_speed: 5.1,
-            use_hills: 1,
-            shortest: false,
+            max_hiking_difficulty: 3,
+            walking_speed: 4,
+            use_hills: 0.5,
+            use_tracks: 1,
+            walkway_factor: 0.7,
+            sidewalk_factor: 1,
+            shortest: true,
         };
     }
 
     if (!options.bicycleOptions) {
         options.bicycleOptions = {
             bicycle_type: "Hybrid",
-            cycling_speed: 20,
-            use_roads: 0.5,
+            cycling_speed: 18,
+            use_roads: 0.4,
             use_hills: 0.5,
-            avoid_bad_surfaces: 0.25,
-            shortest: false,
-        };
-    }
-
-    if (!options.autoOptions) {
-        options.autoOptions = {
-            width: 1.6,
-            height: 1.9,
-            top_speed: 140,
-            fixed_speed: 0,
-            shortest: false,
+            avoid_bad_surfaces: 0.4,
+            shortest: true,
         };
     }
 
     $effect(() => {
-        if (!options.autoRouting) {
+        if (!options.autoRouting || options.modeOfTransport === "pedestrian") {
             showSettings = false;
         }
     });
 
     let showSettings = $state(false);
     let editRoute = $state(false);
-    let crop = $state(false);
     let recalculateElevationData = $state(false);
 
     // svelte-ignore non_reactive_update
@@ -122,12 +98,9 @@
         }
     }
 
-    async function togglePanels(_edit: boolean, _crop: boolean, _recalc: boolean) {        
+    function togglePanels(_edit: boolean, _recalc: boolean) {
         recalculateElevationData = _recalc;
-        crop = _crop;
-        editRoute = _edit
-        await tick()
-        onCropToggle(_crop);
+        editRoute = _edit;
     }
 </script>
 
@@ -137,19 +110,13 @@
             class="btn-icon"
             class:bg-secondary-hover={editRoute}
             aria-label="edit route"
-            onclick={async () => await togglePanels(!editRoute, false, false)}><i class="fa fa-route text-sm"></i></button
-        >
-        <button
-            class="btn-icon"
-            class:bg-secondary-hover={crop}
-            aria-label="crop route"
-            onclick={async () => await togglePanels(false, !crop, false)}><i class="fa fa-scissors text-sm"></i></button
+            onclick={() => togglePanels(!editRoute, false)}><i class="fa fa-route text-sm"></i></button
         >
         <button
             class="btn-icon"
             class:bg-secondary-hover={recalculateElevationData}
             aria-label="recalculate elevation data"
-            onclick={async () => await togglePanels(false, false, !recalculateElevationData)}><i class="fa fa-mountain text-sm"></i></button
+            onclick={() => togglePanels(false, !recalculateElevationData)}><i class="fa fa-mountain text-sm"></i></button
         >
         <button
             class="btn-icon tooltip"
@@ -189,88 +156,25 @@
                 bind:value={options.autoRouting}
                 label={$_("enable-auto-routing")}
             ></Toggle>
-            <Select
-                items={modesOfTransport}
-                bind:value={options.modeOfTransport}
-                disabled={!options.autoRouting}
-                label={$_("activity", { values: { n: 1 } })}
-            ></Select>
-            <div class="flex items-center gap-4 mt-4">
-                <button
-                    class="btn-icon tooltip"
-                    type="button"
-                    onclick={() => onReverse()}
-                    aria-label="Reverse trail direction"
-                    data-title={$_("reverse-direction")}
-                    ><i class="fa fa-arrow-right-arrow-left"></i></button
-                >
-                <button
-                    class="btn-icon tooltip"
-                    type="button"
-                    disabled={!options.autoRouting}
-                    onclick={() => (showSettings = !showSettings)}
-                    data-title={$_("more-route-settings")}
-                    aria-label="Toggle routing settings"
-                    ><i
-                        class="fa fa-cogs"
-                        class:text-gray-500={!options.autoRouting}
-                    ></i></button
-                >
-            </div>
+            {#if options.modeOfTransport !== "pedestrian"}
+                <div class="flex items-center gap-4 mt-4">
+                    <button
+                        class="btn-icon tooltip"
+                        type="button"
+                        disabled={!options.autoRouting}
+                        onclick={() => (showSettings = !showSettings)}
+                        data-title={$_("more-route-settings")}
+                        aria-label="Toggle routing settings"
+                        ><i
+                            class="fa fa-cogs"
+                            class:text-gray-500={!options.autoRouting}
+                        ></i></button
+                    >
+                </div>
+            {/if}
             {#if showSettings}
                 <div in:slide out:slide>
-                    {#if options.modeOfTransport === "pedestrian" && options.pedestrianOptions}
-                        <p class="text-sm font-medium pb-1">
-                            {$_("walking-speed")}
-                        </p>
-                        <Slider
-                            minValue={0.5}
-                            maxValue={25}
-                            bind:currentValue={
-                                options.pedestrianOptions.walking_speed
-                            }
-                        ></Slider>
-                        <p class="text-sm text-end">
-                            {formatSpeed(
-                                options.pedestrianOptions.walking_speed! / 3.6,
-                            )}
-                        </p>
-                        <hr class="border-input-border my-3" />
-                        <p class="text-sm font-medium">{$_("use-hills")}</p>
-                        <Slider
-                            minValue={0}
-                            maxValue={1}
-                            step={0.1}
-                            bind:currentValue={
-                                options.pedestrianOptions!.use_hills
-                            }
-                        ></Slider>
-                        <p class="text-sm text-end">
-                            {options.pedestrianOptions.use_hills?.toFixed(2)}
-                        </p>
-                        <hr class="border-input-border my-3" />
-                        <p class="text-sm font-medium">
-                            {$_("max-hiking-difficulty")}
-                        </p>
-                        <Slider
-                            minValue={0}
-                            maxValue={6}
-                            step={1}
-                            bind:currentValue={
-                                options.pedestrianOptions!.max_hiking_difficulty
-                            }
-                        ></Slider>
-                        <p class="text-sm text-end">
-                            {options.pedestrianOptions.max_hiking_difficulty?.toFixed(
-                                0,
-                            )}
-                        </p>
-                        <hr class="border-input-border my-3" />
-                        <Toggle
-                            label={$_("shortest")}
-                            bind:value={options.pedestrianOptions.shortest}
-                        ></Toggle>
-                    {:else if options.modeOfTransport === "bicycle" && options.bicycleOptions}
+                    {#if options.modeOfTransport === "bicycle" && options.bicycleOptions}
                         <Select
                             items={bikeTypes}
                             label={$_("bike-type")}
@@ -333,89 +237,9 @@
                                 2,
                             )}
                         </p>
-                        <hr class="border-input-border my-3" />
-                        <Toggle
-                            label={$_("shortest")}
-                            bind:value={options.bicycleOptions.shortest}
-                        ></Toggle>
-                    {:else if options.modeOfTransport === "auto" && options.autoOptions}
-                        <p class="text-sm font-medium pb-1">
-                            {$_("fixed-speed")}
-                        </p>
-                        <Slider
-                            minValue={0}
-                            maxValue={252}
-                            step={1}
-                            bind:currentValue={options.autoOptions.fixed_speed}
-                        ></Slider>
-                        <p class="text-sm text-end">
-                            {formatSpeed(
-                                options.autoOptions.fixed_speed! / 3.6,
-                            )}
-                        </p>
-                        <hr class="border-input-border my-3" />
-                        <p class="text-sm font-medium">{$_("top-speed")}</p>
-                        <Slider
-                            minValue={10}
-                            maxValue={252}
-                            step={1}
-                            bind:currentValue={options.autoOptions.top_speed}
-                        ></Slider>
-                        <p class="text-sm text-end">
-                            {formatSpeed(options.autoOptions.top_speed! / 3.6)}
-                        </p>
-                        <hr class="border-input-border my-3" />
-                        <p class="text-sm font-medium">
-                            {$_("car")}
-                            {$_("width")}
-                        </p>
-                        <Slider
-                            minValue={1}
-                            maxValue={10}
-                            step={0.1}
-                            bind:currentValue={options.autoOptions.width}
-                        ></Slider>
-                        <p class="text-sm text-end">
-                            {options.autoOptions.width?.toFixed(1)}
-                        </p>
-                        <hr class="border-input-border my-3" />
-                        <p class="text-sm font-medium">
-                            {$_("car")}
-                            {$_("height")}
-                        </p>
-                        <Slider
-                            minValue={1}
-                            maxValue={10}
-                            step={0.1}
-                            bind:currentValue={options.autoOptions.height}
-                        ></Slider>
-                        <p class="text-sm text-end">
-                            {options.autoOptions.height?.toFixed(1)}
-                        </p>
-                        <hr class="border-input-border my-3" />
-                        <Toggle
-                            label={$_("shortest")}
-                            bind:value={options.autoOptions.shortest}
-                        ></Toggle>
                     {/if}
                 </div>
             {/if}
-        </div>
-    {/if}
-
-    {#if crop}
-        <div
-            class="p-4 my-2 rounded-xl bg-background shadow-xl min-w-72 flex flex-col"
-        >
-            <DoubleSlider onupdate={onUpdateCropRange}></DoubleSlider>
-            <button
-                class="btn-secondary mb-2"
-                onclick={() => {
-                    crop = false;
-                    onCrop();
-                    onCropToggle(false);
-                }}>{$_("crop")}</button
-            >
         </div>
     {/if}
 

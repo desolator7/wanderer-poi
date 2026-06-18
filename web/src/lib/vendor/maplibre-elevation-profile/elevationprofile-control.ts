@@ -64,6 +64,7 @@ export class ElevationProfileControl implements IControl {
     private profileContainer?: HTMLDivElement;
     private settings: ElevationProfileControlOptions;
     private data: GeoJsonObject | null = null;
+    private waypoints: Waypoint[] = [];
     private elevationProfileChart?: ElevationProfile;
 
     constructor(options: ElevationProfileControlOptions = {}) {
@@ -110,6 +111,20 @@ export class ElevationProfileControl implements IControl {
                     : this.settings.container;
             if (!tmpContainer) throw new Error("The provided container is invalid");
             this.profileContainer = tmpContainer as HTMLDivElement;
+            if (getComputedStyle(this.profileContainer).position === "static") {
+                this.profileContainer.style.setProperty("position", "relative");
+            }
+            if (this.settings.backgroundColor) {
+                this.profileContainer.classList.add(this.settings.backgroundColor);
+            }
+            this.profileContainer.style.setProperty("width", "100%");
+            if (
+                !this.profileContainer.style.height &&
+                !this.profileContainer.style.minHeight
+            ) {
+                this.profileContainer.style.setProperty("min-height", "10rem");
+            }
+            this.profileContainer.style.setProperty("display", "none");
         } else {
             this.profileContainer = document.createElement("div");
             this.profileContainer.style.setProperty("display", "none");
@@ -149,7 +164,6 @@ export class ElevationProfileControl implements IControl {
 
         const waypointContainer = document.createElement("div")
         waypointContainer.className = "absolute w-full"
-        waypointContainer.id = "waypoint-container"
 
         this.profileContainer.append(waypointContainer);
 
@@ -159,7 +173,10 @@ export class ElevationProfileControl implements IControl {
 
         this.elevationProfileChart = new ElevationProfile(
             this.profileContainer,
-            this.settings
+            {
+                ...this.settings,
+                waypointContainer,
+            }
         );
 
         if (this.settings.visible) {
@@ -180,8 +197,12 @@ export class ElevationProfileControl implements IControl {
     }
 
     showProfile() {
-        this.profileContainer?.style.setProperty("display", "inherit");
+        this.profileContainer?.style.setProperty("display", "block");
         this.isProfileShown = true;
+        this.elevationProfileChart?.chart.resize();
+        void this.waitForVisibleLayout().then(() => {
+            this.elevationProfileChart?.chart.resize();
+        });
     }
 
     hideProfile() {
@@ -193,16 +214,24 @@ export class ElevationProfileControl implements IControl {
         if (!this.elevationProfileChart) {
             return;
         }
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+            return;
+        }
         const chart = this.elevationProfileChart.chart
         const point = this.elevationProfileChart.getChartCoordinatesFromPosition(lat, lon)
         if (point == null) {
             return;
         }
         const rectangle = chart.canvas.getBoundingClientRect();
+        const clientX = rectangle.left + point[0];
+        const clientY = rectangle.top + point[1];
+        if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) {
+            return;
+        }
 
         const mouseMoveEvent = new MouseEvent('mousemove', {
-            clientX: rectangle.left + point[0],
-            clientY: rectangle.top + point[1]
+            clientX,
+            clientY
         });
 
         chart.canvas.dispatchEvent(mouseMoveEvent);
@@ -226,6 +255,26 @@ export class ElevationProfileControl implements IControl {
 
     getDefaultPosition?: (() => ControlPosition) | undefined;
 
+    private waitForNextFrame() {
+        return new Promise<void>((resolve) => {
+            requestAnimationFrame(() => resolve());
+        });
+    }
+
+    private async waitForVisibleLayout() {
+        if (!this.profileContainer || !this.isProfileShown) {
+            return;
+        }
+
+        for (let attempt = 0; attempt < 3; attempt++) {
+            const rect = this.profileContainer.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+                return;
+            }
+            await this.waitForNextFrame();
+        }
+    }
+
     async setData(data: GeoJsonObject, waypoints?: Waypoint[]) {
         if (!this.map || !this.elevationProfileChart) {
             throw new Error(
@@ -234,9 +283,13 @@ export class ElevationProfileControl implements IControl {
         }
 
         this.data = data;
+        this.waypoints = waypoints ?? [];
 
         if (!this.data) return;
 
-        this.elevationProfileChart.setData(this.data, waypoints);
+        await this.waitForVisibleLayout();
+        this.elevationProfileChart.chart.resize();
+        await this.elevationProfileChart.setData(this.data, this.waypoints);
+        this.elevationProfileChart.chart.resize();
     }
 }

@@ -12,6 +12,7 @@ export interface StravaIntegration extends BaseIntegration {
     clientSecret?: string;
     routes: boolean;
     activities: boolean;
+    excludedTrailIds?: string[];
     accessToken?: string;
     refreshToken?: string;
     expiresAt?: number;
@@ -25,6 +26,7 @@ export interface KomootIntegration extends BaseIntegration {
     password: string,
     completed: boolean,
     planned: boolean
+    excludedTrailIds?: string[],
     privacy: "original" | "settings"
     merge: IntegrationMergeSettings;
 }

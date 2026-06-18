@@ -1,4 +1,5 @@
 import * as M from "maplibre-gl";
+import type GPXWaypoint from "./gpx/waypoint";
 
 
 interface ValhallaCostingOptions {
@@ -84,6 +85,25 @@ export interface RoutingOptions {
 
 interface ValhallaRouteResponse {
     trip: Trip
+}
+
+export interface ValhallaTraceAttributesResponse {
+    edges?: ValhallaTraceEdge[]
+}
+
+export interface ValhallaTraceEdge {
+    length?: number | string
+    sac_scale?: number | string
+}
+
+export interface SacScaleSegment {
+    length: number
+    sacScale: number
+}
+
+export interface RouteCalculationResult {
+    waypoints: GPXWaypoint[]
+    sacScaleSegments: SacScaleSegment[]
 }
 
 export interface Trip {
