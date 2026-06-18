@@ -1,7 +1,7 @@
 <script lang="ts">
     import emptyStateTrailDark from "$lib/assets/svgs/empty_states/empty_state_trail_dark.svg";
     import emptyStateTrailLight from "$lib/assets/svgs/empty_states/empty_state_trail_light.svg";
-    import type { Trail } from "$lib/models/trail";
+    import { isTrailPlanned, type Trail } from "$lib/models/trail";
     import { theme } from "$lib/stores/theme_store";
     import { currentUser } from "$lib/stores/user_store";
     import { getFileURL, isVideoURL } from "$lib/util/file_util";
@@ -13,6 +13,7 @@
     import { _ } from "svelte-i18n";
     import type { MouseEventHandler } from "svelte/elements";
     import Chip from "../base/chip.svelte";
+    import TrailMapEditButton from "./trail_map_edit_button.svelte";
 
     interface Props {
         trail: Trail;
@@ -49,6 +50,8 @@
     let trailIsShared = $derived(
         (trail.expand?.trail_share_via_trail?.length ?? 0) > 0,
     );
+
+    let isPlanned = $derived(isTrailPlanned(trail));
 
     function handleInputClick(e: Event) {
         e.stopPropagation();
@@ -150,9 +153,9 @@
     {/if}
     <div class="p-4">
         <div>
-            <h4 class="font-semibold text-lg line-clamp-2 wrap-anywhere">
-                {trail.name}
-            </h4>
+            <div>
+                <h4 class="font-semibold text-lg line-clamp-2 wrap-anywhere">{trail.name}</h4>
+            </div>
             {#if trail.date}
                 <p class="text-xs text-gray-500 mb-3">
                     {new Date(trail.date).toLocaleDateString(undefined, {
@@ -173,10 +176,30 @@
                         alt="avatar"
                     />
                     {trail.expand.author.preferred_username}{trail.expand.author
-                        .is_local
+                        .isLocal
                         ? ""
                         : "@" + trail.expand.author.domain}
                 </p>
+            {/if}
+            {#if isPlanned || ($currentUser && trail.completed_by_current_user)}
+                <div class="mb-3 flex flex-wrap gap-2">
+                    {#if isPlanned}
+                        <span
+                            class="inline-flex items-center gap-1 rounded-full border border-input-border bg-menu-item-background px-2 py-1 text-xs font-medium text-primary"
+                        >
+                            <i class="fa fa-route"></i>
+                            {$_("planned")}
+                        </span>
+                    {/if}
+                    {#if $currentUser && trail.completed_by_current_user}
+                        <span
+                            class="inline-flex items-center gap-1 rounded-full border border-input-border bg-menu-item-background px-2 py-1 text-xs font-medium text-green-600"
+                        >
+                            <i class="fa fa-circle-check"></i>
+                            {$_("completed-by-you")}
+                        </span>
+                    {/if}
+                </div>
             {/if}
             {#if trail.tags.length}
                 <div class="flex flex-wrap gap-1 mb-3 items-center">
@@ -202,11 +225,7 @@
             <div class="flex gap-x-4 gap-y-1 text-base flex-wrap">
                 {#if trail.expand?.category?.name || trail.category}
                     <p>
-                        <i class="fa fa-shapes mr-3"> </i>{$_(
-                            trail.expand?.category?.name ??
-                                trail.category ??
-                                "-",
-                        )}
+                        <i class="fa fa-shapes mr-3"> </i>{$_(trail.expand?.category?.name ?? trail.category ?? "-")}
                     </p>
                 {/if}
                 {#if trail.location}
@@ -244,6 +263,9 @@
                     trail.elevation_loss,
                 )}</span
             >
+        </div>
+        <div class="mt-3">
+            <TrailMapEditButton trail={trail} compact={true} fullWidth={true} />
         </div>
     </div>
 </div>

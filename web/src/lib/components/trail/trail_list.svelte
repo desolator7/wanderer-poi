@@ -221,7 +221,8 @@
             setSortOrder();
         } else {
             filter.sort = sort;
-            filter.sortOrder = "+";
+            filter.sortOrder =
+                sort === "created" || sort === "date" ? "-" : "+";
             setSort();
         }
     }

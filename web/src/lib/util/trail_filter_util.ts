@@ -147,7 +147,10 @@ export function sanitizeTrailFilter(
         ),
         startDate: getString(source.startDate, defaultFilter.startDate),
         endDate: getString(source.endDate, defaultFilter.endDate),
-        completed: getBoolean(source.completed, defaultFilter.completed),
+        completedByCurrentUser: getBoolean(
+            source.completedByCurrentUser,
+            defaultFilter.completedByCurrentUser,
+        ),
         liked: getBoolean(source.liked, defaultFilter.liked),
         sort:
             typeof source.sort === "string" && TRAIL_SORT_OPTIONS.has(source.sort)

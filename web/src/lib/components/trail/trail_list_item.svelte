@@ -1,7 +1,7 @@
 <script lang="ts">
     import emptyStateTrailDark from "$lib/assets/svgs/empty_states/empty_state_trail_dark.svg";
     import emptyStateTrailLight from "$lib/assets/svgs/empty_states/empty_state_trail_light.svg";
-    import type { Trail } from "$lib/models/trail";
+    import { isTrailPlanned, type Trail } from "$lib/models/trail";
     import { theme } from "$lib/stores/theme_store";
     import { currentUser } from "$lib/stores/user_store";
     import { getFileURL, isVideoURL } from "$lib/util/file_util";
@@ -15,6 +15,7 @@
     import ShareInfo from "../share_info.svelte";
     import { handleFromRecordWithIRI } from "$lib/util/activitypub_util";
     import Chip from "../base/chip.svelte";
+    import TrailMapEditButton from "./trail_map_edit_button.svelte";
 
     interface Props {
         trail: Trail;
@@ -52,6 +53,8 @@
 
     let expandedTags = $state(false);
 
+    let isPlanned = $derived(isTrailPlanned(trail));
+
     function toggleExpandTags(e: MouseEvent) {
         e.preventDefault();
         e.stopPropagation();
@@ -82,9 +85,11 @@
     </div>
     <div class="min-w-0 basis-full relative">
         <div class="flex items-center justify-between">
-            <h4 class="font-semibold text-lg line-clamp-2 wrap-anywhere">
-                {trail.name}
-            </h4>
+            <div class="flex items-center gap-2 min-w-0">
+                <h4 class="font-semibold text-lg line-clamp-2 wrap-anywhere">
+                    {trail.name}
+                </h4>
+            </div>
             <div class="flex items-center shrink-0 gap-3">
                 {#if trail.public && $currentUser}
                     <span class="tooltip" data-title={$_("public")}>
@@ -129,6 +134,26 @@
                 />
                 {handleFromRecordWithIRI(trail)}
             </p>
+        {/if}
+        {#if isPlanned || ($currentUser && trail.completed_by_current_user)}
+            <div class="mb-3 flex flex-wrap gap-2">
+                {#if isPlanned}
+                    <span
+                        class="inline-flex items-center gap-1 rounded-full border border-input-border bg-menu-item-background px-2 py-1 text-xs font-medium text-primary"
+                    >
+                        <i class="fa fa-route"></i>
+                        {$_("planned")}
+                    </span>
+                {/if}
+                {#if $currentUser && trail.completed_by_current_user}
+                    <span
+                        class="inline-flex items-center gap-1 rounded-full border border-input-border bg-menu-item-background px-2 py-1 text-xs font-medium text-green-600"
+                    >
+                        <i class="fa fa-circle-check"></i>
+                        {$_("completed-by-you")}
+                    </span>
+                {/if}
+            </div>
         {/if}
         {#if trail.tags.length && trail.expand?.tags}
             <div class="flex flex-wrap gap-1 mb-3 items-center">
@@ -201,11 +226,18 @@
             >
         </div>
         {#if showDescription}
-            <p
-                class="mt-3 text-sm whitespace-nowrap min-w-0 max-w-full overflow-hidden text-ellipsis basis-full"
-            >
-                {formatHTMLAsText(trail.description ?? "")}
-            </p>
+            <div class="mt-3 flex flex-wrap items-center gap-3 basis-full">
+                <p
+                    class="text-sm whitespace-nowrap min-w-0 max-w-full overflow-hidden text-ellipsis grow"
+                >
+                    {formatHTMLAsText(trail.description ?? "")}
+                </p>
+                <TrailMapEditButton trail={trail} compact={true} />
+            </div>
+        {:else}
+            <div class="mt-3">
+                <TrailMapEditButton trail={trail} compact={true} />
+            </div>
         {/if}
         {#if hovered || selected}
             <div

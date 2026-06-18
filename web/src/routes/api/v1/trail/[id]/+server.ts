@@ -1,5 +1,6 @@
 import { TrailUpdateSchema } from '$lib/models/api/trail_schema';
 import type { Trail } from "$lib/models/trail";
+import { markTrailsCompletedByCurrentUser } from '$lib/server/trail_completion';
 import { Collection, handleError, remove, update } from "$lib/util/api_util";
 import { json, type RequestEvent } from "@sveltejs/kit";
 import type PocketBase from "pocketbase";
@@ -44,6 +45,11 @@ export async function GET(event: RequestEvent) {
         })
 
         await enrichRecord(event.locals.pb, trail);
+        await markTrailsCompletedByCurrentUser(
+            event.locals.pb,
+            event.locals.user?.actor,
+            [trail],
+        );
         trail.expand?.waypoints_via_trail?.sort((a, b) => (a.distance_from_start ?? 0) - (b.distance_from_start ?? 0))
         return json(trail)
     } catch (e: any) {

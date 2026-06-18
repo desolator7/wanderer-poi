@@ -14,9 +14,10 @@ class Waypoint {
     _photos?: File[];
     author: string;
     trail?: string;
+    connectionMode?: "snap" | "straight" | "original-kml";
 
     constructor(lat: number, lon: number, params?: {
-        id?: string, name?: string, description?: string, icon?: typeof icons[number], marker?: M.Marker, photos?: string[], trail?: string
+        id?: string, name?: string, description?: string, icon?: typeof icons[number], marker?: M.Marker, photos?: string[], trail?: string, connectionMode?: "snap" | "straight" | "original-kml"
     }) {
         this.trail = params?.trail;
         this.id = params?.id;
@@ -29,6 +30,7 @@ class Waypoint {
         this.photos = params?.photos ?? []
         this._photos = [];
         this.author = "000000000000000"
+        this.connectionMode = params?.connectionMode;
     }
 }
 

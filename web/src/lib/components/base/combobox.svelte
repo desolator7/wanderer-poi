@@ -187,7 +187,7 @@
             {/each}
         {/if}
         <input
-            class="flex-1 min-w-24 bg-input-background focus:outline-none"
+            class="flex-1 min-w-24 bg-input-background text-base focus:outline-none"
             type="search"
             {name}
             oninput={onSearchType}

@@ -9,11 +9,48 @@ export class APIError extends Error {
     detail: any;
 
     constructor(status: number, message: string, detail?: any) {
-        super();
+        super(typeof message === "string" ? message : String(message));
         this.status = status;
         this.message = message;
-        this.detail = detail
+        this.detail = detail;
     }
+}
+
+function getErrorMessagePart(value: unknown, seen = new WeakSet<object>()): string | null {
+    if (typeof value === "string") {
+        return value.trim() || null;
+    }
+
+    if (value instanceof Error) {
+        return value.message.trim() || null;
+    }
+
+    if (!value || typeof value !== "object") {
+        return null;
+    }
+
+    if (seen.has(value)) {
+        return null;
+    }
+    seen.add(value);
+
+    const record = value as Record<string, unknown>;
+    for (const key of ["status_message", "message", "error", "detail"]) {
+        const message = getErrorMessagePart(record[key], seen);
+        if (message) {
+            return message;
+        }
+    }
+
+    return null;
+}
+
+export function getAPIErrorDetailMessage(e: unknown): string | null {
+    if (e instanceof APIError) {
+        return getErrorMessagePart(e.detail) ?? getErrorMessagePart(e.message);
+    }
+
+    return getErrorMessagePart(e);
 }
 
 
@@ -38,6 +75,9 @@ export enum Collection {
     trails = "trails",
     tags = "tags",
     waypoints = "waypoints",
+    pois = "pois",
+    poi_categories = "poi_categories",
+    poi_attributes = "poi_attributes",
     trails_bounding_box = "trails_bounding_box",
     trails_filter = "trails_filter",
     users_anonymous = "users_anonymous",
@@ -159,10 +199,11 @@ export function handleError(e: any) {
     if (e instanceof ZodError) {
         return json({ message: "invalid_params", detail: e.issues }, { status: 400 })
     } else if (e instanceof ClientResponseError && e.status > 0) {
-        return json({ ...e.response, message: e.message, detail: e.originalError.data }, { status: e.status })
+        const detail = e.response?.data ?? e.originalError?.data ?? null;
+        return json({ ...e.response, message: e.message, detail }, { status: e.status })
     } else if (e instanceof SyntaxError) {
         return json({ message: "invalid_json" }, { status: 400 })
     } else {
-        return json({ message: e }, { status: 500 })
+        return json({ message: e instanceof Error ? e.message : String(e) }, { status: 500 })
     }
 }

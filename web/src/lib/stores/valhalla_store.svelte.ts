@@ -3,7 +3,7 @@ import Track from "$lib/models/gpx/track";
 import TrackSegment from "$lib/models/gpx/track-segment";
 import { haversineDistance } from "$lib/models/gpx/utils";
 import Waypoint from "$lib/models/gpx/waypoint";
-import { type RoutingOptions, type ValhallaAnchor, type ValhallaHeightResponse, type ValhallaRouteResponse } from "$lib/models/valhalla";
+import { type RouteCalculationResult, type RoutingOptions, type SacScaleSegment, type ValhallaAnchor, type ValhallaHeightResponse, type ValhallaRouteResponse, type ValhallaTraceAttributesResponse } from "$lib/models/valhalla";
 import { APIError } from "$lib/util/api_util";
 import { decodePolyline, encodePolyline } from "$lib/util/polyline_util";
 import { renderValhallaAnchorMarker, valhallaAnchorTitle } from "$lib/util/valhalla_anchor_util";
@@ -55,10 +55,61 @@ export function setRoute(newRoute: GPX, undoable: boolean = false) {
 
 }
 
-export async function calculateRouteBetween(startLat: number, startLon: number, endLat: number, endLon: number, options: RoutingOptions) {
+function normalizeSacScale(value: unknown) {
+    const sacScale = Number(value);
+    if (!Number.isFinite(sacScale) || sacScale <= 0) {
+        return 1;
+    }
+
+    return Math.max(1, Math.min(6, Math.round(sacScale)));
+}
+
+async function getSacScaleSegments(shape: string, options: RoutingOptions): Promise<SacScaleSegment[]> {
+    if (!options.autoRouting || options.modeOfTransport !== "pedestrian") {
+        return [];
+    }
+
+    const requestBody = {
+        encoded_polyline: shape,
+        shape_match: "edge_walk",
+        costing: options.modeOfTransport,
+        costing_options: { [options.modeOfTransport]: options.pedestrianOptions },
+        filters: {
+            attributes: ["edge.length", "edge.sac_scale"],
+            action: "include",
+        },
+    };
+
+    try {
+        const r = await fetch("/api/v1/valhalla/trace_attributes", { method: "POST", body: JSON.stringify(requestBody) })
+
+        if (!r.ok) {
+            return [];
+        }
+
+        const traceResponse: ValhallaTraceAttributesResponse = await r.json();
+        return (traceResponse.edges ?? []).flatMap((edge) => {
+            const length = Number(edge.length);
+            if (!Number.isFinite(length) || length <= 0) {
+                return [];
+            }
+
+            return [{
+                length,
+                sacScale: normalizeSacScale(edge.sac_scale),
+            }];
+        });
+    } catch (e) {
+        console.warn("Unable to read Valhalla SAC scale attributes", e);
+        return [];
+    }
+}
+
+export async function calculateRouteBetween(startLat: number, startLon: number, endLat: number, endLon: number, options: RoutingOptions): Promise<RouteCalculationResult> {
 
     let shape;
     let duration: number;
+    let sacScaleSegments: SacScaleSegment[] = [];
     if (options.autoRouting) {
         let costingBody;
         switch (options.modeOfTransport) {
@@ -88,6 +139,7 @@ export async function calculateRouteBetween(startLat: number, startLon: number, 
         const routeResponse: ValhallaRouteResponse = await r.json();
         shape = routeResponse.trip.legs[0].shape
         duration = routeResponse.trip.summary.time
+        sacScaleSegments = await getSacScaleSegments(shape, options);
     } else {
         shape = encodePolyline([[startLat, startLon], [endLat, endLon]])
         duration = 0;
@@ -106,14 +158,14 @@ export async function calculateRouteBetween(startLat: number, startLon: number, 
 
     const waypoints = points.map((p, i) => new Waypoint({ $: { lat: p[1], lon: p[0] }, ele: heightResponse.height[i], time: new Date(startTime + (((duration * 1000) / points.length) * i)) }))
 
-    return waypoints
+    return { waypoints, sacScaleSegments }
 }
 
 export async function insertIntoRoute(waypoints: Waypoint[], index?: number) {
     const snapshot = new GPX({ ...valhallaStore.route })
     const segment = new TrackSegment({ trkpt: waypoints })
 
-    if (index) {
+    if (index !== undefined) {
         snapshot.trk?.at(0)?.trkseg?.splice(index, 0, segment);
     } else {
         snapshot.trk?.at(0)?.trkseg?.push(segment);

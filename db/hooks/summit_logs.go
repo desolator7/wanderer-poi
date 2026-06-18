@@ -1,6 +1,8 @@
 package hooks
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"pocketbase/federation"
@@ -41,12 +43,7 @@ func CreateSummitLogHandler(client meilisearch.ServiceManager) func(e *core.Reco
 			return err
 		}
 
-		trail, err := e.App.FindRecordById("trails", e.Record.GetString("trail"))
-		if err != nil {
-			return err
-		}
-
-		if err := util.IndexTrails(e.App, []*core.Record{trail}, client); err != nil {
+		if err := reindexSummitLogTrails(e.App, e.Record, client); err != nil {
 			return err
 		}
 
@@ -59,7 +56,7 @@ func CreateSummitLogHandler(client meilisearch.ServiceManager) func(e *core.Reco
 	}
 }
 
-func UpdateSummitLogHandler() func(e *core.RecordRequestEvent) error {
+func UpdateSummitLogHandler(client meilisearch.ServiceManager) func(e *core.RecordRequestEvent) error {
 	return func(e *core.RecordRequestEvent) error {
 
 		err := e.Next()
@@ -81,6 +78,11 @@ func UpdateSummitLogHandler() func(e *core.RecordRequestEvent) error {
 		if err != nil {
 			return err
 		}
+
+		if err := reindexSummitLogTrails(e.App, e.Record, client); err != nil {
+			return err
+		}
+
 		return nil
 	}
 }
@@ -92,12 +94,7 @@ func DeleteSummitLogHandler(client meilisearch.ServiceManager) func(e *core.Reco
 			return err
 		}
 
-		trail, err := e.App.FindRecordById("trails", e.Record.GetString("trail"))
-		if err != nil {
-			return err
-		}
-
-		if err := util.IndexTrails(e.App, []*core.Record{trail}, client); err != nil {
+		if err := reindexSummitLogTrails(e.App, e.Record, client); err != nil {
 			return err
 		}
 
@@ -107,4 +104,31 @@ func DeleteSummitLogHandler(client meilisearch.ServiceManager) func(e *core.Reco
 		}
 		return nil
 	}
+}
+
+func reindexSummitLogTrails(app core.App, record *core.Record, client meilisearch.ServiceManager) error {
+	trailIDs := map[string]bool{}
+	if trailID := record.GetString("trail"); trailID != "" {
+		trailIDs[trailID] = true
+	}
+	if original := record.Original(); original != nil {
+		if trailID := original.GetString("trail"); trailID != "" {
+			trailIDs[trailID] = true
+		}
+	}
+
+	for trailID := range trailIDs {
+		trail, err := app.FindRecordById("trails", trailID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				continue
+			}
+			return err
+		}
+		if err := util.IndexTrails(app, []*core.Record{trail}, client); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
