@@ -79,12 +79,14 @@
 
     function colCount() {
         return [
+            showPhotos,
             showCategory,
             showTrail,
             showAuthor,
             showRoute,
             showDescription,
-        ].reduce((b, v) => (v ? b + 1 : b), 7);
+            showMenu,
+        ].reduce((b, v) => (v ? b + 1 : b), 5);
     }
 
     function handleDropdownClick(item: DropdownItem): void {
@@ -212,7 +214,7 @@
     {/if}
     {#if showRoute}
         <td>
-            {#if log.gpx}
+            {#if log.gpx || log.expand?.gpx_data}
                 <button
                     aria-label="Open route"
                     onclick={openRoute}

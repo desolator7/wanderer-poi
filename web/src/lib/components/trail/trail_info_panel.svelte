@@ -64,6 +64,7 @@
     } from "$lib/stores/trail_store";
     import Combobox, { type ComboboxItem } from "../base/combobox.svelte";
     import { tags_index } from "$lib/stores/tag_store";
+    import TrailMapEditButton from "./trail_map_edit_button.svelte";
 
     interface Props {
         initTrail: Trail;
@@ -151,7 +152,15 @@
     }
 
     async function toggleMapFullScreen() {
-        goto(`/map/trail/${handle}/${trail.id!}`);
+        const searchParams = new URLSearchParams();
+        const shareToken = page.url.searchParams.get("share");
+        if (shareToken) {
+            searchParams.set("share", shareToken);
+        }
+
+        goto(
+            `/trail/edit/${trail.id!}${searchParams.size ? `?${searchParams.toString()}` : ""}`,
+        );
     }
 
     async function fetchComments() {
@@ -684,17 +693,21 @@
                         </h3>
                     </div>
                 </div>
-                <div class="flex flex-col items-center gap-y-2">
+                <div class="flex flex-col items-end gap-y-2">
                     {#if ($currentUser && $currentUser.actor == trail.author) || trail.expand?.trail_share_via_trail?.length || trail.public}
                         <LikeButton {trail}></LikeButton>
                     {/if}
-                    <TrailDropdown
-                        trails={new Set<Trail>([trail])}
-                        onDelete={() =>
-                            history.length ? history.back() : goto("/trails")}
-                        onMerge={handleTrailMerge}
-                        {mode}
-                    ></TrailDropdown>
+                    <div class="flex items-center gap-2">
+                        <TrailMapEditButton trail={trail} compact={true} />
+                        <TrailDropdown
+                            trails={new Set<Trail>([trail])}
+                            onDelete={() =>
+                                history.length ? history.back() : goto("/trails")}
+                            onMerge={handleTrailMerge}
+                            showMapEditAction={false}
+                            {mode}
+                        ></TrailDropdown>
+                    </div>
                 </div>
             </div>
         </section>
@@ -827,7 +840,7 @@
                 </h4>
                 {#if mode === "overview"}
                     <div
-                        class="relative border border-input-border rounded-xl p-2 mb-6 text-xs"
+                        class="relative h-40 border border-input-border rounded-xl p-2 mb-6 text-xs"
                         id="epc-container"
                     ></div>
                 {/if}

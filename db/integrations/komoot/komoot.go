@@ -201,13 +201,32 @@ func (k *KomootApi) fetchDetailedTour(tour KomootTour) (*DetailedKomootTour, err
 func syncTrailWithTours(app core.App, client meilisearch.ServiceManager, ctx context.Context, k *KomootApi, i KomootIntegration, user string, actor *core.Record, tours []KomootTour) (bool, error) {
 	allAlreadySynced := true
 	for _, tour := range tours {
-		existingTrail, err := util.FindTrailByExternalReference(app, "komoot", strconv.Itoa(int(tour.ID)))
+		externalID := strconv.Itoa(int(tour.ID))
+		if containsExternalID(i.ExcludedTrailIDs, externalID) {
+			continue
+		}
+
+		existingTrail, err := util.FindTrailByExternalReference(app, "komoot", externalID)
 		if err != nil {
 			return false, err
 		}
 		if existingTrail != nil {
+			if tour.Type == "tour_recorded" && i.Completed {
+				if err := attachRecordedTourToExistingTrail(app, k, tour, existingTrail, actor.Id); err != nil {
+					app.Logger().Warn(fmt.Sprintf("Unable to attach recorded tour '%s' to existing trail: %v", tour.Name, err))
+				}
+			}
 			continue
 		}
+
+		synced, err := util.ExternalSourceExists(app, "komoot", externalID)
+		if err != nil {
+			return false, err
+		}
+		if synced {
+			continue
+		}
+
 		// Tour is not yet in the DB - we must keep paginating regardless of type filter
 		allAlreadySynced = false
 		if (tour.Type == "tour_planned" && !i.Planned) || (tour.Type == "tour_recorded" && !i.Completed) {
@@ -228,7 +247,11 @@ func syncTrailWithTours(app core.App, client meilisearch.ServiceManager, ctx con
 			app.Logger().Warn(fmt.Sprintf("Unable to create trail for tour '%s': %v", tour.Name, err))
 			continue
 		}
-		err = createWaypointsFromTour(app, detailedTour, actor.Id, trailid)
+		if len(detailedTour.Embedded.Timeline.Embedded.Items) > 0 {
+			err = createWaypointsFromTour(app, detailedTour, actor.Id, trailid)
+		} else {
+			err = util.CreateRouteWaypointsFromGPX(app, gpx, actor.Id, trailid)
+		}
 		if err != nil {
 			app.Logger().Warn(fmt.Sprintf("Unable to create waypoints for tour '%s': %v", tour.Name, err))
 			continue
@@ -239,6 +262,38 @@ func syncTrailWithTours(app core.App, client meilisearch.ServiceManager, ctx con
 
 	}
 	return allAlreadySynced, nil
+}
+
+func containsExternalID(ids []string, externalID string) bool {
+	for _, id := range ids {
+		if id == externalID {
+			return true
+		}
+	}
+	return false
+}
+
+func attachRecordedTourToExistingTrail(app core.App, k *KomootApi, tour KomootTour, trail *core.Record, actor string) error {
+	externalID := strconv.Itoa(int(tour.ID))
+	synced, err := summitLogExists(app, "komoot", externalID)
+	if err != nil {
+		return err
+	}
+	if synced {
+		return nil
+	}
+
+	detailedTour, err := k.fetchDetailedTour(tour)
+	if err != nil {
+		return err
+	}
+
+	gpx, err := generateTourGPX(detailedTour)
+	if err != nil {
+		return err
+	}
+
+	return createSummitLogFromTour(app, detailedTour, gpx, actor, trail.Id)
 }
 
 func createTrailFromTour(app core.App, k *KomootApi, detailedTour *DetailedKomootTour, gpx *filesystem.File, user string, actor string, privacy string) (string, error) {
@@ -335,27 +390,53 @@ func createTrailFromTour(app core.App, k *KomootApi, detailedTour *DetailedKomoo
 	}
 
 	if detailedTour.Type == "tour_recorded" {
-		collection, err := app.FindCollectionByNameOrId("summit_logs")
-		if err != nil {
-			return "", err
-		}
-
-		summitLogRecord := core.NewRecord(collection)
-		summitLogRecord.Load(map[string]any{
-			"distance":       detailedTour.Distance,
-			"elevation_gain": detailedTour.ElevationUp,
-			"elevation_loss": detailedTour.ElevationDown,
-			"duration":       detailedTour.Duration,
-			"date":           detailedTour.Date,
-			"author":         actor,
-			"trail":          trailid,
-		})
-		if err := app.Save(summitLogRecord); err != nil {
+		if err := createSummitLogFromTour(app, detailedTour, gpx, actor, trailid); err != nil {
 			return "", err
 		}
 	}
 
 	return trailid, nil
+}
+
+func createSummitLogFromTour(app core.App, detailedTour *DetailedKomootTour, gpx *filesystem.File, actor string, trailID string) error {
+	collection, err := app.FindCollectionByNameOrId("summit_logs")
+	if err != nil {
+		return err
+	}
+
+	summitLogRecord := core.NewRecord(collection)
+	summitLogRecord.Load(map[string]any{
+		"distance":          detailedTour.Distance,
+		"elevation_gain":    detailedTour.ElevationUp,
+		"elevation_loss":    detailedTour.ElevationDown,
+		"duration":          detailedTour.Duration,
+		"date":              detailedTour.Date,
+		"external_provider": "komoot",
+		"external_id":       strconv.Itoa(detailedTour.ID),
+		"author":            actor,
+		"trail":             trailID,
+	})
+	if gpx != nil {
+		summitLogRecord.Set("gpx", gpx)
+	}
+
+	return app.Save(summitLogRecord)
+}
+
+func summitLogExists(app core.App, provider string, externalID string) (bool, error) {
+	logs, err := app.FindRecordsByFilter(
+		"summit_logs",
+		"external_provider = {:provider} && external_id = {:id}",
+		"",
+		1,
+		0,
+		dbx.Params{"provider": provider, "id": externalID},
+	)
+	if err != nil {
+		return false, err
+	}
+
+	return len(logs) > 0, nil
 }
 
 func createWaypointsFromTour(app core.App, tour *DetailedKomootTour, actor string, trailid string) error {

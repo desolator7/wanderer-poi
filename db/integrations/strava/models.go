@@ -28,6 +28,7 @@ type StravaIntegration struct {
 	Active       bool                                    `json:"active"`
 	Routes       bool                                    `json:"routes"`
 	Activities   bool                                    `json:"activities"`
+	ExcludedTrailIDs []string                            `json:"excludedTrailIds,omitempty"`
 	ClientID     int32                                   `json:"clientId"`
 	ClientSecret string                                  `json:"clientSecret"`
 	AccessToken  string                                  `json:"accessToken,omitempty"`

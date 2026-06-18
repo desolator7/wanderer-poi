@@ -314,6 +314,8 @@ export type ElevationProfileOptions = {
 
     onLeave?: (() => void) | null;
 
+    waypointContainer?: HTMLDivElement;
+
 };
 
 const elevationProfileDefaultOptions: ElevationProfileOptions = {
@@ -389,6 +391,7 @@ export class ElevationProfile {
     private width?: number
     private height?: number
     private gradient?: CanvasGradient;
+    private waypointContainer?: HTMLDivElement;
 
 
     constructor(
@@ -411,6 +414,9 @@ export class ElevationProfile {
 
         this.canvas = document.createElement("canvas");
         this.canvas.id = "elevation-profile-chart"
+        this.canvas.style.width = "100%";
+        this.canvas.style.height = "100%";
+        this.canvas.style.display = "block";
         appContainer.appendChild(this.canvas);
 
         Chart.register(...registerables);
@@ -420,6 +426,7 @@ export class ElevationProfile {
             ...elevationProfileDefaultOptions,
             ...options,
         };
+        this.waypointContainer = this.settings.waypointContainer;
 
         const distanceUnit = this.settings.unit === "imperial" ? "mi" : "km";
         const elevationUnit = this.settings.unit === "imperial" ? "ft" : "m";
@@ -690,11 +697,13 @@ export class ElevationProfile {
                 {
                     id: "waypointPlugin",
                     afterDraw: (chart, args, options) => {
-                        const waypointContainer = document.getElementById("waypoint-container") as HTMLDivElement;
+                        const waypointContainer = this.waypointContainer;
+                        if (!waypointContainer) {
+                            return;
+                        }
                         waypointContainer.innerHTML = ""; // Clear previous ticks
 
                         const xScale = chart.scales.x; // Get X-axis scale
-                        const chartRect = chart.canvas.getBoundingClientRect(); // Canvas position
 
                         this.waypointPositions.forEach((position: number, index: number) => {
 
@@ -702,12 +711,15 @@ export class ElevationProfile {
 
                             // Create custom HTML tick
                             const wpDiv = document.createElement("div");
-                            wpDiv.className = "wp-marker absolute -translate-x-1/2 w-6 aspect-square bg-background-inverse rounded-full flex justify-center items-center text-content-inverse cursor-pointer hover:scale-110";
+                            wpDiv.className = "wp-marker absolute -translate-x-1/2 w-6 aspect-square bg-background-inverse rounded-full flex justify-center items-center text-content-inverse text-xs font-semibold cursor-pointer hover:scale-110";
                             wpDiv.style.left = `${xPos}px`; // Position horizontally
                             wpDiv.style.top = `8px`; // Position horizontally
 
-                            // Add custom HTML content (e.g., icon + label)
-                            wpDiv.innerHTML = `<div class="tooltip" data-title="${this.waypoints[index]?.name ?? "?"}"><i class="fa fa-${this.waypoints.at(index)?.icon ?? 'circle'}"></i></div>`;
+                            const waypointLabel = document.createElement("div");
+                            waypointLabel.className = "tooltip leading-none";
+                            waypointLabel.dataset.title = this.waypoints[index]?.name ?? `${index + 1}`;
+                            waypointLabel.textContent = `${index + 1}`;
+                            wpDiv.appendChild(waypointLabel);
 
                             waypointContainer.appendChild(wpDiv); // Add to container
                         });
@@ -906,10 +918,22 @@ export class ElevationProfile {
         this.times = times;
 
         this.elevatedPositions = smoothElevations(positions, Math.ceil(positions.length / 100));
+        this.cumulatedDPlus = [];
+        this.grade = [];
+        this.cumulatedTime = [];
+        this.speed = [];
+        this.waypoints = waypoints ?? [];
+        this.waypointPositions = [];
 
         this.cumulatedDistance = haversineCumulatedDistanceWgs84(
             this.elevatedPositions
         );
+        if (!this.elevatedPositions.length || !this.cumulatedDistance.length) {
+            this.chart.data.labels = [];
+            this.chart.data.datasets[0].data = [];
+            this.chart.update();
+            return;
+        }
 
         // Conversion of distance to miles and elevation to feet
         if (this.settings.unit === "imperial") {
@@ -930,11 +954,6 @@ export class ElevationProfile {
             ); // we still need to convert distance to km
             this.elevatedPositionsAdjustedUnit = this.elevatedPositions;
         }
-
-        this.cumulatedDPlus = [];
-        this.grade = [];
-        this.waypoints = waypoints ?? [];
-        this.waypointPositions = [];
 
         let cumulatedDPlus = 0;
         let cumulatedTime = 0;
@@ -1038,7 +1057,10 @@ export class ElevationProfile {
             }
         }
 
-        const elevationPadding = (maxElevation - minElevation) * 0.1;
+        let elevationPadding = (maxElevation - minElevation) * 0.1;
+        if (!Number.isFinite(elevationPadding) || elevationPadding === 0) {
+            elevationPadding = this.settings.unit === "imperial" ? 10 : 3;
+        }
         this.chart.data.labels = this.cumulatedDistanceAdjustedUnit;
         this.chart.data.datasets[0].data = this.elevatedPositionsAdjustedUnit.map(
             (pos) => pos[2]

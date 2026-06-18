@@ -3,6 +3,8 @@ import emptyStateTrailLight from "$lib/assets/svgs/empty_states/empty_state_trai
 import { haversineDistance } from "$lib/models/gpx/utils";
 import type { Trail } from "$lib/models/trail";
 import type { Waypoint } from "$lib/models/waypoint";
+import type { Poi } from "$lib/models/poi";
+import type { PoiAttribute } from "$lib/models/poi_attribute";
 import { theme } from "$lib/stores/theme_store";
 import M from "maplibre-gl";
 import { _ } from "svelte-i18n";
@@ -10,40 +12,90 @@ import { get } from "svelte/store";
 import { handleFromRecordWithIRI } from "./activitypub_util";
 import { getFileURL } from "./file_util";
 import { formatDistance, formatElevation, formatTimeHHMM } from "./format_util";
-import { icons } from "./icon_util";
+import { icons, normalizePoiIcon } from "./icon_util";
+import {
+    canEditPoiAttributeValue,
+    getPoiDisplayColor,
+    normalizePoiAttributesForSave,
+} from "./poi_util";
 
 export class FontawesomeMarker extends M.Marker {
     constructor(options: { icon: string, fontSize?: string, width?: number, backgroundColor?: string, fontColor?: string, style?: string, id?: string }, markerOptions?: M.MarkerOptions) {
         const element = document.createElement('div')
-        element.className = `cursor-pointer flex items-center justify-center w-${options.width ?? 7} aspect-square ${options.backgroundColor ?? "bg-gray-500"} rounded-full text-${options.fontSize ?? "normal"} ${options.style ?? ""}`
+        element.className = `cursor-pointer relative flex items-center justify-center w-${options.width ?? 7} aspect-square rounded-full text-${options.fontSize ?? "normal"} ${options.style ?? ""}`
+        if (options.backgroundColor?.startsWith("#")) {
+            element.style.backgroundColor = options.backgroundColor;
+        } else {
+            element.classList.add(options.backgroundColor ?? "bg-gray-500");
+        }
         element.id = options.id ?? "";
         super({ element: element, ...markerOptions });
 
-        const {
-            icon,
-        } = options
+        const iconElement = document.createElement("i");
+        options.icon.split(" ").forEach((className) => {
+            if (className.length) {
+                iconElement.classList.add(className);
+            }
+        });
 
-        const iconElementString = `<i class="text-${options.fontColor ?? "white"} ${icon}"></i>`
-        this._element.insertAdjacentHTML('beforeend', iconElementString)
+        if (options.fontColor?.startsWith("#")) {
+            iconElement.style.color = options.fontColor;
+        } else {
+            iconElement.classList.add(`text-${options.fontColor ?? "white"}`);
+        }
+
+        this._element.appendChild(iconElement);
     }
 }
 
-export function createMarkerFromWaypoint(waypoint: Waypoint, onDragEnd?: (marker: M.Marker, wpId?: string) => void): FontawesomeMarker {
-    const marker = new FontawesomeMarker({
-        id: waypoint.id,
-        icon: `fa fa-${waypoint.icon}`,
-    }, {
-        draggable: onDragEnd !== undefined,
-        color: "#6b7280"
+export function createMarkerFromWaypoint(
+    waypoint: Waypoint,
+    onDragEnd?: (marker: M.Marker, wpId?: string) => void,
+    order?: number,
+): M.Marker {
+    const markerElement = document.createElement("div");
+    markerElement.className =
+        "cursor-pointer relative flex items-center justify-center";
+    markerElement.id = waypoint.id ?? "";
 
-    })
+    const iconName = waypoint.icon && icons.includes(waypoint.icon) ? waypoint.icon : "circle";
+    if (order !== undefined) {
+        markerElement.classList.add(
+            "route-anchor",
+            "h-9",
+            "w-9",
+            "rounded-full",
+            "bg-primary",
+            "text-sm",
+            "font-semibold",
+            "text-white",
+            "shadow-md",
+        );
+        markerElement.textContent = String(order);
+    } else {
+        markerElement.classList.add(
+            "h-9",
+            "w-9",
+            "rounded-full",
+            "bg-primary",
+            "text-white",
+            "shadow-md",
+        );
+        const markerIcon = document.createElement("i");
+        markerIcon.classList.add("fa", `fa-${iconName}`);
+        markerElement.appendChild(markerIcon);
+    }
+
+    const marker = new M.Marker({
+        draggable: onDragEnd !== undefined,
+        element: markerElement,
+    });
 
     const content = document.createElement("div");
     content.className = "p-2"
 
     const spanElement = document.createElement("span");
     const iconElement = document.createElement("i");
-    const iconName = waypoint.icon && icons.includes(waypoint.icon) ? waypoint.icon : "circle";
     iconElement.classList.add("fa", `fa-${iconName}`)
     spanElement.appendChild(iconElement);
 
@@ -69,24 +121,25 @@ export function createMarkerFromWaypoint(waypoint: Waypoint, onDragEnd?: (marker
         .setLngLat([waypoint.lon, waypoint.lat])
         .setPopup(popup)
 
+    const clickHitArea = document.createElement("span");
+    clickHitArea.className = "absolute -inset-2 rounded-full bg-transparent";
+    clickHitArea.style.touchAction = "pan-x pan-y pinch-zoom";
+    marker.getElement().appendChild(clickHitArea);
+
     if (onDragEnd) {
         marker.on("dragend", () => onDragEnd(marker, waypoint.id,));
     }
 
-    marker.getElement().addEventListener("click", (e) => {
-        e.stopPropagation();
-        marker.togglePopup();
-    });
-
     return marker;
 }
 
-export function createAnchorMarker(lat: number, lon: number,
+export function createAnchorMarker(lat: number, lon: number, index: number,
     onDeleteClick: () => void, onLoopClick: () => void,
     onDragStart: (event: Event) => void, onDragEnd: (event: Event) => void): FontawesomeMarker {
 
     const anchorElement = document.createElement("span")
-    anchorElement.className = "route-anchor cursor-pointer flex items-center justify-center rounded-full w-6 h-6 border border-black bg-primary text-white"
+    anchorElement.className = "route-anchor flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-primary text-sm font-semibold text-white shadow-md"
+    anchorElement.textContent = "" + index
     const marker = new M.Marker(
         {
             draggable: true,
@@ -100,7 +153,7 @@ export function createAnchorMarker(lat: number, lon: number,
     popupContent.className = "py-3 pl-3"
     const anchorH = document.createElement("h5")
     anchorH.classList.add("text-base", "font-medium");
-    anchorH.textContent = get(_)("route-point");
+    anchorH.textContent = get(_)("route-point") + " #" + index;
 
     const deleteButton = document.createElement("button");
     deleteButton.className = "btn-secondary w-full mt-2 text-sm";
@@ -323,7 +376,7 @@ export function createOverpassPopup(
         actionButton.setAttribute("title", action.label);
 
         const iconElement = document.createElement("i");
-        iconElement.className = (action.icon ?? "fa fa-flag-checkered");
+        iconElement.className = action.icon ?? "fa fa-flag-checkered";
         iconElement.setAttribute("aria-hidden", "true");
         actionButton.appendChild(iconElement);
 
@@ -384,4 +437,213 @@ export function calculateScaleFactor(map: M.Map) {
     const scaleFactor = realWorldMetersPer100Pixels / screenMetersPer100Pixels
 
     return scaleFactor
+}
+
+export function createMarkerFromPoi(
+    poi: Poi,
+    attributeDefinitions: PoiAttribute[] = [],
+    options?: {
+        draggable?: boolean;
+    },
+): FontawesomeMarker {
+    const icon = poi.expand?.category?.icon ?? "location-dot";
+    const color = getPoiDisplayColor(poi, attributeDefinitions);
+    const marker = new FontawesomeMarker(
+        {
+            id: poi.id,
+            icon: `fa fa-${normalizePoiIcon(icon)}`,
+            width: 9,
+            backgroundColor: poi.public ? "bg-primary" : "bg-gray-700",
+            fontColor: color ?? "white",
+            style: "shadow-md",
+        },
+        { draggable: options?.draggable ?? false },
+    ).setLngLat([poi.lon, poi.lat]);
+
+    const clickHitArea = document.createElement("span");
+    clickHitArea.className =
+        "absolute -inset-2 rounded-full bg-transparent";
+    clickHitArea.style.touchAction = "pan-x pan-y pinch-zoom";
+    marker.getElement().appendChild(clickHitArea);
+
+    const label = document.createElement("span");
+    label.className =
+        "poi-marker-label hidden pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-1 max-w-48 overflow-hidden text-ellipsis whitespace-nowrap rounded bg-background/90 px-1.5 py-0.5 text-xs font-medium text-content shadow";
+    label.textContent = poi.name;
+    marker.getElement().appendChild(label);
+
+    return marker;
+}
+
+export function createPopupFromPoi(
+    poi: Poi,
+    attributeDefinitions: PoiAttribute[],
+    options?: {
+        editable?: boolean;
+        onSave?: (attributes: Record<string, string | boolean | null>) => Promise<void> | void;
+        currentUserId?: string;
+        isAdmin?: boolean;
+    },
+) {
+    const popup = new M.Popup({ offset: 25, maxWidth: "380px" });
+    const content = document.createElement("div");
+    content.className = "p-4 space-y-3 min-w-60";
+
+    const title = document.createElement("h4");
+    title.className = "text-lg font-semibold flex items-center gap-2";
+    const titleIcon = document.createElement("i");
+    titleIcon.classList.add(
+        "fa",
+        `fa-${normalizePoiIcon(poi.expand?.category?.icon ?? "location-dot")}`,
+    );
+    const color = getPoiDisplayColor(poi, attributeDefinitions);
+    if (color) {
+        titleIcon.style.color = color;
+    }
+    title.appendChild(titleIcon);
+    title.appendChild(document.createTextNode(poi.name));
+    content.appendChild(title);
+
+    if (poi.expand?.category?.name || poi.location) {
+        const meta = document.createElement("p");
+        meta.className = "text-sm text-gray-500";
+        meta.textContent = [poi.expand?.category?.name, poi.location]
+            .filter(Boolean)
+            .join(" - ");
+        content.appendChild(meta);
+    }
+
+    if (poi.description?.length) {
+        const description = document.createElement("p");
+        description.textContent = poi.description;
+        content.appendChild(description);
+    }
+
+    if (attributeDefinitions.length) {
+        const divider = document.createElement("hr");
+        divider.className = "border-input-border";
+        content.appendChild(divider);
+
+        if (attributeDefinitions.some((definition) => definition.value_storage === "private")) {
+            const privateHint = document.createElement("p");
+            privateHint.className = "text-xs text-gray-500";
+            privateHint.textContent =
+                'Hinweis: "privat" definierte Attribute werden benutzerbezogen gespeichert.';
+            content.appendChild(privateHint);
+        }
+
+        const attributesWrapper = document.createElement("div");
+        attributesWrapper.className = "space-y-3";
+
+        for (const definition of attributeDefinitions) {
+            const label = document.createElement("label");
+            label.className = "block";
+
+            const labelText = document.createElement("span");
+            labelText.className = "text-sm font-medium block mb-1";
+            labelText.textContent = definition.value_storage === "private"
+                ? `${definition.name} (privat)`
+                : definition.name;
+            label.appendChild(labelText);
+
+            const currentValue = poi.attributes?.[definition.key];
+            const editable = Boolean(options?.editable) &&
+                canEditPoiAttributeValue(definition, {
+                    currentUserId: options?.currentUserId,
+                    isAdmin: options?.isAdmin,
+                });
+
+            if (editable) {
+                if (definition.type === "boolean") {
+                    const input = document.createElement("input");
+                    input.type = "checkbox";
+                    input.name = definition.key;
+                    input.checked = currentValue === true;
+                    label.appendChild(input);
+                } else {
+                    const input = document.createElement("input");
+                    input.type = definition.type === "date" ? "date" : "text";
+                    input.name = definition.key;
+                    input.value =
+                        typeof currentValue === "string" ? currentValue : "";
+                    input.className =
+                        "bg-input-background border border-input-border rounded-md p-2 w-full";
+                    label.appendChild(input);
+                }
+            } else {
+                const value = document.createElement("span");
+                value.className = "text-sm text-gray-600";
+                value.textContent =
+                    currentValue === null || currentValue === undefined
+                        ? "-"
+                        : typeof currentValue === "boolean"
+                          ? currentValue
+                              ? "Yes"
+                              : "No"
+                          : String(currentValue);
+                label.appendChild(value);
+            }
+
+            attributesWrapper.appendChild(label);
+        }
+
+        content.appendChild(attributesWrapper);
+
+        if (options?.editable && attributeDefinitions.some((definition) =>
+            canEditPoiAttributeValue(definition, {
+                currentUserId: options?.currentUserId,
+                isAdmin: options?.isAdmin,
+            }),
+        )) {
+            const saveButton = document.createElement("button");
+            saveButton.className = "btn-primary w-full";
+            saveButton.textContent = get(_)("save");
+            saveButton.addEventListener("click", async () => {
+                const rawValues: Record<string, string | boolean | null> = {};
+                for (const definition of attributeDefinitions) {
+                    if (!canEditPoiAttributeValue(definition, {
+                        currentUserId: options?.currentUserId,
+                        isAdmin: options?.isAdmin,
+                    })) {
+                        continue;
+                    }
+                    const field = content.querySelector(
+                        `[name="${definition.key}"]`,
+                    ) as HTMLInputElement | null;
+                    if (!field) {
+                        rawValues[definition.key] = null;
+                        continue;
+                    }
+                    if (definition.type === "boolean") {
+                        rawValues[definition.key] = field.checked;
+                    } else {
+                        rawValues[definition.key] = field.value.trim().length
+                            ? field.value
+                            : null;
+                    }
+                }
+                const values = normalizePoiAttributesForSave(
+                    attributeDefinitions.filter((definition) =>
+                        canEditPoiAttributeValue(definition, {
+                            currentUserId: options?.currentUserId,
+                            isAdmin: options?.isAdmin,
+                        }),
+                    ),
+                    rawValues,
+                );
+
+                saveButton.setAttribute("disabled", "true");
+                try {
+                    await options.onSave?.(values);
+                    popup.remove();
+                } finally {
+                    saveButton.removeAttribute("disabled");
+                }
+            });
+            content.appendChild(saveButton);
+        }
+    }
+
+    popup.setDOMContent(content);
+    return popup;
 }

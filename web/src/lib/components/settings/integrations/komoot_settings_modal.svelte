@@ -5,6 +5,7 @@
         type SelectItem,
     } from "$lib/components/base/select.svelte";
     import TextField from "$lib/components/base/text_field.svelte";
+    import Textarea from "$lib/components/base/textarea.svelte";
     import Toggle from "$lib/components/base/toggle.svelte";
     import { KomootSchema } from "$lib/models/api/integration_schema";
     import type {
@@ -42,6 +43,8 @@
         password: integration?.komoot?.password ?? "",
         completed: integration?.komoot?.completed ?? true,
         planned: integration?.komoot?.planned ?? true,
+        excludedTrailIds: integration?.komoot?.excludedTrailIds ?? [],
+        excludedTrailIdsText: (integration?.komoot?.excludedTrailIds ?? []).join("\n"),
         active: integration?.komoot?.active ?? false,
         privacy: integration?.komoot?.privacy ?? "original",
         merge: integration?.komoot?.merge ?? {
@@ -60,6 +63,10 @@
         }),
         onSubmit: async (form) => {
             form.active = integration?.komoot?.active ?? form.active;
+            form.excludedTrailIds = (($d as any).excludedTrailIdsText ?? "")
+                .split(/[\n,]+/)
+                .map((id) => id.trim())
+                .filter((id, index, all) => id.length > 0 && all.indexOf(id) === index);
             onsave?.(form);
             modal.closeModal();
         },
@@ -97,6 +104,15 @@
                     label={$_("completed-tours", { values: { n: 2 } })}
                 ></Toggle>
             </div>
+            <Textarea
+                name="excludedTrailIdsText"
+                label="Excluded external IDs"
+                rows={4}
+                placeholder="One ID per line (or comma-separated)"
+            ></Textarea>
+            <p class="text-xs text-gray-500 max-w-lg">
+                Trails deleted from this provider are added here automatically and won't be imported again.
+            </p>
 
             <Select
                 label={$_("privacy")}

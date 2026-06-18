@@ -16,6 +16,8 @@ class SummitLog {
   author: string;
   trail?: string;
   iri?: string;
+  external_provider?: "strava" | "komoot" | "hammerhead";
+  external_id?: string;
   created?: string;
 
   expand?: {

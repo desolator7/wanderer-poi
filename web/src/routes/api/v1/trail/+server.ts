@@ -1,5 +1,6 @@
 import { TrailCreateSchema } from '$lib/models/api/trail_schema';
 import type { Trail } from '$lib/models/trail';
+import { markTrailsCompletedByCurrentUser } from '$lib/server/trail_completion';
 import { Collection, create, handleError, list } from '$lib/util/api_util';
 import { json, type RequestEvent } from '@sveltejs/kit';
 
@@ -54,6 +55,11 @@ export async function GET(event: RequestEvent) {
 
             t.expand?.waypoints_via_trail?.sort((a, b) => (a.distance_from_start ?? 0) - (b.distance_from_start ?? 0))
         }
+        await markTrailsCompletedByCurrentUser(
+            event.locals.pb,
+            event.locals.user?.actor,
+            r.items,
+        );
         return json(r)
     } catch (e: any) {
         return handleError(e);

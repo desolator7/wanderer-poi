@@ -31,7 +31,7 @@ export const load: Load = async ({ params, fetch, parent }) => {
         elevationLossMax: 0,
         elevationLossLimit: 0,
         sort: "created",
-        sortOrder: "+",
+        sortOrder: "-",
     };
     try {
         const trails = await profile_trails_index(params.handle, filter, 1, 12, fetch)
