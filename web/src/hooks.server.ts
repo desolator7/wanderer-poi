@@ -79,6 +79,17 @@ const auth: Handle = async ({ event, resolve }) => {
     pb.authStore.loadFromCookie(event.request.headers.get('cookie') || '')
   }
 
+  // Validate a cookie-backed session before using it for any downstream
+  // request. A stale PocketBase token would otherwise also authenticate the
+  // search-token request and turn an expected logout into an HTTP 500.
+  try {
+    if (pb.authStore.isValid) {
+      await pb.collection('users').authRefresh({ requestKey: null })
+    }
+  } catch (_) {
+    pb.authStore.clear()
+    event.cookies.delete('meilisearch_token', { path: '/' });
+  }
 
   const secure = event.url.protocol === "https:"
   let meiliCookie = event.cookies.get('meilisearch_token');
@@ -126,17 +137,6 @@ const auth: Handle = async ({ event, resolve }) => {
     throw redirect(302, '/');
   } else if (envPub.PUBLIC_DISABLE_SIGNUP === "true" && url.pathname === "/register") {
     throw redirect(302, '/');
-  }
-
-  try {
-    // get an up-to-date auth store state by verifying and refreshing the loaded auth model (if any)
-    if (pb.authStore.isValid) {
-      await pb.collection('users').authRefresh({ requestKey: null })
-    }
-  } catch (_) {
-    // clear the auth store on failed refresh
-    pb.authStore.clear()
-    event.cookies.delete('meilisearch_token', { path: '/' });
   }
 
   let settings: Settings | undefined;
