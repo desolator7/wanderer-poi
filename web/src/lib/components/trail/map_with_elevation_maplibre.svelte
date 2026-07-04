@@ -81,6 +81,7 @@
         ) => void;
         oninit?: (map: M.Map) => void;
         autoGeolocateOnDrawing?: boolean;
+        liveTrackUserLocation?: boolean;
         buildPoiAnchorAction?: OverpassPopupActionFactory;
         onpoiclick?: (poi: Poi) => void;
         onpoisave?: (
@@ -130,6 +131,7 @@
         onUnclusteredClick,
         oninit,
         autoGeolocateOnDrawing = false,
+        liveTrackUserLocation = false,
         buildPoiAnchorAction = undefined,
         onpoiclick,
         onpoisave,
@@ -183,6 +185,18 @@
         toggleEpcTheme();
     });
     $effect(() => {
+        showElevation;
+        if (mapLoaded && epc) {
+            untrack(() => {
+                if (showElevation) {
+                    void refreshElevationProfile();
+                } else {
+                    epc.hideProfile();
+                }
+            });
+        }
+    });
+    $effect(() => {
         if (drawing && map && layerManager) {
             untrack(() => startDrawing());
         } else if (map && layerManager) {
@@ -196,6 +210,11 @@
         untrack(() => {
             updateCursor();
         });
+    });
+    $effect(() => {
+        liveTrackUserLocation;
+        map;
+        untrack(() => syncLiveLocationTracking());
     });
     $effect(() => {
         if (showGrid) {
@@ -1245,7 +1264,12 @@
             trackUserLocation: true,
         });
         geolocateControl.on("geolocate", () => syncUserHeadingMarker());
-        geolocateControl.on("trackuserlocationend", hideUserHeadingMarker);
+        geolocateControl.on("trackuserlocationend", () => {
+            hideUserHeadingMarker();
+            if (liveTrackUserLocation) {
+                queueMicrotask(() => syncLiveLocationTracking());
+            }
+        });
         geolocateControl.on("error", hideUserHeadingMarker);
         map.addControl(geolocateControl);
         startDeviceCompass();
@@ -1359,6 +1383,7 @@
             initMap(true);
             showPois();
             oninit?.(map!);
+            syncLiveLocationTracking();
         });
 
         syncWaypointMarkers();
@@ -1372,6 +1397,29 @@
                 geolocateControl.options.trackUserLocation = true;
                 geolocateControl.trigger();
             }
+        }
+    }
+
+    function syncLiveLocationTracking() {
+        if (!geolocateControl) {
+            return;
+        }
+
+        if (liveTrackUserLocation) {
+            if (
+                geolocateControl._watchState === "OFF" ||
+                geolocateControl._watchState === "BACKGROUND"
+            ) {
+                geolocateControl.trigger();
+            }
+            return;
+        }
+
+        if (geolocateControl._watchState === "BACKGROUND") {
+            geolocateControl.trigger();
+        }
+        if (geolocateControl._watchState !== "OFF") {
+            geolocateControl.trigger();
         }
     }
 

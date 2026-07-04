@@ -23,6 +23,11 @@
     import type { LayoutData } from "./$types";
     import PocketBase from "pocketbase";
     import { browser } from "$app/environment";
+    import {
+        isCurrentPwaLiveRoute,
+        isStandalonePwa,
+        readPwaLiveRoute,
+    } from "$lib/util/pwa_live_mode";
 
     interface Props {
         data: LayoutData;
@@ -35,12 +40,35 @@
         if (!$currentUser && isRouteProtected(n.to?.url)) {
             n.cancel();
             goto("/login?r=" + n.to?.url?.pathname);
+            return;
+        }
+
+        if (!browser || !n.to?.url || !isStandalonePwa()) {
+            return;
+        }
+
+        const liveRoute = readPwaLiveRoute();
+        if (
+            liveRoute &&
+            isCurrentPwaLiveRoute(liveRoute, page.url) &&
+            !isCurrentPwaLiveRoute(liveRoute, n.to.url)
+        ) {
+            n.cancel();
         }
     });
 
     onMount(() => {
         if (page.data.origin != location.origin) {
             showWarning = true;
+        }
+
+        if (!isStandalonePwa() || page.url.pathname.startsWith("/login")) {
+            return;
+        }
+
+        const liveRoute = readPwaLiveRoute();
+        if (liveRoute && !isCurrentPwaLiveRoute(liveRoute, page.url)) {
+            void goto(liveRoute.path, { replaceState: true });
         }
     });
 
