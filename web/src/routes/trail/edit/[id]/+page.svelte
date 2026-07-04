@@ -111,6 +111,13 @@
         type SimplifyPolylineOptions,
     } from "$lib/util/waypoint_routing";
     import { consumeRouteImportSession } from "$lib/util/route_import_util";
+    import {
+        clearPwaLiveRoute,
+        isCurrentPwaLiveRoute,
+        isStandalonePwa,
+        readPwaLiveRoute,
+        writePwaLiveRoute,
+    } from "$lib/util/pwa_live_mode";
     import EXIF from "$lib/vendor/exif-js/exif.js";
     import { validator } from "@felte/validator-zod";
     import cryptoRandomString from "crypto-random-string";
@@ -136,6 +143,9 @@
     let listSelectModal: ListSearchModal;
 
     let loading = $state(false);
+    let standalonePwa = $state(false);
+    let liveMode = $state(false);
+    let activateLiveAfterSave = false;
 
     let editingBasicInfo: boolean = $state(false);
 
@@ -672,6 +682,7 @@
         form,
         errors,
         data: formData,
+        isValid,
         setFields,
     } = createForm<z.infer<typeof ClientTrailCreateSchema>>({
         initialValues: getInitialFormValues(),
@@ -768,6 +779,10 @@
                     icon: "check",
                     text: $_("trail-saved-successfully"),
                 });
+
+                if (activateLiveAfterSave) {
+                    await enterLiveMode();
+                }
             } catch (e) {
                 console.error(e);
 
@@ -777,6 +792,7 @@
                     text: $_("error-saving-trail"),
                 });
             } finally {
+                activateLiveAfterSave = false;
                 loading = false;
             }
         },
@@ -875,7 +891,57 @@
                     ))),
     );
     let mapInteractionMode = $state(isNewTrail);
-    let canModifyTrail = $derived(trailCanBeEdited && mapInteractionMode);
+    let canModifyTrail = $derived(
+        trailCanBeEdited && mapInteractionMode && !liveMode,
+    );
+
+    async function requestLiveMode() {
+        if (!standalonePwa || isNewTrail || !trailCanBeEdited || loading) {
+            return;
+        }
+
+        mapInteractionMode = true;
+        await tick();
+
+        const trailForm = document.getElementById(
+            "trail-form",
+        ) as HTMLFormElement | null;
+        if (!trailForm) {
+            return;
+        }
+
+        if (!$isValid) {
+            trailForm.requestSubmit();
+            return;
+        }
+
+        activateLiveAfterSave = true;
+        trailForm.requestSubmit();
+    }
+
+    async function enterLiveMode() {
+        const trailId = $formData.id ?? data.trail.id;
+        if (!trailId || trailId === "new") {
+            return;
+        }
+
+        writePwaLiveRoute({
+            trailId,
+            path: `${page.url.pathname}${page.url.search}`,
+        });
+        mapInteractionMode = false;
+        liveMode = true;
+        await tick();
+        map?.resize();
+    }
+
+    async function exitLiveMode() {
+        clearPwaLiveRoute();
+        liveMode = false;
+        mapInteractionMode = false;
+        await tick();
+        map?.resize();
+    }
 
     $effect(() => {
         if (!trailCanBeEdited && mapInteractionMode) {
@@ -948,6 +1014,17 @@
     });
 
     onMount(async () => {
+        standalonePwa = isStandalonePwa();
+        const storedLiveRoute = readPwaLiveRoute();
+        if (
+            standalonePwa &&
+            storedLiveRoute &&
+            isCurrentPwaLiveRoute(storedLiveRoute, page.url)
+        ) {
+            liveMode = true;
+            mapInteractionMode = false;
+        }
+
         clearAnchors();
         clearRoute();
         clearUndoRedoStack();
@@ -3343,7 +3420,10 @@
     >
 </svelte:head>
 
-<main class="grid grid-cols-1 md:grid-cols-[400px_1fr]">
+<main
+    class="grid grid-cols-1 md:grid-cols-[400px_1fr]"
+    class:live-mode={liveMode}
+>
     <form
         id="trail-form"
         class="overflow-y-auto overflow-x-hidden flex flex-col gap-4 px-8 order-1 md:order-none mt-8 md:mt-0"
@@ -3356,7 +3436,9 @@
                         {$_("map")} / {$_("edit")}
                     </p>
                     <p class="text-sm text-gray-500">
-                        {#if mapInteractionMode}
+                        {#if liveMode}
+                            {$_("live-mode")}
+                        {:else if mapInteractionMode}
                             {$_("edit")}
                         {:else}
                             <i class="fa fa-lock mr-2"></i>Ansicht gesperrt
@@ -3387,6 +3469,18 @@
                     >
                         <i class="fa fa-pen"></i>
                     </button>
+                    {#if standalonePwa && !isNewTrail}
+                        <button
+                            type="button"
+                            class="flex h-10 w-10 items-center justify-center rounded-full transition-colors"
+                            aria-label={$_("start-live-mode")}
+                            title={$_("start-live-mode")}
+                            disabled={!trailCanBeEdited || loading}
+                            onclick={requestLiveMode}
+                        >
+                            <i class="fa fa-location-arrow"></i>
+                        </button>
+                    {/if}
                 </div>
             </div>
         </div>
@@ -3932,7 +4026,18 @@
             >
         {/if}
     </form>
-    <div class="relative">
+    <div class="relative" class:live-map-shell={liveMode}>
+        {#if liveMode}
+            <button
+                type="button"
+                class="live-mode-exit btn-secondary"
+                aria-label={$_("exit-live-mode")}
+                title={$_("exit-live-mode")}
+                onclick={exitLiveMode}
+            >
+                <i class="fa fa-xmark mr-2"></i>{$_("exit-live-mode")}
+            </button>
+        {/if}
         {#if drawingActive && canModifyTrail}
             <div
                 in:fly={{ easing: backInOut, x: -30 }}
@@ -3953,7 +4058,9 @@
                 waypoints={$formData.expand?.waypoints_via_trail}
                 drawing={canModifyTrail && drawingActive}
                 crosshairCursor={canModifyTrail}
+                showElevation={!liveMode}
                 showTerrain={true}
+                liveTrackUserLocation={liveMode}
                 autoGeolocateOnDrawing={page.params.id === "new"}
                 onmarkerdragend={canModifyTrail ? moveMarker : undefined}
                 activeTrail={0}
@@ -3988,6 +4095,35 @@
 <style>
     #trail-map {
         height: calc(50vh);
+    }
+
+    .live-mode {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: block;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: rgb(var(--background));
+    }
+
+    .live-mode form {
+        display: none;
+    }
+
+    .live-map-shell,
+    .live-mode #trail-map {
+        width: 100%;
+        height: 100%;
+    }
+
+    .live-mode-exit {
+        position: absolute;
+        z-index: 60;
+        top: max(1rem, env(safe-area-inset-top));
+        left: 50%;
+        transform: translateX(-50%);
     }
 
     .readonly-edit-block {
