@@ -288,6 +288,7 @@
   "make-thumbnail": "Make thumbnail",
   "map": "Map",
   "live-mode": "Live mode",
+  "live-mode-validation-error": "Please correct the highlighted trail fields first",
   "map-trail-preview-zoom-level": "Show trail previews from zoom level",
   "show-trail-start-marker": "Show marker at start of trail",
   "map-style": "Map style",
