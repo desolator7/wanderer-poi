@@ -288,6 +288,7 @@
   "make-thumbnail": "Thumbnail festlegen",
   "map": "Karte",
   "live-mode": "Livemodus",
+  "live-mode-validation-error": "Bitte korrigiere zuerst die markierten Routenfelder",
   "map-trail-preview-zoom-level": "Routenlinien anzeigen ab Zoomstufe",
   "show-trail-start-marker": "Marker am Start der Route anzeigen",
   "map-style": "Kartenstil",

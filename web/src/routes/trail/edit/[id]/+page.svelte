@@ -145,7 +145,6 @@
     let loading = $state(false);
     let standalonePwa = $state(false);
     let liveMode = $state(false);
-    let activateLiveAfterSave = false;
 
     let editingBasicInfo: boolean = $state(false);
 
@@ -682,7 +681,7 @@
         form,
         errors,
         data: formData,
-        isValid,
+        createSubmitHandler,
         setFields,
     } = createForm<z.infer<typeof ClientTrailCreateSchema>>({
         initialValues: getInitialFormValues(),
@@ -691,7 +690,7 @@
         }),
         onSubmit: async (form) => {
             if (!canModifyTrail) {
-                return;
+                return false;
             }
             loading = true;
             try {
@@ -779,10 +778,7 @@
                     icon: "check",
                     text: $_("trail-saved-successfully"),
                 });
-
-                if (activateLiveAfterSave) {
-                    await enterLiveMode();
-                }
+                return true;
             } catch (e) {
                 console.error(e);
 
@@ -791,9 +787,17 @@
                     icon: "close",
                     text: $_("error-saving-trail"),
                 });
+                return false;
             } finally {
-                activateLiveAfterSave = false;
                 loading = false;
+            }
+        },
+    });
+
+    const submitLiveMode = createSubmitHandler({
+        onSuccess: async (saved) => {
+            if (saved === true) {
+                await enterLiveMode();
             }
         },
     });
@@ -902,21 +906,15 @@
 
         mapInteractionMode = true;
         await tick();
+        await submitLiveMode();
 
-        const trailForm = document.getElementById(
-            "trail-form",
-        ) as HTMLFormElement | null;
-        if (!trailForm) {
-            return;
+        if (!liveMode && Object.keys($errors).length > 0) {
+            show_toast({
+                type: "warning",
+                icon: "warning",
+                text: $_("live-mode-validation-error"),
+            });
         }
-
-        if (!$isValid) {
-            trailForm.requestSubmit();
-            return;
-        }
-
-        activateLiveAfterSave = true;
-        trailForm.requestSubmit();
     }
 
     async function enterLiveMode() {
