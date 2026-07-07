@@ -92,6 +92,15 @@ func RemoteListGet(e *core.RequestEvent) error {
 }
 
 func findLocalListByRemoteInfo(e *core.RequestEvent, ctx context.Context, handle, trailID string) (*core.Record, error) {
+	// Preserve links that still contain an instance's previous domain after a
+	// move. A local list ID is authoritative and does not need WebFinger.
+	if existing, err := e.App.FindRecordById("lists", trailID); err == nil {
+		author, authorErr := e.App.FindRecordById("activitypub_actors", existing.GetString("author"))
+		if authorErr == nil && author.GetBool("is_local") {
+			return existing, nil
+		}
+	}
+
 	// 1. Get Actor to build the IRI
 	actor, err := federation.GetActorByHandle(e.App, ctx, handle, false)
 	if err != nil {

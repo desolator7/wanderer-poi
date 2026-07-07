@@ -124,6 +124,16 @@ func RemoteTrailGet(e *core.RequestEvent) error {
 }
 
 func findLocalTrailByRemoteInfo(e *core.RequestEvent, ctx context.Context, handle, trailID string) (*core.Record, error) {
+	// Old links can keep the previous domain in their handle after an instance
+	// has moved. Prefer an existing trail owned by a local actor before trying
+	// to resolve that stale handle over WebFinger.
+	if existing, err := e.App.FindRecordById("trails", trailID); err == nil {
+		author, authorErr := e.App.FindRecordById("activitypub_actors", existing.GetString("author"))
+		if authorErr == nil && author.GetBool("is_local") {
+			return existing, nil
+		}
+	}
+
 	// 1. Get Actor to build the IRI
 	actor, err := federation.GetActorByHandle(e.App, ctx, handle, false)
 	if err != nil && !errors.Is(err, federation.ErrProfilePrivate) {
