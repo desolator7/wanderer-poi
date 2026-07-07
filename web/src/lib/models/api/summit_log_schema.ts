@@ -13,7 +13,10 @@ const SummitLogCreateSchema = z.object({
     duration: z.number().nonnegative().optional(),
     author: z.string().length(15),
     trail: z.string().length(15).optional(),
-    external_provider: z.enum(["strava", "komoot", "hammerhead"]).optional(),
+    external_provider: z.preprocess(
+        (value) => (value === "" ? undefined : value),
+        z.enum(["strava", "komoot", "hammerhead"]).optional(),
+    ),
     external_id: z.string().optional(),
     photos: z.array(z.string()).default([])
 }) satisfies ZodType<Partial<SummitLog>>
