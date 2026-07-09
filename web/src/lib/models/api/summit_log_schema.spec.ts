@@ -7,6 +7,30 @@ const validSummitLog = {
 };
 
 describe("SummitLogCreateSchema", () => {
+    it("accepts a date-only value", () => {
+        const summitLog = SummitLogCreateSchema.parse(validSummitLog);
+
+        expect(summitLog.date).toBe("2026-07-07");
+    });
+
+    it("accepts a PocketBase datetime value", () => {
+        const summitLog = SummitLogCreateSchema.parse({
+            ...validSummitLog,
+            date: "2026-03-28 12:48:11.000Z",
+        });
+
+        expect(summitLog.date).toBe("2026-03-28 12:48:11.000Z");
+    });
+
+    it("rejects an invalid date value", () => {
+        const result = SummitLogCreateSchema.safeParse({
+            ...validSummitLog,
+            date: "not-a-date",
+        });
+
+        expect(result.success).toBe(false);
+    });
+
     it("normalizes an empty external provider to undefined", () => {
         const summitLog = SummitLogCreateSchema.parse({
             ...validSummitLog,

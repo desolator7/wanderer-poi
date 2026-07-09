@@ -195,9 +195,6 @@
                     .array(
                         WaypointCreateSchema.extend({
                             marker: z.any().optional(),
-                            connectionMode: z
-                                .enum(["snap", "straight", "original-kml"])
-                                .optional(),
                         }),
                     )
                     .optional(),
