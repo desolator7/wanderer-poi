@@ -26,7 +26,10 @@ services:
       timeout: 10s
   db:
     container_name: wanderer-db
-    image: flomp/wanderer-db
+    image: wanderer-poi-db:local
+    pull_policy: never
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
     depends_on:
       search:
         condition: service_healthy
@@ -50,7 +53,10 @@ services:
       timeout: 10s
   web:
     container_name: wanderer-web
-    image: flomp/wanderer-web
+    image: wanderer-poi-web:local
+    pull_policy: never
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
     depends_on:
       search:
         condition: service_healthy
