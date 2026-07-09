@@ -1,10 +1,25 @@
 import { z, ZodType } from "zod";
 import type { SummitLog } from "../summit_log";
 
+const DateOnlySchema = z.string().date();
+const PocketBaseDateTimePattern =
+    /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
+
+const SummitLogDateSchema = z.string().refine((value) => {
+    if (DateOnlySchema.safeParse(value).success) {
+        return true;
+    }
+
+    return (
+        PocketBaseDateTimePattern.test(value) &&
+        !Number.isNaN(Date.parse(value.replace(" ", "T")))
+    );
+}, "invalid-date");
+
 
 const SummitLogCreateSchema = z.object({
     id: z.string().length(15).optional(),
-    date: z.string().date().refine((val) => !isNaN(Date.parse(val)), "invalid-date"),
+    date: SummitLogDateSchema,
     text: z.string().optional(),
     gpx: z.string().optional(),
     distance: z.number().nonnegative().optional(),
@@ -22,7 +37,7 @@ const SummitLogCreateSchema = z.object({
 }) satisfies ZodType<Partial<SummitLog>>
 
 const SummitLogUpdateSchema = z.object({
-    date: z.string().date().refine((val) => !val || !isNaN(Date.parse(val)), "invalid-date").optional(),
+    date: SummitLogDateSchema.optional(),
     text: z.string().optional(),
     gpx: z.string().optional(),
     distance: z.number().nonnegative().optional(),
