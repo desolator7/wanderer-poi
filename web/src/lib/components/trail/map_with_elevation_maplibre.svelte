@@ -82,6 +82,7 @@
         oninit?: (map: M.Map) => void;
         autoGeolocateOnDrawing?: boolean;
         liveTrackUserLocation?: boolean;
+        liveTrackingZoom?: number;
         buildPoiAnchorAction?: OverpassPopupActionFactory;
         onpoiclick?: (poi: Poi) => void;
         onpoisave?: (
@@ -132,6 +133,7 @@
         oninit,
         autoGeolocateOnDrawing = false,
         liveTrackUserLocation = false,
+        liveTrackingZoom = undefined,
         buildPoiAnchorAction = undefined,
         onpoiclick,
         onpoisave,
@@ -215,6 +217,11 @@
         liveTrackUserLocation;
         map;
         untrack(() => syncLiveLocationTracking());
+    });
+    $effect(() => {
+        liveTrackingZoom;
+        map;
+        untrack(() => applyLiveTrackingCamera(lastLivePosition));
     });
     $effect(() => {
         if (showGrid) {
@@ -998,6 +1005,7 @@
     }
 
     let geolocateControl: M.GeolocateControl;
+    let lastLivePosition: GeolocationPosition | undefined;
     let userHeadingIcon: SVGSVGElement | null = null;
     let deviceCompassHeading: number | null = null;
     let removeDeviceCompassPermissionClickListener: (() => void) | null = null;
@@ -1263,7 +1271,12 @@
             },
             trackUserLocation: true,
         });
-        geolocateControl.on("geolocate", () => syncUserHeadingMarker());
+        geolocateControl.on("geolocate", (event) => {
+            const position = event as GeolocationPosition;
+            lastLivePosition = position;
+            applyLiveTrackingCamera(position);
+            syncUserHeadingMarker();
+        });
         geolocateControl.on("trackuserlocationend", () => {
             hideUserHeadingMarker();
             if (liveTrackUserLocation) {
@@ -1421,6 +1434,26 @@
         if (geolocateControl._watchState !== "OFF") {
             geolocateControl.trigger();
         }
+    }
+
+    function applyLiveTrackingCamera(position?: GeolocationPosition) {
+        if (
+            !map ||
+            !liveTrackUserLocation ||
+            liveTrackingZoom === undefined
+        ) {
+            return;
+        }
+
+        map.jumpTo(
+            {
+                center: position
+                    ? [position.coords.longitude, position.coords.latitude]
+                    : map.getCenter(),
+                zoom: liveTrackingZoom,
+            },
+            { geolocateSource: true },
+        );
     }
 
     function updateCursor() {

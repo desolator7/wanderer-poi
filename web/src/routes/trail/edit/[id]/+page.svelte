@@ -113,9 +113,12 @@
     import { consumeRouteImportSession } from "$lib/util/route_import_util";
     import {
         clearPwaLiveRoute,
+        DEFAULT_PWA_LIVE_ZOOM_PRESET,
         isCurrentPwaLiveRoute,
         isStandalonePwa,
+        PWA_LIVE_ZOOM_LEVELS,
         readPwaLiveRoute,
+        type PwaLiveZoomPreset,
         writePwaLiveRoute,
     } from "$lib/util/pwa_live_mode";
     import EXIF from "$lib/vendor/exif-js/exif.js";
@@ -145,6 +148,18 @@
     let loading = $state(false);
     let standalonePwa = $state(false);
     let liveMode = $state(false);
+    let liveZoomPreset: PwaLiveZoomPreset = $state(
+        DEFAULT_PWA_LIVE_ZOOM_PRESET,
+    );
+    const liveZoomPresetItems: Array<{
+        value: PwaLiveZoomPreset;
+        label: string;
+    }> = [
+        { value: "near", label: "live-zoom-near" },
+        { value: "medium", label: "live-zoom-medium" },
+        { value: "far", label: "live-zoom-far" },
+    ];
+    let liveTrackingZoom = $derived(PWA_LIVE_ZOOM_LEVELS[liveZoomPreset]);
 
     let editingBasicInfo: boolean = $state(false);
 
@@ -923,6 +938,7 @@
         writePwaLiveRoute({
             trailId,
             path: `${page.url.pathname}${page.url.search}`,
+            zoomPreset: liveZoomPreset,
         });
         mapInteractionMode = false;
         liveMode = true;
@@ -933,9 +949,25 @@
     async function exitLiveMode() {
         clearPwaLiveRoute();
         liveMode = false;
+        liveZoomPreset = DEFAULT_PWA_LIVE_ZOOM_PRESET;
         mapInteractionMode = false;
         await tick();
         map?.resize();
+    }
+
+    function selectLiveZoomPreset(preset: PwaLiveZoomPreset) {
+        liveZoomPreset = preset;
+
+        const trailId = $formData.id ?? data.trail.id;
+        if (!liveMode || !trailId || trailId === "new") {
+            return;
+        }
+
+        writePwaLiveRoute({
+            trailId,
+            path: `${page.url.pathname}${page.url.search}`,
+            zoomPreset: preset,
+        });
     }
 
     $effect(() => {
@@ -1016,6 +1048,7 @@
             storedLiveRoute &&
             isCurrentPwaLiveRoute(storedLiveRoute, page.url)
         ) {
+            liveZoomPreset = storedLiveRoute.zoomPreset;
             liveMode = true;
             mapInteractionMode = false;
         }
@@ -4032,6 +4065,24 @@
             >
                 <i class="fa fa-xmark mr-2"></i>{$_("exit-live-mode")}
             </button>
+            <div
+                class="live-mode-zoom-presets rounded-full border border-input-border bg-menu-background/90 p-1 shadow-lg backdrop-blur"
+                role="group"
+                aria-label={$_("live-zoom-level")}
+            >
+                {#each liveZoomPresetItems as preset}
+                    <button
+                        type="button"
+                        class="min-h-11 min-w-16 rounded-full px-3 text-sm font-semibold transition-colors"
+                        class:bg-primary={liveZoomPreset === preset.value}
+                        class:text-white={liveZoomPreset === preset.value}
+                        aria-pressed={liveZoomPreset === preset.value}
+                        onclick={() => selectLiveZoomPreset(preset.value)}
+                    >
+                        {$_(preset.label)}
+                    </button>
+                {/each}
+            </div>
         {/if}
         {#if drawingActive && canModifyTrail}
             <div
@@ -4056,6 +4107,7 @@
                 showElevation={!liveMode}
                 showTerrain={true}
                 liveTrackUserLocation={liveMode}
+                liveTrackingZoom={liveMode ? liveTrackingZoom : undefined}
                 autoGeolocateOnDrawing={page.params.id === "new"}
                 onmarkerdragend={canModifyTrail ? moveMarker : undefined}
                 activeTrail={0}
@@ -4118,6 +4170,16 @@
         z-index: 60;
         top: max(1rem, env(safe-area-inset-top));
         left: 50%;
+        transform: translateX(-50%);
+    }
+
+    .live-mode-zoom-presets {
+        position: absolute;
+        z-index: 60;
+        bottom: calc(1rem + env(safe-area-inset-bottom));
+        left: 50%;
+        display: flex;
+        gap: 0.25rem;
         transform: translateX(-50%);
     }
 
