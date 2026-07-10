@@ -4,6 +4,9 @@ import { build, files, version } from '$service-worker';
 
 const CACHE_NAME = `wanderer-cache-${version}`;
 const ASSETS = [...build, ...files];
+const ASSET_PATHS = new Set(
+	ASSETS.map((asset) => new URL(asset, self.location.origin).pathname)
+);
 
 self.addEventListener('install', (event) => {
 	event.waitUntil(
@@ -32,17 +35,26 @@ self.addEventListener('fetch', (event) => {
 		return;
 	}
 
+	const requestUrl = new URL(event.request.url);
+	if (
+		requestUrl.origin !== self.location.origin ||
+		!ASSET_PATHS.has(requestUrl.pathname)
+	) {
+		return;
+	}
+
 	event.respondWith(
-		caches.match(event.request).then((cachedResponse) => {
+		caches.match(event.request, { ignoreSearch: true }).then((cachedResponse) => {
 			if (cachedResponse) {
 				return cachedResponse;
 			}
 
 			return fetch(event.request).then((response) => {
-				const responseClone = response.clone();
-
-				if (response.ok && event.request.url.startsWith(self.location.origin)) {
-					caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
+				if (response.ok) {
+					const responseClone = response.clone();
+					void caches
+						.open(CACHE_NAME)
+						.then((cache) => cache.put(event.request, responseClone));
 				}
 
 				return response;
