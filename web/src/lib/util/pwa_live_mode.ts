@@ -1,8 +1,19 @@
 export const PWA_LIVE_ROUTE_STORAGE_KEY = "wanderer-pwa-live-route";
 
+export const PWA_LIVE_ZOOM_LEVELS = {
+    near: 18,
+    medium: 16,
+    far: 15,
+} as const;
+
+export type PwaLiveZoomPreset = keyof typeof PWA_LIVE_ZOOM_LEVELS;
+
+export const DEFAULT_PWA_LIVE_ZOOM_PRESET: PwaLiveZoomPreset = "medium";
+
 export interface PwaLiveRoute {
     trailId: string;
     path: string;
+    zoomPreset: PwaLiveZoomPreset;
 }
 
 interface StandaloneNavigator extends Navigator {
@@ -39,7 +50,18 @@ export function readPwaLiveRoute(
         ) {
             throw new Error("Invalid PWA live route");
         }
-        return value as PwaLiveRoute;
+        const zoomPreset = Object.hasOwn(
+            PWA_LIVE_ZOOM_LEVELS,
+            value.zoomPreset ?? "",
+        )
+            ? (value.zoomPreset as PwaLiveZoomPreset)
+            : DEFAULT_PWA_LIVE_ZOOM_PRESET;
+
+        return {
+            trailId: value.trailId,
+            path: value.path,
+            zoomPreset,
+        };
     } catch {
         storage.removeItem(PWA_LIVE_ROUTE_STORAGE_KEY);
         return null;
