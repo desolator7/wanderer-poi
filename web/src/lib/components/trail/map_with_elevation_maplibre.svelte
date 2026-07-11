@@ -1280,7 +1280,11 @@
         geolocateControl.on("trackuserlocationend", () => {
             hideUserHeadingMarker();
             if (liveTrackUserLocation) {
-                queueMicrotask(() => syncLiveLocationTracking());
+                queueMicrotask(() => {
+                    if (!map?.isMoving()) {
+                        syncLiveLocationTracking();
+                    }
+                });
             }
         });
         geolocateControl.on("error", hideUserHeadingMarker);
@@ -1361,6 +1365,10 @@
 
         map.on("moveend", (e) => {
             updatePoiLabelVisibility();
+            const eventData = e as typeof e & { geolocateSource?: boolean };
+            if (liveTrackUserLocation && !eventData.geolocateSource) {
+                queueMicrotask(() => syncLiveLocationTracking());
+            }
             onmoveend?.(e.target);
         });
 
@@ -1425,6 +1433,7 @@
             ) {
                 geolocateControl.trigger();
             }
+            applyLiveTrackingCamera(lastLivePosition);
             return;
         }
 
