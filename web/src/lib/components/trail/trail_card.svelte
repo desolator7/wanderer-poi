@@ -69,7 +69,7 @@
 </script>
 
 <div
-    class="trail-card relative rounded-2xl border border-input-border min-w-72 h-[386px] bg-background {fullWidth
+    class="trail-card relative rounded-2xl border border-input-border min-w-72 min-h-[386px] bg-background {fullWidth
         ? ''
         : 'lg:w-72'} cursor-pointer flex flex-col"
     class:bg-secondary-hover={selected}
@@ -78,7 +78,7 @@
     role="listitem"
 >
     <div
-        class="relative w-full basis-full max-h-48 overflow-hidden rounded-t-2xl"
+        class="relative w-full h-48 shrink-0 overflow-hidden rounded-t-2xl"
     >
         {#if isVideoURL(thumbnail)}
             <!-- svelte-ignore a11y_media_has_caption -->
