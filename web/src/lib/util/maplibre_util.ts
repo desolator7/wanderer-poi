@@ -567,7 +567,7 @@ export function createPopupFromPoi(
                     input.value =
                         typeof currentValue === "string" ? currentValue : "";
                     input.className =
-                        "bg-input-background border border-input-border rounded-md p-2 w-full";
+                        "bg-input-background border border-input-border rounded-md p-2 text-base w-full";
                     label.appendChild(input);
                 }
             } else {
