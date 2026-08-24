@@ -53,6 +53,15 @@ test these changes as you would review any other contribution.
 The current POI UI includes English and German text. Other translations can be
 incomplete for the experimental POI areas.
 
+## Rechtliches und Datenquellen
+
+Der Fork ist unabhängig von der Harzer Wandernadel GmbH und anderen Vereinen
+oder POI-Betreibern. Als vorbefüllter POI-Datenbestand wird ausschließlich der
+OpenStreetMap-basierte Snapshot `data/osm-stamp-points.json` bereitgestellt. Die
+Anwendung zeigt die Hinweise zu Unabhängigkeit, Datenqualität und ODbL unter
+`/legal`. Der aktuelle rechtliche und technische Ist-Stand ist in
+[Rechtliches und Datenquellen](docs/legal-and-data-sources.md) beschrieben.
+
 ## POI features
 
 ### POI records

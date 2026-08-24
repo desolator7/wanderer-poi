@@ -142,6 +142,10 @@
         onpoidragend,
     }: Props = $props();
 
+    let showOSMPoiAttribution = $derived(
+        pois.some((poi) => poi.attributes?.data_source === "OpenStreetMap"),
+    );
+
     let mapContainer: HTMLDivElement;
     let epc: ElevationProfileControl;
     let graticule: MaplibreGraticule;
@@ -1545,16 +1549,62 @@
 </script>
 
 <svelte:window on:keydown={handleKeydown} on:keyup={handleKeyup} />
-<div id="map" bind:this={mapContainer}></div>
+<div class="map-shell">
+    <div id="map" bind:this={mapContainer}></div>
+    {#if showOSMPoiAttribution}
+        <div class="osm-poi-attribution">
+            OSM-basierte POI-Daten:
+            <a
+                href="https://www.openstreetmap.org/copyright"
+                target="_blank"
+                rel="noreferrer">© OpenStreetMap-Mitwirkende</a
+            >
+            ·
+            <a
+                href="https://opendatacommons.org/licenses/odbl/1-0/"
+                target="_blank"
+                rel="noreferrer">ODbL 1.0</a
+            >
+        </div>
+    {/if}
+</div>
 
 <style lang="postcss">
     @reference "tailwindcss";
     @reference "../../../css/app.css";
 
+    .map-shell,
     #map {
         width: 100%;
         height: 100%;
+    }
+
+    .map-shell {
+        position: relative;
+    }
+
+    #map {
         touch-action: pan-x pan-y pinch-zoom;
+    }
+
+    .osm-poi-attribution {
+        position: absolute;
+        z-index: 2;
+        right: 0;
+        bottom: 25px;
+        max-width: min(92%, 32rem);
+        padding: 2px 5px;
+        border-radius: 3px 0 0 3px;
+        background: rgb(255 255 255 / 85%);
+        color: #1f2937;
+        font-size: 10px;
+        line-height: 1.35;
+        text-align: right;
+    }
+
+    .osm-poi-attribution a {
+        color: inherit;
+        text-decoration: underline;
     }
 
     :global(.maplibregl-popup-content) {
