@@ -2,6 +2,7 @@ import { PoiUpdateSchema } from "$lib/models/api/poi_schema";
 import type { Poi } from "$lib/models/poi";
 import {
     applyPrivateAttributesForUser,
+    attributesForPersistence,
     getPoiAttributeDefinitions,
     splitAttributeUpdates,
 } from "$lib/server/poi_attributes";
@@ -41,8 +42,11 @@ export async function POST(event: RequestEvent) {
 
         const r = await event.locals.pb.collection("pois").update<Poi>(id, {
             ...safeData,
-            attributes: split.attributes,
-            private_attributes: split.private_attributes,
+            attributes: attributesForPersistence(
+                split.attributes,
+                split.private_attributes,
+                userId,
+            ),
         });
         return json(applyPrivateAttributesForUser(r, definitions, userId));
     } catch (e: any) {

@@ -3,6 +3,7 @@ import type { Poi } from "$lib/models/poi";
 import type { PoiAttribute } from "$lib/models/poi_attribute";
 import {
     applyPrivateAttributesForUser,
+    attributesForPersistence,
     getPoiAttributeDefinitions,
     splitAttributeUpdates,
 } from "$lib/server/poi_attributes";
@@ -45,7 +46,7 @@ export async function PUT(event: RequestEvent) {
         const isAdmin = event.locals.pb.authStore.isSuperuser;
 
         const split = splitAttributeUpdates(
-            { ...safeData, private_attributes: safeData.private_attributes ?? {} } as Poi,
+            { ...safeData, private_attributes: {} } as Poi,
             definitions,
             safeData.attributes,
             userId,
@@ -55,8 +56,11 @@ export async function PUT(event: RequestEvent) {
         const r = await event.locals.pb.collection("pois").create<Poi>(
             {
                 ...safeData,
-                attributes: split.attributes,
-                private_attributes: split.private_attributes,
+                attributes: attributesForPersistence(
+                    split.attributes,
+                    split.private_attributes,
+                    userId,
+                ),
             },
             { requestKey: null },
         );
