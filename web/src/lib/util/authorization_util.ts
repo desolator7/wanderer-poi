@@ -10,6 +10,8 @@ const privateRoutes = [
 const publicRoutes = [
   "/",
   "/login",
+  "/legal",
+  "/data/osm-stamp-points.json",
   "/api/v1/auth",
   "/api/v1/user",
   "/api/v1/category",
