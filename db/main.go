@@ -147,6 +147,7 @@ func setupEventHandlers(app *pocketbase.PocketBase, client meilisearch.ServiceMa
 
 func setupCommands(app *pocketbase.PocketBase) {
 	app.RootCmd.AddCommand(commands.Dedup(app))
+	app.RootCmd.AddCommand(commands.PoiOSMImport(app))
 }
 
 func onBeforeServeHandler(client meilisearch.ServiceManager) func(se *core.ServeEvent) error {

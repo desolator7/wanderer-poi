@@ -13,6 +13,9 @@ build*.sh
 start*.*
 
 data*/
+!web/static/data/
+!web/static/data/osm-stamp-points.json
+!web/static/data/osm-stamp-points.json.sha256
 .planning/
 .claude/
 CLAUDE.md
