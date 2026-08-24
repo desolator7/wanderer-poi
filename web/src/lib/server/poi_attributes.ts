@@ -44,9 +44,26 @@ export function applyPrivateAttributesForUser(
         attributes[definition.key] = (userValue ?? null) as PoiAttributeValue;
     }
 
+    const { private_attributes: _privateAttributes, ...publicPoi } = poi;
+
     return {
-        ...poi,
+        ...publicPoi,
         attributes,
+    };
+}
+
+export function attributesForPersistence(
+    attributes: Record<string, PoiAttributeValue>,
+    privateAttributes: Record<string, Record<string, PoiAttributeValue>>,
+    userId: string | undefined,
+) {
+    if (!userId) {
+        return attributes;
+    }
+
+    return {
+        ...attributes,
+        ...(privateAttributes[userId] ?? {}),
     };
 }
 
