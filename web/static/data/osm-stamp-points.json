@@ -1,0 +1,3362 @@
+{
+  "metadata": {
+    "query": "[out:json][timeout:120]; rel(148007)->.network; node(r.network)[\"tourism\"=\"checkpoint\"][\"checkpoint\"~\"(^|;)hiking($|;)\"][\"checkpoint:type\"=\"stamp\"]; out meta;",
+    "relation": 148007,
+    "retrievedAt": "2026-08-24T10:22:20Z",
+    "osmBaseTimestamp": "2026-08-24T10:20:51Z",
+    "transformation": "Strictly validated OSM nodes; retained only number, neutralized name, coordinates, season and OSM provenance; sorted by number, season and OSM id.",
+    "odbl": {
+      "license": "Open Data Commons Open Database License (ODbL) v1.0",
+      "attribution": "© OpenStreetMap contributors",
+      "url": "https://www.openstreetmap.org/copyright"
+    },
+    "entriesSha256": "8707d78f00da1647f4cd6433ffce6b79a42884a7849ee8f14e16b12cea2e2839"
+  },
+  "points": [
+    {
+      "number": "001",
+      "name": "001 – Eckertalsperre",
+      "coordinates": {
+        "latitude": 51.841533,
+        "longitude": 10.5800307
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460530931,
+        "version": 26,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "002",
+      "name": "002 – Scharfenstein Rangerstation",
+      "coordinates": {
+        "latitude": 51.8301482,
+        "longitude": 10.6027727
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460530936,
+        "version": 20,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "003",
+      "name": "003 – Am Kruzifix",
+      "coordinates": {
+        "latitude": 51.8443373,
+        "longitude": 10.611757
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460530941,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "004",
+      "name": "004 – Taubenklippe",
+      "coordinates": {
+        "latitude": 51.8625602,
+        "longitude": 10.6181847
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 729546364,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "005",
+      "name": "005 – Froschfelsen",
+      "coordinates": {
+        "latitude": 51.851883,
+        "longitude": 10.654536
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 729546363,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "006",
+      "name": "006 – Obere Ilsefälle (Bremer Hütte)",
+      "coordinates": {
+        "latitude": 51.8286423,
+        "longitude": 10.6348148
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460530955,
+        "version": 15,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "007",
+      "name": "007 – Gasthaus Plessenburg",
+      "coordinates": {
+        "latitude": 51.832099,
+        "longitude": 10.6681411
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460530948,
+        "version": 18,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "008",
+      "name": "008 – Stempelsbuche",
+      "coordinates": {
+        "latitude": 51.8193643,
+        "longitude": 10.6278865
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 6545331999,
+        "version": 12,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "009",
+      "name": "009 – Brockenhaus",
+      "coordinates": {
+        "latitude": 51.8004161,
+        "longitude": 10.615737
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 1364689802,
+        "version": 35,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "010",
+      "name": "010 – Große Zeterklippe",
+      "coordinates": {
+        "latitude": 51.8026311,
+        "longitude": 10.6433359
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460530960,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "011",
+      "name": "011 – Eckerloch",
+      "coordinates": {
+        "latitude": 51.7850107,
+        "longitude": 10.6179079
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460530971,
+        "version": 19,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "012",
+      "name": "012 – Achtermannshöhe",
+      "coordinates": {
+        "latitude": 51.7613647,
+        "longitude": 10.5690798
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 5156015444,
+        "version": 17,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "013",
+      "name": "013 – Ahrensklint",
+      "coordinates": {
+        "latitude": 51.7736409,
+        "longitude": 10.6670943
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460841726,
+        "version": 20,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "014",
+      "name": "014 – Schnarcherklippe",
+      "coordinates": {
+        "latitude": 51.7542418,
+        "longitude": 10.6657183
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460530983,
+        "version": 12,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "015",
+      "name": "015 – Leistenklippe",
+      "coordinates": {
+        "latitude": 51.7815855,
+        "longitude": 10.6937458
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460841579,
+        "version": 15,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "016",
+      "name": "016 – Ferdinandsstein",
+      "coordinates": {
+        "latitude": 51.8233622,
+        "longitude": 10.6522328
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 1734931625,
+        "version": 16,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "017",
+      "name": "017 – Trudenstein",
+      "coordinates": {
+        "latitude": 51.7721816,
+        "longitude": 10.6966119
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460841650,
+        "version": 17,
+        "timestamp": "2026-05-23T11:14:26Z"
+      }
+    },
+    {
+      "number": "018",
+      "name": "018 – Grenzweg am Kaffeehorst",
+      "coordinates": {
+        "latitude": 51.7516557,
+        "longitude": 10.6324268
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460530980,
+        "version": 11,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "019",
+      "name": "019 – Skidenkmal",
+      "coordinates": {
+        "latitude": 51.8203404,
+        "longitude": 10.5729884
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460530933,
+        "version": 19,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "020",
+      "name": "020 – Aussichtskanzel am Barenberg",
+      "coordinates": {
+        "latitude": 51.7503207,
+        "longitude": 10.6749696
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674157663,
+        "version": 12,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "021",
+      "name": "021 – Helenenruh - Schierker Stern",
+      "coordinates": {
+        "latitude": 51.7540653,
+        "longitude": 10.6808017
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 492886172,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "022",
+      "name": "022 – Gelber Brink",
+      "coordinates": {
+        "latitude": 51.7909192,
+        "longitude": 10.6448513
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460530969,
+        "version": 18,
+        "timestamp": "2026-05-23T11:14:26Z"
+      }
+    },
+    {
+      "number": "023",
+      "name": "023 – Molkenhausstern",
+      "coordinates": {
+        "latitude": 51.807559,
+        "longitude": 10.6578517
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460530964,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "024",
+      "name": "024 – Wolfsklippe",
+      "coordinates": {
+        "latitude": 51.8194586,
+        "longitude": 10.6705387
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 749936007,
+        "version": 12,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "025",
+      "name": "025 – Oberförster-Koch-Denkmal",
+      "coordinates": {
+        "latitude": 51.8252493,
+        "longitude": 10.688428
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 749936008,
+        "version": 12,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "026",
+      "name": "026 – Mönchsbuche",
+      "coordinates": {
+        "latitude": 51.8179046,
+        "longitude": 10.7076351
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460841485,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "027",
+      "name": "027 – Ottofelsen",
+      "coordinates": {
+        "latitude": 51.7966779,
+        "longitude": 10.712014
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460841524,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "028",
+      "name": "028 – Steinerne Renne",
+      "coordinates": {
+        "latitude": 51.8049081,
+        "longitude": 10.6999162
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460841505,
+        "version": 12,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "029",
+      "name": "029 – Elverstein",
+      "coordinates": {
+        "latitude": 51.8047213,
+        "longitude": 10.7348696
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 667391437,
+        "version": 11,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "030",
+      "name": "030 – Gasthaus Ilsestein",
+      "coordinates": {
+        "latitude": 51.846203,
+        "longitude": 10.662943
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460530946,
+        "version": 19,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "031",
+      "name": "031 – Agnesberg",
+      "coordinates": {
+        "latitude": 51.8301362,
+        "longitude": 10.7979693
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 677105498,
+        "version": 12,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "032",
+      "name": "032 – Gasthaus Christianental",
+      "coordinates": {
+        "latitude": 51.8276136,
+        "longitude": 10.8125413
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 676316278,
+        "version": 15,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "033",
+      "name": "033 – Stapenberg",
+      "coordinates": {
+        "latitude": 51.8262667,
+        "longitude": 10.8483116
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 676313743,
+        "version": 11,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "034",
+      "name": "034 – Scharfenstein",
+      "coordinates": {
+        "latitude": 51.8100271,
+        "longitude": 10.7983249
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 685337916,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "035",
+      "name": "035 – Gasthaus Armeleuteberg",
+      "coordinates": {
+        "latitude": 51.8154191,
+        "longitude": 10.7766782
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 667392442,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "036",
+      "name": "036 – Peterstein",
+      "coordinates": {
+        "latitude": 51.7922298,
+        "longitude": 10.7805186
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 322826535,
+        "version": 20,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "037",
+      "name": "037 – Büchenberg",
+      "coordinates": {
+        "latitude": 51.7910492,
+        "longitude": 10.8184315
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 1756602738,
+        "version": 12,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "038",
+      "name": "038 – Galgenberg",
+      "coordinates": {
+        "latitude": 51.7737879,
+        "longitude": 10.8167429
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 749936011,
+        "version": 12,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "039",
+      "name": "039 – Tagebau Felswerke",
+      "coordinates": {
+        "latitude": 51.7599055,
+        "longitude": 10.8018957
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 712985893,
+        "version": 15,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "040",
+      "name": "040 – Königshütter Wasserfall",
+      "coordinates": {
+        "latitude": 51.7509895,
+        "longitude": 10.753721
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 677034265,
+        "version": 16,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "041",
+      "name": "041 – Ruine Königsburg",
+      "coordinates": {
+        "latitude": 51.7385677,
+        "longitude": 10.7675122
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 749952934,
+        "version": 17,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "042",
+      "name": "042 – Trogfurter Brücke",
+      "coordinates": {
+        "latitude": 51.7355323,
+        "longitude": 10.8050789
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460842060,
+        "version": 16,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "043",
+      "name": "043 – Hohe Tür",
+      "coordinates": {
+        "latitude": 51.6186208,
+        "longitude": 10.5042132
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 4126701200,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "044",
+      "name": "044 – Kapitelsberg",
+      "coordinates": {
+        "latitude": 51.7056244,
+        "longitude": 10.7408886
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 749952939,
+        "version": 12,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "045",
+      "name": "045 – Dicke Tannen",
+      "coordinates": {
+        "latitude": 51.6571367,
+        "longitude": 10.6481906
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 793915554,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "046",
+      "name": "046 – Grenzmuseum - Ring der Erinnerung",
+      "coordinates": {
+        "latitude": 51.69361,
+        "longitude": 10.6666703
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 748189844,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "047",
+      "name": "047 – Oberharzblick am Buchenberg",
+      "coordinates": {
+        "latitude": 51.6527317,
+        "longitude": 10.7484761
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 739859525,
+        "version": 17,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "048",
+      "name": "048 – Stierbergsteich",
+      "coordinates": {
+        "latitude": 51.6410318,
+        "longitude": 10.7571081
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 793915558,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "049",
+      "name": "049 – Grüntal",
+      "coordinates": {
+        "latitude": 51.6765913,
+        "longitude": 10.7552683
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 689808482,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "050",
+      "name": "050 – Walzenhütte",
+      "coordinates": {
+        "latitude": 51.6611654,
+        "longitude": 10.7669847
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 689422756,
+        "version": 17,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "051",
+      "name": "051 – Carlsturm (Carlshausturm)",
+      "coordinates": {
+        "latitude": 51.6563757,
+        "longitude": 10.7970694
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 2623884724,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "052",
+      "name": "052 – Trageburg",
+      "coordinates": {
+        "latitude": 51.7027979,
+        "longitude": 10.7911331
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460842033,
+        "version": 19,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "053",
+      "name": "053 – Hassel-Vorsperre",
+      "coordinates": {
+        "latitude": 51.7096449,
+        "longitude": 10.8309515
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 712920911,
+        "version": 19,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "054",
+      "name": "054 – Rotestein",
+      "coordinates": {
+        "latitude": 51.7292195,
+        "longitude": 10.8805251
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 689915802,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "055",
+      "name": "055 – Wüstung Selkenfelde/Kirche",
+      "coordinates": {
+        "latitude": 51.6504702,
+        "longitude": 10.918705
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 729123798,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "056",
+      "name": "056 – Rappbodeblick Trautenstein",
+      "coordinates": {
+        "latitude": 51.7115513,
+        "longitude": 10.8011614
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 749963839,
+        "version": 19,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "057",
+      "name": "057 – Echowiese Allrode",
+      "coordinates": {
+        "latitude": 51.6902829,
+        "longitude": 10.9892572
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674166475,
+        "version": 15,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "058",
+      "name": "058 – Pferdchen",
+      "coordinates": {
+        "latitude": 51.6384275,
+        "longitude": 10.630513
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 2397757167,
+        "version": 12,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "059",
+      "name": "059 – Klostergrund Michaelstein",
+      "coordinates": {
+        "latitude": 51.8050582,
+        "longitude": 10.9098064
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 764664049,
+        "version": 16,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "060",
+      "name": "060 – Stemberghaus-Köhlerei",
+      "coordinates": {
+        "latitude": 51.7219122,
+        "longitude": 10.8961218
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 750015093,
+        "version": 16,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "061",
+      "name": "061 – Harzer Grauwacke Rieder",
+      "coordinates": {
+        "latitude": 51.7134356,
+        "longitude": 11.1795165
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 764664052,
+        "version": 17,
+        "timestamp": "2026-05-23T11:14:26Z"
+      }
+    },
+    {
+      "number": "062",
+      "name": "062 – Talsperre Wendefurth",
+      "coordinates": {
+        "latitude": 51.742875,
+        "longitude": 10.9194426
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 689915837,
+        "version": 19,
+        "timestamp": "2026-08-22T09:57:15Z"
+      }
+    },
+    {
+      "number": "063",
+      "name": "063 – Schöneburg",
+      "coordinates": {
+        "latitude": 51.7297453,
+        "longitude": 10.9230257
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 770315807,
+        "version": 18,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "064",
+      "name": "064 – Böser Kleef",
+      "coordinates": {
+        "latitude": 51.7300529,
+        "longitude": 10.9495835
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 681219734,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "065",
+      "name": "065 – Gasthaus Todtenrode",
+      "coordinates": {
+        "latitude": 51.7367706,
+        "longitude": 10.9556519
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 681218287,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "066",
+      "name": "066 – Wilhelmsblick (Aussichtspunkt)",
+      "coordinates": {
+        "latitude": 51.7230841,
+        "longitude": 10.9661253
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 409467177,
+        "version": 16,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "067",
+      "name": "067 – Weisser Hirsch (Aussichtspunkt)",
+      "coordinates": {
+        "latitude": 51.7169317,
+        "longitude": 10.9780189
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674166464,
+        "version": 16,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "068",
+      "name": "068 – Pfeil-Denkmal",
+      "coordinates": {
+        "latitude": 51.7172463,
+        "longitude": 11.0022835
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674166466,
+        "version": 12,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "069",
+      "name": "069 – Sonnenklippe (Bodetal) Sommer",
+      "coordinates": {
+        "latitude": 51.7221009,
+        "longitude": 10.9700942
+      },
+      "season": "spring;summer;autumn",
+      "osm": {
+        "type": "node",
+        "id": 681222107,
+        "version": 18,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "069",
+      "name": "069 – Sonnenklippe (Bodetal) Winter",
+      "coordinates": {
+        "latitude": 51.7156204,
+        "longitude": 10.9755909
+      },
+      "season": "winter",
+      "osm": {
+        "type": "node",
+        "id": 10921101354,
+        "version": 8,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "070",
+      "name": "070 – Prinzensicht (Aussichtspunkt)",
+      "coordinates": {
+        "latitude": 51.7336642,
+        "longitude": 11.0074403
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674166449,
+        "version": 12,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "071",
+      "name": "071 – Rosstrappe",
+      "coordinates": {
+        "latitude": 51.7372317,
+        "longitude": 11.0185215
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 687635356,
+        "version": 22,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "072",
+      "name": "072 – La Viershöhe",
+      "coordinates": {
+        "latitude": 51.7305718,
+        "longitude": 11.0167806
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 687635340,
+        "version": 9,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "073",
+      "name": "073 – Glockenstein",
+      "coordinates": {
+        "latitude": 51.729122,
+        "longitude": 11.0571901
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674166467,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "074",
+      "name": "074 – Hamburger Wappen (Teufelsmauer)",
+      "coordinates": {
+        "latitude": 51.7768975,
+        "longitude": 11.0013018
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 750015094,
+        "version": 16,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "075",
+      "name": "075 – Hahnenkleeklippen",
+      "coordinates": {
+        "latitude": 51.737378,
+        "longitude": 10.5658391
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460530906,
+        "version": 17,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "076",
+      "name": "076 – Großvaterfelsen",
+      "coordinates": {
+        "latitude": 51.7859718,
+        "longitude": 10.9671325
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 750015091,
+        "version": 16,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "077",
+      "name": "077 – Ruine Luisenburg",
+      "coordinates": {
+        "latitude": 51.7827176,
+        "longitude": 10.9540076
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 750015092,
+        "version": 18,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "078",
+      "name": "078 – Barocke Gärten",
+      "coordinates": {
+        "latitude": 51.7874985,
+        "longitude": 10.9561695
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 751084435,
+        "version": 19,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "079",
+      "name": "079 – Otto-Ebert-Brücke",
+      "coordinates": {
+        "latitude": 51.7849796,
+        "longitude": 10.9230116
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 751084444,
+        "version": 11,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "080",
+      "name": "080 – Burgruine Regenstein",
+      "coordinates": {
+        "latitude": 51.8138376,
+        "longitude": 10.9583309
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 716841392,
+        "version": 21,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "081",
+      "name": "081 – Sandhöhlen im Heers",
+      "coordinates": {
+        "latitude": 51.8171495,
+        "longitude": 10.9658226
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 716856266,
+        "version": 15,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "082",
+      "name": "082 – Regenstein-Mühle",
+      "coordinates": {
+        "latitude": 51.8164795,
+        "longitude": 10.9487377
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 716841380,
+        "version": 10,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "083",
+      "name": "083 – Austbergturm",
+      "coordinates": {
+        "latitude": 51.8376796,
+        "longitude": 10.8593287
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 683622655,
+        "version": 15,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "084",
+      "name": "084 – Altenburg (bei Heimburg)",
+      "coordinates": {
+        "latitude": 51.826842,
+        "longitude": 10.9111949
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 751140960,
+        "version": 18,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "085",
+      "name": "085 – Brückeneck / Wasserkunst Thumkuhlental",
+      "coordinates": {
+        "latitude": 51.8085394,
+        "longitude": 10.7285123
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 749935984,
+        "version": 15,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "086",
+      "name": "086 – Bisongehege Stangerode",
+      "coordinates": {
+        "latitude": 51.6619519,
+        "longitude": 11.3417017
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 3037795119,
+        "version": 9,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "087",
+      "name": "087 – Volkmarskeller",
+      "coordinates": {
+        "latitude": 51.7873137,
+        "longitude": 10.8733444
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 739435632,
+        "version": 16,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "088",
+      "name": "088 – Aussichtspavillon Hoher Kleef",
+      "coordinates": {
+        "latitude": 51.7536285,
+        "longitude": 10.8462376
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 734760076,
+        "version": 14,
+        "timestamp": "2026-05-23T11:14:26Z"
+      }
+    },
+    {
+      "number": "089",
+      "name": "089 – Schornsteinberg",
+      "coordinates": {
+        "latitude": 51.7596978,
+        "longitude": 10.8505108
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 734760146,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "090",
+      "name": "090 – Roter Schuss",
+      "coordinates": {
+        "latitude": 51.6171591,
+        "longitude": 10.6517402
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 739859520,
+        "version": 15,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "091",
+      "name": "091 – Weltkulturerbe Rammelsberg",
+      "coordinates": {
+        "latitude": 51.8901076,
+        "longitude": 10.419035
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460479323,
+        "version": 12,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "092",
+      "name": "092 – Poppenberg mit Aussichtsturm",
+      "coordinates": {
+        "latitude": 51.5881573,
+        "longitude": 10.8269352
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674166446,
+        "version": 11,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "093",
+      "name": "093 – Dreitälerblick",
+      "coordinates": {
+        "latitude": 51.601265,
+        "longitude": 10.7925579
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674166436,
+        "version": 15,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "094",
+      "name": "094 – Dreiherrenstein",
+      "coordinates": {
+        "latitude": 51.606466,
+        "longitude": 10.8919008
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 914890808,
+        "version": 10,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "095",
+      "name": "095 – Ilfelder Wetterfahne",
+      "coordinates": {
+        "latitude": 51.5873101,
+        "longitude": 10.7917979
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674166440,
+        "version": 15,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "096",
+      "name": "096 – Ehemalige Steinmühle",
+      "coordinates": {
+        "latitude": 51.6080708,
+        "longitude": 10.7286693
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 945387772,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "097",
+      "name": "097 – Ziegenalm Sophienhof",
+      "coordinates": {
+        "latitude": 51.6324974,
+        "longitude": 10.7904664
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 811987349,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "098",
+      "name": "098 – Ruine Hohnstein",
+      "coordinates": {
+        "latitude": 51.5698811,
+        "longitude": 10.837271
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674166448,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "099",
+      "name": "099 – Harzer Holzdampflok",
+      "coordinates": {
+        "latitude": 51.5565396,
+        "longitude": 10.8254877
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 6434275154,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "100",
+      "name": "100 – Ebersburg",
+      "coordinates": {
+        "latitude": 51.553903,
+        "longitude": 10.8797036
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 2032649421,
+        "version": 12,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "101",
+      "name": "101 – Einhornhöhle",
+      "coordinates": {
+        "latitude": 51.635002,
+        "longitude": 10.4043826
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 734699846,
+        "version": 17,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "102",
+      "name": "102 – Lageswarte",
+      "coordinates": {
+        "latitude": 51.914699,
+        "longitude": 10.2512724
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 455497693,
+        "version": 16,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "103",
+      "name": "103 – Luchsstein",
+      "coordinates": {
+        "latitude": 51.8803757,
+        "longitude": 10.2554511
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460422020,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "104",
+      "name": "104 – Tränkebachhütte",
+      "coordinates": {
+        "latitude": 51.8849871,
+        "longitude": 10.2385312
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460422021,
+        "version": 12,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "105",
+      "name": "105 – Prinzenlaube",
+      "coordinates": {
+        "latitude": 51.8258467,
+        "longitude": 10.2885682
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 875722496,
+        "version": 10,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "106",
+      "name": "106 – Schöne Aussicht, Bielstein",
+      "coordinates": {
+        "latitude": 51.8769921,
+        "longitude": 10.2922381
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674224300,
+        "version": 11,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "107",
+      "name": "107 – Maaßener Gaipel",
+      "coordinates": {
+        "latitude": 51.8637134,
+        "longitude": 10.2897656
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460422025,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "108",
+      "name": "108 – Sudmerberger Warte",
+      "coordinates": {
+        "latitude": 51.915053,
+        "longitude": 10.4677475
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460422022,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "109",
+      "name": "109 – Heimberg",
+      "coordinates": {
+        "latitude": 51.9126579,
+        "longitude": 10.335654
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460422030,
+        "version": 13,
+        "timestamp": "2026-06-09T18:26:35Z"
+      }
+    },
+    {
+      "number": "110",
+      "name": "110 – Granestausee",
+      "coordinates": {
+        "latitude": 51.9005516,
+        "longitude": 10.3822796
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460422032,
+        "version": 17,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "111",
+      "name": "111 – Steinbergturm/Steinbergalm",
+      "coordinates": {
+        "latitude": 51.9064634,
+        "longitude": 10.4053063
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460479330,
+        "version": 17,
+        "timestamp": "2026-06-09T20:33:40Z"
+      }
+    },
+    {
+      "number": "112",
+      "name": "112 – Liebesbank",
+      "coordinates": {
+        "latitude": 51.86063,
+        "longitude": 10.3572033
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460479331,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "113",
+      "name": "113 – Grumbacher Teich",
+      "coordinates": {
+        "latitude": 51.8494632,
+        "longitude": 10.3000786
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460422024,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "114",
+      "name": "114 – Ramseck",
+      "coordinates": {
+        "latitude": 51.8884659,
+        "longitude": 10.4264081
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460479324,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "115",
+      "name": "115 – Bismarckturm",
+      "coordinates": {
+        "latitude": 51.6407396,
+        "longitude": 10.4720901
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 2621119870,
+        "version": 15,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "116",
+      "name": "116 – Verlobungsinsel in der Oker",
+      "coordinates": {
+        "latitude": 51.8670332,
+        "longitude": 10.4742093
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 476567186,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "117",
+      "name": "117 – Treppenstein",
+      "coordinates": {
+        "latitude": 51.871813,
+        "longitude": 10.4813913
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460479326,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "118",
+      "name": "118 – Kästehaus",
+      "coordinates": {
+        "latitude": 51.868864,
+        "longitude": 10.4859846
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 1945697692,
+        "version": 12,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "119",
+      "name": "119 – Hallesche Hütte",
+      "coordinates": {
+        "latitude": 51.8541588,
+        "longitude": 10.4678421
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460479329,
+        "version": 15,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "120",
+      "name": "120 – Elfenstein",
+      "coordinates": {
+        "latitude": 51.8791116,
+        "longitude": 10.527595
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 748114682,
+        "version": 11,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "121",
+      "name": "121 – \"Aussichtsreich\" Burgberg",
+      "coordinates": {
+        "latitude": 51.8715329,
+        "longitude": 10.5665569
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460530922,
+        "version": 18,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "122",
+      "name": "122 – Kreuz des deutschen Ostens",
+      "coordinates": {
+        "latitude": 51.8752668,
+        "longitude": 10.5924853
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460530924,
+        "version": 15,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "123",
+      "name": "123 – Waldgaststätte Rinderstall",
+      "coordinates": {
+        "latitude": 51.7162864,
+        "longitude": 10.5622511
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 746113909,
+        "version": 15,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "124",
+      "name": "124 – Köte am Heidestieg",
+      "coordinates": {
+        "latitude": 51.8408113,
+        "longitude": 10.4234649
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460479333,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "125",
+      "name": "125 – Schalker Turm",
+      "coordinates": {
+        "latitude": 51.8488302,
+        "longitude": 10.3822139
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460479335,
+        "version": 11,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "126",
+      "name": "126 – Lochstein, Oberer Schalker Graben",
+      "coordinates": {
+        "latitude": 51.8370613,
+        "longitude": 10.3798379
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460479334,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "127",
+      "name": "127 – Weppner-Hütte",
+      "coordinates": {
+        "latitude": 51.7978629,
+        "longitude": 10.3888045
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460479343,
+        "version": 12,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "128",
+      "name": "128 – Huttaler Widerwaage",
+      "coordinates": {
+        "latitude": 51.7857087,
+        "longitude": 10.3773858
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460479344,
+        "version": 11,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "129",
+      "name": "129 – Hütte im WeltWald Harz",
+      "coordinates": {
+        "latitude": 51.819289,
+        "longitude": 10.2250283
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 872692895,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "130",
+      "name": "130 – Iberger Albertturm",
+      "coordinates": {
+        "latitude": 51.8197567,
+        "longitude": 10.2453204
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460422023,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "131",
+      "name": "131 – Kaysereiche",
+      "coordinates": {
+        "latitude": 51.792039,
+        "longitude": 10.2757991
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460479350,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "132",
+      "name": "132 – Schwarzenberg (Köte Brockenblick)",
+      "coordinates": {
+        "latitude": 51.8059218,
+        "longitude": 10.445555
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 748127599,
+        "version": 17,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "133",
+      "name": "133 – Förster-Ludewig-Platz",
+      "coordinates": {
+        "latitude": 51.8034876,
+        "longitude": 10.487849
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460479338,
+        "version": 17,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "134",
+      "name": "134 – Gustav-Baumann-Weg",
+      "coordinates": {
+        "latitude": 51.7854576,
+        "longitude": 10.4674106
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 4126687889,
+        "version": 12,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "135",
+      "name": "135 – Wolfswarte",
+      "coordinates": {
+        "latitude": 51.7904501,
+        "longitude": 10.5036658
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460479336,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "136",
+      "name": "136 – Eckersprung - Grünes Band",
+      "coordinates": {
+        "latitude": 51.7876615,
+        "longitude": 10.5864774
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460530917,
+        "version": 15,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "137",
+      "name": "137 – Bärenbrucher Teich",
+      "coordinates": {
+        "latitude": 51.776033,
+        "longitude": 10.3509415
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460479347,
+        "version": 11,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "138",
+      "name": "138 – Braunseck",
+      "coordinates": {
+        "latitude": 51.7667064,
+        "longitude": 10.355276
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460479346,
+        "version": 10,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "139",
+      "name": "139 – Kuckholzklippe",
+      "coordinates": {
+        "latitude": 51.7662158,
+        "longitude": 10.3137769
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 1327920116,
+        "version": 10,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "140",
+      "name": "140 – Eselsplatz",
+      "coordinates": {
+        "latitude": 51.7461422,
+        "longitude": 10.3015158
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460479348,
+        "version": 15,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "141",
+      "name": "141 – Oberer Hahnebalzer Teich",
+      "coordinates": {
+        "latitude": 51.7847838,
+        "longitude": 10.2862713
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460479349,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "142",
+      "name": "142 – Mandolinenhütte",
+      "coordinates": {
+        "latitude": 51.895145,
+        "longitude": 10.2789356
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 748189756,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "143",
+      "name": "143 – Köte Schindelkopf",
+      "coordinates": {
+        "latitude": 51.7230429,
+        "longitude": 10.3364148
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460479357,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "144",
+      "name": "144 – Hanskühnenburg",
+      "coordinates": {
+        "latitude": 51.728109,
+        "longitude": 10.4033865
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460479351,
+        "version": 15,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "145",
+      "name": "145 – Schmidts Denkmal",
+      "coordinates": {
+        "latitude": 51.7772072,
+        "longitude": 10.3877569
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 701197822,
+        "version": 10,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "146",
+      "name": "146 – Großes Wehr",
+      "coordinates": {
+        "latitude": 51.7626476,
+        "longitude": 10.4453369
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460479340,
+        "version": 19,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "147",
+      "name": "147 – Eleonorenblick",
+      "coordinates": {
+        "latitude": 51.7537888,
+        "longitude": 10.3983404
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460479354,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "148",
+      "name": "148 – Naturmythenpfad",
+      "coordinates": {
+        "latitude": 51.7231077,
+        "longitude": 10.5818634
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460479352,
+        "version": 17,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "149",
+      "name": "149 – Altenauer Herzweg/Mühlenberg",
+      "coordinates": {
+        "latitude": 51.8032889,
+        "longitude": 10.4501461
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 1763604128,
+        "version": 15,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "150",
+      "name": "150 – Großer Knollen",
+      "coordinates": {
+        "latitude": 51.6673244,
+        "longitude": 10.4298048
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460479359,
+        "version": 15,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "151",
+      "name": "151 – Ruine Scharzfels",
+      "coordinates": {
+        "latitude": 51.6288411,
+        "longitude": 10.4089341
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460479361,
+        "version": 15,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "152",
+      "name": "152 – Knollenkreuz",
+      "coordinates": {
+        "latitude": 51.6434862,
+        "longitude": 10.442685
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 748189856,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "153",
+      "name": "153 – Goedeckenplatz",
+      "coordinates": {
+        "latitude": 51.6883819,
+        "longitude": 10.4720878
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 4126701203,
+        "version": 11,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "154",
+      "name": "154 – Dreibrodestein",
+      "coordinates": {
+        "latitude": 51.7324955,
+        "longitude": 10.5114273
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460530902,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "155",
+      "name": "155 – Rehberger Grabenhaus",
+      "coordinates": {
+        "latitude": 51.7292187,
+        "longitude": 10.538098
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460530904,
+        "version": 16,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "156",
+      "name": "156 – Wurmberg-Baude",
+      "coordinates": {
+        "latitude": 51.7564976,
+        "longitude": 10.6187471
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460530974,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "157",
+      "name": "157 – Kapellenfleck",
+      "coordinates": {
+        "latitude": 51.6903615,
+        "longitude": 10.5955323
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460841755,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "158",
+      "name": "158 – Hassenstein",
+      "coordinates": {
+        "latitude": 51.638222,
+        "longitude": 10.5250634
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 1327920111,
+        "version": 12,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "159",
+      "name": "159 – Stöberhai",
+      "coordinates": {
+        "latitude": 51.6565737,
+        "longitude": 10.5543823
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460479367,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "160",
+      "name": "160 – Helenenruh",
+      "coordinates": {
+        "latitude": 51.6422759,
+        "longitude": 10.6107713
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460841773,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "161",
+      "name": "161 – Stephanshütte",
+      "coordinates": {
+        "latitude": 51.6306679,
+        "longitude": 10.5427186
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460479365,
+        "version": 16,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "162",
+      "name": "162 – Kreuztalsklippe",
+      "coordinates": {
+        "latitude": 51.6281789,
+        "longitude": 10.5849142
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 1327922832,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "163",
+      "name": "163 – Gipfelblick am Kaiserweg",
+      "coordinates": {
+        "latitude": 51.6532619,
+        "longitude": 10.600876
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 3891503401,
+        "version": 10,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "164",
+      "name": "164 – Stiefmutter",
+      "coordinates": {
+        "latitude": 51.6230474,
+        "longitude": 10.6432638
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460841829,
+        "version": 12,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "165",
+      "name": "165 – Wendel-Eiche",
+      "coordinates": {
+        "latitude": 51.6245363,
+        "longitude": 10.6570842
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460841860,
+        "version": 16,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "166",
+      "name": "166 – Sachsensteinhütte",
+      "coordinates": {
+        "latitude": 51.5807146,
+        "longitude": 10.583852
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 4126701204,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "167",
+      "name": "167 – Hexentanzplatz (Ellricher Blick)",
+      "coordinates": {
+        "latitude": 51.5811229,
+        "longitude": 10.6458948
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 739859442,
+        "version": 16,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "168",
+      "name": "168 – Dreieckiger Pfahl",
+      "coordinates": {
+        "latitude": 51.7812832,
+        "longitude": 10.5805835
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460530912,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "169",
+      "name": "169 – Molkenhaus",
+      "coordinates": {
+        "latitude": 51.8556586,
+        "longitude": 10.5730357
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460530929,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "170",
+      "name": "170 – Rabenklippe",
+      "coordinates": {
+        "latitude": 51.8648493,
+        "longitude": 10.6052661
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460530926,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "171",
+      "name": "171 – Altarklippen",
+      "coordinates": {
+        "latitude": 51.888365,
+        "longitude": 10.3318943
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 460422026,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "172",
+      "name": "172 – Katzsohlteich",
+      "coordinates": {
+        "latitude": 51.6370395,
+        "longitude": 10.968342
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674182934,
+        "version": 15,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "173",
+      "name": "173 – Waldwiese Hirschbüchenkopf",
+      "coordinates": {
+        "latitude": 51.6375263,
+        "longitude": 11.0229011
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674182938,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "174",
+      "name": "174 – Hohnehof",
+      "coordinates": {
+        "latitude": 51.7754709,
+        "longitude": 10.7191377
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 1738657485,
+        "version": 14,
+        "timestamp": "2026-05-23T11:14:26Z"
+      }
+    },
+    {
+      "number": "175",
+      "name": "175 – Schaubergwerk Glasebach",
+      "coordinates": {
+        "latitude": 51.6118639,
+        "longitude": 11.0650881
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674224303,
+        "version": 17,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "176",
+      "name": "176 – Uhlenköpfe Hänichen",
+      "coordinates": {
+        "latitude": 51.632179,
+        "longitude": 11.082955
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674224313,
+        "version": 10,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "177",
+      "name": "177 – Verlobungsurne Alexisbad",
+      "coordinates": {
+        "latitude": 51.6463594,
+        "longitude": 11.1147557
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674224323,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "178",
+      "name": "178 – Hirschgrund (am Gasthaus Königsruh)",
+      "coordinates": {
+        "latitude": 51.7336129,
+        "longitude": 11.0176944
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 687635343,
+        "version": 18,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "179",
+      "name": "179 – IV. Friedrichshammer",
+      "coordinates": {
+        "latitude": 51.6684902,
+        "longitude": 11.1659193
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674224330,
+        "version": 15,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "180",
+      "name": "180 – Alter Kohlenschacht",
+      "coordinates": {
+        "latitude": 51.7071752,
+        "longitude": 11.2555875
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674224336,
+        "version": 16,
+        "timestamp": "2026-05-23T11:14:26Z"
+      }
+    },
+    {
+      "number": "181",
+      "name": "181 – Forstmeister Tannen",
+      "coordinates": {
+        "latitude": 51.7160812,
+        "longitude": 11.2100586
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 492892412,
+        "version": 20,
+        "timestamp": "2026-05-23T11:14:26Z"
+      }
+    },
+    {
+      "number": "182",
+      "name": "182 – Schirm Ballenstedt",
+      "coordinates": {
+        "latitude": 51.6913955,
+        "longitude": 11.1822904
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674182968,
+        "version": 9,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "183",
+      "name": "183 – Försterblick Gernrode",
+      "coordinates": {
+        "latitude": 51.7176754,
+        "longitude": 11.1308636
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 5682865509,
+        "version": 10,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "184",
+      "name": "184 – Bärendenkmal",
+      "coordinates": {
+        "latitude": 51.6821095,
+        "longitude": 11.0963599
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674182961,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "185",
+      "name": "185 – Preußenturm",
+      "coordinates": {
+        "latitude": 51.7238033,
+        "longitude": 11.1192977
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674182948,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "186",
+      "name": "186 – Anhaltinischer Saalstein",
+      "coordinates": {
+        "latitude": 51.716427,
+        "longitude": 11.1054045
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674182951,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "187",
+      "name": "187 – Lauenburg",
+      "coordinates": {
+        "latitude": 51.7265024,
+        "longitude": 11.0806979
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674182944,
+        "version": 19,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "188",
+      "name": "188 – Teufelsmauer Weddersleben",
+      "coordinates": {
+        "latitude": 51.7560282,
+        "longitude": 11.0873354
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 490509126,
+        "version": 16,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "189",
+      "name": "189 – Große Teufelsmühle",
+      "coordinates": {
+        "latitude": 51.6848768,
+        "longitude": 11.0792658
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674182957,
+        "version": 11,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "190",
+      "name": "190 – Bergrat-Müller-Teich",
+      "coordinates": {
+        "latitude": 51.679445,
+        "longitude": 11.0649916
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674182930,
+        "version": 12,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "191",
+      "name": "191 – Laubtalblick",
+      "coordinates": {
+        "latitude": 51.6724617,
+        "longitude": 11.0366405
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 729123800,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "192",
+      "name": "192 – Historischer Gipsbrennofen",
+      "coordinates": {
+        "latitude": 51.5768157,
+        "longitude": 10.5750532
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 2294037726,
+        "version": 13,
+        "timestamp": "2026-05-23T11:14:26Z"
+      }
+    },
+    {
+      "number": "193",
+      "name": "193 – Stahlquelle",
+      "coordinates": {
+        "latitude": 51.6079697,
+        "longitude": 11.1366955
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674224320,
+        "version": 17,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "194",
+      "name": "194 – Hellergrund",
+      "coordinates": {
+        "latitude": 51.6178996,
+        "longitude": 11.0814579
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674224310,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "195",
+      "name": "195 – Köthener Hütte",
+      "coordinates": {
+        "latitude": 51.6609967,
+        "longitude": 11.1262262
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674224326,
+        "version": 15,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "196",
+      "name": "196 – Bremer Teich",
+      "coordinates": {
+        "latitude": 51.6848806,
+        "longitude": 11.1122096
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674182964,
+        "version": 17,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "197",
+      "name": "197 – Burgruine Anhalt",
+      "coordinates": {
+        "latitude": 51.6678228,
+        "longitude": 11.1936186
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674224333,
+        "version": 16,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "198",
+      "name": "198 – Glockensteine",
+      "coordinates": {
+        "latitude": 51.5176479,
+        "longitude": 10.8580876
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 2032649430,
+        "version": 12,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "199",
+      "name": "199 – Bismarckturm",
+      "coordinates": {
+        "latitude": 51.714251,
+        "longitude": 11.258816
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674182971,
+        "version": 12,
+        "timestamp": "2026-05-23T11:14:26Z"
+      }
+    },
+    {
+      "number": "200",
+      "name": "200 – Burg Falkenstein",
+      "coordinates": {
+        "latitude": 51.6818287,
+        "longitude": 11.2659464
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674224348,
+        "version": 17,
+        "timestamp": "2026-05-23T11:14:26Z"
+      }
+    },
+    {
+      "number": "201",
+      "name": "201 – Konradsburg",
+      "coordinates": {
+        "latitude": 51.714015,
+        "longitude": 11.3479113
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674224354,
+        "version": 15,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "202",
+      "name": "202 – Landschaftspark Degenerhausen",
+      "coordinates": {
+        "latitude": 51.6853637,
+        "longitude": 11.3076823
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674224351,
+        "version": 15,
+        "timestamp": "2026-05-23T11:14:26Z"
+      }
+    },
+    {
+      "number": "203",
+      "name": "203 – Schutzhütte am Mettenberg",
+      "coordinates": {
+        "latitude": 51.6791007,
+        "longitude": 11.2326291
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674224339,
+        "version": 17,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "204",
+      "name": "204 – Selkesicht an der Ackeburg",
+      "coordinates": {
+        "latitude": 51.6854244,
+        "longitude": 11.254456
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674224342,
+        "version": 15,
+        "timestamp": "2026-05-23T11:14:26Z"
+      }
+    },
+    {
+      "number": "205",
+      "name": "205 – Rastplatz unterhalb des Clusberges",
+      "coordinates": {
+        "latitude": 51.6634335,
+        "longitude": 11.3066631
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674224360,
+        "version": 15,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "206",
+      "name": "206 – Hahnestein",
+      "coordinates": {
+        "latitude": 51.6756031,
+        "longitude": 10.6413024
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 793915556,
+        "version": 10,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "207",
+      "name": "207 – Mausoleum",
+      "coordinates": {
+        "latitude": 51.7006424,
+        "longitude": 11.2833892
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674224345,
+        "version": 13,
+        "timestamp": "2026-05-23T11:14:26Z"
+      }
+    },
+    {
+      "number": "208",
+      "name": "208 – Burgruine Grillenburg",
+      "coordinates": {
+        "latitude": 51.5344277,
+        "longitude": 11.314466
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674224367,
+        "version": 16,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "209",
+      "name": "209 – Moltkewarte (Aussichtsturm)",
+      "coordinates": {
+        "latitude": 51.4930695,
+        "longitude": 11.2710278
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 686740341,
+        "version": 12,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "210",
+      "name": "210 – Schöne Aussicht Hainrode",
+      "coordinates": {
+        "latitude": 51.5013203,
+        "longitude": 11.1419333
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674224363,
+        "version": 16,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "211",
+      "name": "211 – Kiliansteiche",
+      "coordinates": {
+        "latitude": 51.607561,
+        "longitude": 11.014991
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 674224370,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "212",
+      "name": "212 – An der Queste",
+      "coordinates": {
+        "latitude": 51.4932795,
+        "longitude": 11.1171796
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 686740268,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "213",
+      "name": "213 – Bauerngraben",
+      "coordinates": {
+        "latitude": 51.4891064,
+        "longitude": 11.0780223
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 686740247,
+        "version": 17,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "214",
+      "name": "214 – Reesbergdoline",
+      "coordinates": {
+        "latitude": 51.4981163,
+        "longitude": 10.9480779
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 4126706336,
+        "version": 14,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "215",
+      "name": "215 – Josephshöhe (Auerberg)",
+      "coordinates": {
+        "latitude": 51.5807083,
+        "longitude": 11.0052873
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 771865985,
+        "version": 15,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "216",
+      "name": "216 – Lutherbuche",
+      "coordinates": {
+        "latitude": 51.5717799,
+        "longitude": 10.9526541
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 4436866404,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "217",
+      "name": "217 – Sonnenkappe/Oderteich",
+      "coordinates": {
+        "latitude": 51.7794096,
+        "longitude": 10.5328269
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 4126688434,
+        "version": 12,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "218",
+      "name": "218 – Neustädter Talsperre",
+      "coordinates": {
+        "latitude": 51.578931,
+        "longitude": 10.8634953
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 914886789,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "219",
+      "name": "219 – Wippertalsperre",
+      "coordinates": {
+        "latitude": 51.5696125,
+        "longitude": 11.192582
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 771866065,
+        "version": 15,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "220",
+      "name": "220 – Philippsgruß",
+      "coordinates": {
+        "latitude": 51.6095047,
+        "longitude": 10.5318268
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 1327922830,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "221",
+      "name": "221 – Jungfernklippe",
+      "coordinates": {
+        "latitude": 51.8041525,
+        "longitude": 10.5137933
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 1763604129,
+        "version": 13,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    },
+    {
+      "number": "222",
+      "name": "222 – Bergbaulehrpfad Wettelrode",
+      "coordinates": {
+        "latitude": 51.5203139,
+        "longitude": 11.2768015
+      },
+      "season": null,
+      "osm": {
+        "type": "node",
+        "id": 411510452,
+        "version": 20,
+        "timestamp": "2026-05-25T18:29:31Z"
+      }
+    }
+  ]
+}

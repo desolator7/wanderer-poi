@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
+    "data:osm-stamps": "node scripts/generate-osm-stamps.js",
     "openapi:generate": "node scripts/generate-openapi.js",
     "start": "node watcher.js & node build",
     "preview": "vite preview",
