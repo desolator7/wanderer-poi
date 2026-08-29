@@ -88,4 +88,4 @@ ODbL können Datenbankrechte relevant sein; siehe
 Der globale Footer enthält einen dezenten Link zu `/legal` und einen separaten
 Link zum [Quellcode dieses Forks](https://github.com/desolator7/wanderer-poi).
 Die bestehenden Links zum Upstream-Projekt und dessen About-Seite bleiben davon
-unberührt. Die Rechtseite trägt die Kennzeichnung `Ver. 161.26.006`.
+unberührt. Die Rechtseite trägt die Kennzeichnung `Ver. 161.26.007`.

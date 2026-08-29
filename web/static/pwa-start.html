@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="de">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#22c55e">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <title>Wanderer wird gestartet</title>
+    <style>
+        :root {
+            color-scheme: light dark;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #191b24;
+            color: #f8fafc;
+        }
+
+        body {
+            display: grid;
+            min-height: 100vh;
+            min-height: 100dvh;
+            margin: 0;
+            place-items: center;
+            background: #191b24;
+        }
+
+        main {
+            width: min(28rem, calc(100% - 3rem));
+            text-align: center;
+        }
+
+        .logo {
+            display: grid;
+            width: 4rem;
+            height: 4rem;
+            margin: 0 auto 1.5rem;
+            place-items: center;
+            border-radius: 1rem;
+            background: #22c55e;
+            color: #07120a;
+            font-size: 2rem;
+            font-weight: 800;
+        }
+
+        h1 {
+            margin: 0 0 0.75rem;
+            font-size: 1.5rem;
+        }
+
+        p {
+            margin: 0;
+            color: #cbd5e1;
+            line-height: 1.55;
+        }
+
+        button {
+            min-height: 2.75rem;
+            margin-top: 1.5rem;
+            padding: 0.65rem 1.25rem;
+            border: 0;
+            border-radius: 0.65rem;
+            background: #22c55e;
+            color: #07120a;
+            font: inherit;
+            font-weight: 700;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <div class="logo" aria-hidden="true">W</div>
+        <h1>Keine Offline-Route aktiv</h1>
+        <p id="status">
+            Für den Livemodus muss zuerst online eine Route geöffnet und gespeichert werden.
+        </p>
+        <button id="retry" type="button">Erneut versuchen</button>
+    </main>
+    <script>
+        const LIVE_ROUTE_KEY = "wanderer-pwa-live-route";
+        const LIVE_ROUTE_VERSION = 1;
+
+        function hasValidLiveRoute() {
+            try {
+                const value = JSON.parse(localStorage.getItem(LIVE_ROUTE_KEY));
+                const valid = value?.version === LIVE_ROUTE_VERSION &&
+                    typeof value?.trailId === "string" &&
+                    value.trailId !== "new" &&
+                    typeof value?.sourcePath === "string" &&
+                    typeof value?.trail?.name === "string" &&
+                    typeof value?.trail?.gpxData === "string" &&
+                    value.trail.gpxData.trim().length > 0;
+                if (!valid && value !== null) {
+                    localStorage.removeItem(LIVE_ROUTE_KEY);
+                }
+                return valid;
+            } catch {
+                localStorage.removeItem(LIVE_ROUTE_KEY);
+                return false;
+            }
+        }
+
+        function routePwaStart() {
+            if (hasValidLiveRoute()) {
+                location.replace("/live");
+                return;
+            }
+
+            if (navigator.onLine) {
+                location.replace("/");
+                return;
+            }
+
+            document.getElementById("status").textContent =
+                "Die App ist offline und es ist keine lokal gespeicherte Route aktiv.";
+        }
+
+        document.getElementById("retry").addEventListener("click", routePwaStart);
+        window.addEventListener("online", routePwaStart);
+        routePwaStart();
+    </script>
+</body>
+</html>

@@ -1,4 +1,8 @@
 export const PWA_LIVE_ROUTE_STORAGE_KEY = "wanderer-pwa-live-route";
+export const PWA_LIVE_ROUTE_VERSION = 1;
+export const PWA_LIVE_PATH = "/live";
+export const PWA_LIVE_DATA_PATH = "/live/__data.json";
+export const PWA_START_PATH = "/pwa-start.html";
 
 export const PWA_LIVE_ZOOM_LEVELS = {
     near: 18,
@@ -11,9 +15,14 @@ export type PwaLiveZoomPreset = keyof typeof PWA_LIVE_ZOOM_LEVELS;
 export const DEFAULT_PWA_LIVE_ZOOM_PRESET: PwaLiveZoomPreset = "medium";
 
 export interface PwaLiveRoute {
+    version: typeof PWA_LIVE_ROUTE_VERSION;
     trailId: string;
-    path: string;
+    sourcePath: string;
     zoomPreset: PwaLiveZoomPreset;
+    trail: {
+        name: string;
+        gpxData: string;
+    };
 }
 
 interface StandaloneNavigator extends Navigator {
@@ -39,29 +48,26 @@ export function readPwaLiveRoute(
 
     try {
         const value = JSON.parse(raw) as Partial<PwaLiveRoute>;
-        const expectedPath = `/trail/edit/${value.trailId}`;
+        const expectedSourcePath = `/trail/edit/${value.trailId}`;
         if (
+            value.version !== PWA_LIVE_ROUTE_VERSION ||
             typeof value.trailId !== "string" ||
             !value.trailId ||
-            typeof value.path !== "string" ||
-            (value.path !== expectedPath &&
-                !value.path.startsWith(`${expectedPath}?`)) ||
-            value.trailId === "new"
+            value.trailId === "new" ||
+            typeof value.sourcePath !== "string" ||
+            (value.sourcePath !== expectedSourcePath &&
+                !value.sourcePath.startsWith(`${expectedSourcePath}?`)) ||
+            !Object.hasOwn(PWA_LIVE_ZOOM_LEVELS, value.zoomPreset ?? "") ||
+            typeof value.trail !== "object" ||
+            value.trail === null ||
+            typeof value.trail.name !== "string" ||
+            typeof value.trail.gpxData !== "string" ||
+            !value.trail.gpxData.trim()
         ) {
             throw new Error("Invalid PWA live route");
         }
-        const zoomPreset = Object.hasOwn(
-            PWA_LIVE_ZOOM_LEVELS,
-            value.zoomPreset ?? "",
-        )
-            ? (value.zoomPreset as PwaLiveZoomPreset)
-            : DEFAULT_PWA_LIVE_ZOOM_PRESET;
 
-        return {
-            trailId: value.trailId,
-            path: value.path,
-            zoomPreset,
-        };
+        return value as PwaLiveRoute;
     } catch {
         storage.removeItem(PWA_LIVE_ROUTE_STORAGE_KEY);
         return null;
@@ -81,9 +87,24 @@ export function clearPwaLiveRoute(
     storage.removeItem(PWA_LIVE_ROUTE_STORAGE_KEY);
 }
 
-export function isCurrentPwaLiveRoute(
-    route: PwaLiveRoute,
-    currentUrl: Pick<URL, "pathname" | "search">,
-): boolean {
-    return route.path === `${currentUrl.pathname}${currentUrl.search}`;
+export async function cachePwaLiveShell(
+    targetFetch: typeof fetch = fetch,
+): Promise<boolean> {
+    try {
+        const [shellResponse, dataResponse] = await Promise.all([
+            targetFetch(PWA_LIVE_PATH, {
+                cache: "reload",
+                credentials: "same-origin",
+                headers: { accept: "text/html" },
+            }),
+            targetFetch(PWA_LIVE_DATA_PATH, {
+                cache: "reload",
+                credentials: "same-origin",
+                headers: { accept: "application/json" },
+            }),
+        ]);
+        return shellResponse.ok && dataResponse.ok;
+    } catch {
+        return false;
+    }
 }

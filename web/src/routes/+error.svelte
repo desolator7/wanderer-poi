@@ -3,19 +3,6 @@
     import errorDark from "$lib/assets/svgs/empty_states/error_dark.svg";
     import errorLight from "$lib/assets/svgs/empty_states/error_light.svg";
     import { theme } from "$lib/stores/theme_store";
-    import {
-        clearPwaLiveRoute,
-        isCurrentPwaLiveRoute,
-        readPwaLiveRoute,
-    } from "$lib/util/pwa_live_mode";
-    import { onMount } from "svelte";
-
-    onMount(() => {
-        const liveRoute = readPwaLiveRoute();
-        if (liveRoute && isCurrentPwaLiveRoute(liveRoute, page.url)) {
-            clearPwaLiveRoute();
-        }
-    });
 </script>
 
 <svelte:head>

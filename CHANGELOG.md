@@ -1,6 +1,7 @@
 # [Unreleased]
 
 ## Features
+- Offline-first PWA live mode: The installed app now starts through a cached router and restores the active route and GPS tracking from a local snapshot without loading the server-backed home page first.
 - Server-side map clustering and zoom-aware polyline filtering: The world map now performs trail clustering on the server to improve performance. At lower zoom levels, smaller trails are clustered, while at higher zoom levels the largest routes in the current view are shown as detailed polylines. The maximum number of simultaneously visible polylines can be configured via the PUBLIC_MAP_MAX_POLYLINES environment variable.
 
 # v0.19.2

@@ -83,6 +83,7 @@
         autoGeolocateOnDrawing?: boolean;
         liveTrackUserLocation?: boolean;
         liveTrackingZoom?: number;
+        offlineMode?: boolean;
         buildPoiAnchorAction?: OverpassPopupActionFactory;
         onpoiclick?: (poi: Poi) => void;
         onpoisave?: (
@@ -134,6 +135,7 @@
         autoGeolocateOnDrawing = false,
         liveTrackUserLocation = false,
         liveTrackingZoom = undefined,
+        offlineMode = false,
         buildPoiAnchorAction = undefined,
         onpoiclick,
         onpoisave,
@@ -174,6 +176,20 @@
         "#fae455", // yellow
         "#17becf", // teal
     ];
+
+    const offlineMapStyle: M.StyleSpecification = {
+        version: 8,
+        sources: {},
+        layers: [
+            {
+                id: "offline-background",
+                type: "background",
+                paint: {
+                    "background-color": "#d9e2d0",
+                },
+            },
+        ],
+    };
 
     let clusterPopup: M.Popup | null = null;
     let poiMarkers: M.Marker[] = $state([]);
@@ -1221,12 +1237,14 @@
                 center: [initialState.lng, initialState.lat],
                 zoom: initialState.zoom,
             },
+            ...(offlineMode ? { style: offlineMapStyle } : {}),
             ...mapOptions,
         };
         map = new M.Map(finalMapOptions);
 
         layerManager = new LayerManager(map, {
             overpassActionFactory: buildPoiAnchorAction,
+            offlineMode,
         });
 
         elevationMarker = new FontawesomeMarker(

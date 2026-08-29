@@ -1,10 +1,5 @@
 <script lang="ts">
-    import {
-        beforeNavigate,
-        goto,
-        invalidate,
-        invalidateAll,
-    } from "$app/navigation";
+    import { beforeNavigate, goto } from "$app/navigation";
 
     import { page } from "$app/state";
     import { env } from "$env/dynamic/public";
@@ -21,13 +16,6 @@
     import "../css/components.css";
     import "../css/theme.css";
     import type { LayoutData } from "./$types";
-    import PocketBase from "pocketbase";
-    import { browser } from "$app/environment";
-    import {
-        isCurrentPwaLiveRoute,
-        isStandalonePwa,
-        readPwaLiveRoute,
-    } from "$lib/util/pwa_live_mode";
 
     interface Props {
         data: LayoutData;
@@ -42,33 +30,11 @@
             goto("/login?r=" + n.to?.url?.pathname);
             return;
         }
-
-        if (!browser || !n.to?.url || !isStandalonePwa()) {
-            return;
-        }
-
-        const liveRoute = readPwaLiveRoute();
-        if (
-            liveRoute &&
-            isCurrentPwaLiveRoute(liveRoute, page.url) &&
-            !isCurrentPwaLiveRoute(liveRoute, n.to.url)
-        ) {
-            n.cancel();
-        }
     });
 
     onMount(() => {
         if (page.data.origin != location.origin) {
             showWarning = true;
-        }
-
-        if (!isStandalonePwa() || page.url.pathname.startsWith("/login")) {
-            return;
-        }
-
-        const liveRoute = readPwaLiveRoute();
-        if (liveRoute && !isCurrentPwaLiveRoute(liveRoute, page.url)) {
-            void goto(liveRoute.path, { replaceState: true });
         }
     });
 

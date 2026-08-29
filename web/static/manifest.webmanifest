@@ -2,12 +2,13 @@
   "name": "Wanderer",
   "short_name": "Wanderer",
   "description": "Social trail planning and outdoor navigation.",
-  "start_url": "/",
+  "id": "/",
+  "start_url": "/pwa-start.html",
   "scope": "/",
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#22c55e",
-  "lang": "en",
+  "lang": "de",
   "icons": [
     {
       "src": "/favicon.png",

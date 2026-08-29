@@ -33,6 +33,7 @@ The POI work keeps the upstream trail features and adds the following parts:
 - KML and KMZ import
 - POI markers in the global map
 - POI selection in the trail route editor
+- an offline-first PWA live mode with a local route snapshot and GPS tracking
 - API routes for POIs, categories, attributes, and imports
 
 The fork focuses on local POI records. It does not define a separate product,
@@ -61,6 +62,19 @@ OpenStreetMap-basierte Snapshot `data/osm-stamp-points.json` bereitgestellt. Die
 Anwendung zeigt die Hinweise zu Unabhängigkeit, Datenqualität und ODbL unter
 `/legal`. Der aktuelle rechtliche und technische Ist-Stand ist in
 [Rechtliches und Datenquellen](docs/legal-and-data-sources.md) beschrieben.
+
+## PWA-Livemodus
+
+Die installierte PWA startet über einen lokalen Start-Router. Bei aktivem
+Livemodus öffnet sie direkt die lokal gespeicherte Route unter `/live`, ohne
+zuvor die serverabhängige Startseite zu laden. Der Livemodus zeigt die Route
+und die Geräteposition auch ohne Netzwerk. Eine kartografische Basiskarte ist
+offline nur verfügbar, wenn die dafür benötigten Kartendaten bereits durch den
+Browser vorgehalten werden; andernfalls verwendet die Ansicht eine lokale
+Grundfläche.
+
+Der technische Ist-Stand und die Grenzen sind unter
+[PWA-Livemodus](docs/pwa-live-mode.md) beschrieben.
 
 ## POI features
 
