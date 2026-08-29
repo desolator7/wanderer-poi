@@ -1,13 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
 import {
     DEFAULT_PWA_LIVE_ZOOM_PRESET,
+    PWA_LIVE_DATA_PATH,
+    PWA_LIVE_PATH,
     PWA_LIVE_ROUTE_STORAGE_KEY,
+    PWA_LIVE_ROUTE_VERSION,
     PWA_LIVE_ZOOM_LEVELS,
+    PWA_START_PATH,
+    cachePwaLiveShell,
     clearPwaLiveRoute,
-    isCurrentPwaLiveRoute,
     isStandalonePwa,
     readPwaLiveRoute,
     writePwaLiveRoute,
+    type PwaLiveRoute,
 } from "./pwa_live_mode";
 
 function createStorage(initialValue: string | null = null) {
@@ -23,8 +28,23 @@ function createStorage(initialValue: string | null = null) {
     };
 }
 
+function createRoute(): PwaLiveRoute {
+    return {
+        version: PWA_LIVE_ROUTE_VERSION,
+        trailId: "trail-1",
+        sourcePath: "/trail/edit/trail-1?share=secret",
+        zoomPreset: "near",
+        trail: {
+            name: "Testweg",
+            gpxData: "<gpx><trk /></gpx>",
+        },
+    };
+}
+
 describe("PWA live mode", () => {
-    it("uses local fixed zoom levels", () => {
+    it("uses stable local routes and fixed zoom levels", () => {
+        expect(PWA_START_PATH).toBe("/pwa-start.html");
+        expect(PWA_LIVE_PATH).toBe("/live");
         expect(PWA_LIVE_ZOOM_LEVELS).toEqual({
             near: 18,
             medium: 16,
@@ -47,56 +67,47 @@ describe("PWA live mode", () => {
         expect(isStandalonePwa(iosWindow)).toBe(true);
     });
 
-    it("persists a route including its share query", () => {
+    it("persists the complete live route snapshot", () => {
         const storage = createStorage();
-        const route = {
-            trailId: "trail-1",
-            path: "/trail/edit/trail-1?share=secret",
-            zoomPreset: "near" as const,
-        };
+        const route = createRoute();
 
         writePwaLiveRoute(route, storage);
 
         expect(readPwaLiveRoute(storage)).toEqual(route);
-        expect(
-            isCurrentPwaLiveRoute(
-                route,
-                new URL("https://example.test/trail/edit/trail-1?share=secret"),
-            ),
-        ).toBe(true);
     });
 
     it.each([
-        ["missing", undefined],
-        ["invalid", "regional"],
-    ])("normalizes a %s zoom preset to medium", (_name, zoomPreset) => {
-        const storage = createStorage(
+        ["malformed JSON", "not-json"],
+        [
+            "old metadata-only state",
             JSON.stringify({
                 trailId: "trail-1",
                 path: "/trail/edit/trail-1",
-                ...(zoomPreset === undefined ? {} : { zoomPreset }),
+                zoomPreset: "medium",
             }),
-        );
+        ],
+        [
+            "new route",
+            JSON.stringify({ ...createRoute(), trailId: "new" }),
+        ],
+        [
+            "invalid source path",
+            JSON.stringify({ ...createRoute(), sourcePath: "/settings" }),
+        ],
+        [
+            "empty GPX data",
+            JSON.stringify({
+                ...createRoute(),
+                trail: { name: "Testweg", gpxData: "" },
+            }),
+        ],
+    ])("removes %s", (_name, value) => {
+        const storage = createStorage(value);
 
-        expect(readPwaLiveRoute(storage)).toEqual({
-            trailId: "trail-1",
-            path: "/trail/edit/trail-1",
-            zoomPreset: DEFAULT_PWA_LIVE_ZOOM_PRESET,
-        });
-        expect(storage.removeItem).not.toHaveBeenCalled();
-    });
-
-    it("removes malformed and new-route state", () => {
-        const malformedStorage = createStorage("not-json");
-        const newRouteStorage = createStorage(
-            JSON.stringify({ trailId: "new", path: "/trail/edit/new" }),
-        );
-
-        expect(readPwaLiveRoute(malformedStorage)).toBeNull();
-        expect(malformedStorage.removeItem).toHaveBeenCalledWith(
+        expect(readPwaLiveRoute(storage)).toBeNull();
+        expect(storage.removeItem).toHaveBeenCalledWith(
             PWA_LIVE_ROUTE_STORAGE_KEY,
         );
-        expect(readPwaLiveRoute(newRouteStorage)).toBeNull();
     });
 
     it("clears the active route explicitly", () => {
@@ -105,5 +116,25 @@ describe("PWA live mode", () => {
         expect(storage.removeItem).toHaveBeenCalledWith(
             PWA_LIVE_ROUTE_STORAGE_KEY,
         );
+    });
+
+    it("warms the cached live shell without throwing offline", async () => {
+        const successfulFetch = vi.fn(async () => new Response("", { status: 200 }));
+        const failedFetch = vi.fn(async () => {
+            throw new TypeError("offline");
+        });
+
+        await expect(cachePwaLiveShell(successfulFetch)).resolves.toBe(true);
+        expect(successfulFetch).toHaveBeenNthCalledWith(1, PWA_LIVE_PATH, {
+            cache: "reload",
+            credentials: "same-origin",
+            headers: { accept: "text/html" },
+        });
+        expect(successfulFetch).toHaveBeenNthCalledWith(2, PWA_LIVE_DATA_PATH, {
+            cache: "reload",
+            credentials: "same-origin",
+            headers: { accept: "application/json" },
+        });
+        await expect(cachePwaLiveShell(failedFetch)).resolves.toBe(false);
     });
 });

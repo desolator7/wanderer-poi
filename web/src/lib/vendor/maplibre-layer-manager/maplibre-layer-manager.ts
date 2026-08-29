@@ -9,16 +9,23 @@ const DEFAULT_GLYPHS = "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.
 
 export class LayerManager {
     private map: M.Map;
+    private offlineMode: boolean;
     state!: MapState;
     layers: Record<string, BaseLayer> = {};
     private addedListeners: Set<string> = new Set();
     private overpassActionFactory?: OverpassPopupActionFactory;
 
-    constructor(map: M.Map, options?: { overpassActionFactory?: OverpassPopupActionFactory }) {
+    constructor(map: M.Map, options?: {
+        overpassActionFactory?: OverpassPopupActionFactory,
+        offlineMode?: boolean,
+    }) {
         this.map = map;
         this.overpassActionFactory = options?.overpassActionFactory;
+        this.offlineMode = options?.offlineMode ?? false;
 
-        const storedMapState = localStorage.getItem("map-state")
+        const storedMapState = this.offlineMode
+            ? null
+            : localStorage.getItem("map-state")
         if (storedMapState) {
             this.state = JSON.parse(storedMapState)
 
@@ -43,6 +50,10 @@ export class LayerManager {
         try {
             this.update(this.state, true);
 
+            if (this.offlineMode) {
+                return;
+            }
+
             const overpassLayer = new OverpassLayer(this.map, this.overpassActionFactory)
             const debugLayer = new DebugLayer()
 
@@ -59,11 +70,14 @@ export class LayerManager {
     update(newState: MapState, initialize: boolean = false) {
         const oldState = this.state;
 
-        if (oldState.base != newState.base || initialize) {
+        if (!this.offlineMode && (oldState.base != newState.base || initialize)) {
             this.updateBaseLayer(baseMapStyles[newState.base])
         }
 
         for (const [name, active] of Object.entries(newState.overlays)) {
+            if (this.offlineMode) {
+                continue;
+            }
             const oldOverlayActive = oldState.overlays[name]
 
             if (active && (!oldOverlayActive || initialize)) {
@@ -73,10 +87,14 @@ export class LayerManager {
             }
         }
 
-        this.updateOverpassLayer(newState);
+        if (!this.offlineMode) {
+            this.updateOverpassLayer(newState);
+        }
 
         this.state = newState
-        localStorage.setItem("map-state", JSON.stringify(this.state));
+        if (!this.offlineMode) {
+            localStorage.setItem("map-state", JSON.stringify(this.state));
+        }
     }
 
     updateOverpassLayerAfterMapMoveBinded = this.updateOverpassLayerAfterMapMove.bind(this);

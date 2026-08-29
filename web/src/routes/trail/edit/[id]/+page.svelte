@@ -65,6 +65,7 @@
     } from "$lib/util/format_util";
     import { fromFile, gpx2trail } from "$lib/util/gpx_util";
 
+    import { goto } from "$app/navigation";
     import { page } from "$app/state";
     import emptyStateTrailDark from "$lib/assets/svgs/empty_states/empty_state_trail_dark.svg";
     import emptyStateTrailLight from "$lib/assets/svgs/empty_states/empty_state_trail_light.svg";
@@ -112,13 +113,11 @@
     } from "$lib/util/waypoint_routing";
     import { consumeRouteImportSession } from "$lib/util/route_import_util";
     import {
-        clearPwaLiveRoute,
+        cachePwaLiveShell,
         DEFAULT_PWA_LIVE_ZOOM_PRESET,
-        isCurrentPwaLiveRoute,
         isStandalonePwa,
-        PWA_LIVE_ZOOM_LEVELS,
-        readPwaLiveRoute,
-        type PwaLiveZoomPreset,
+        PWA_LIVE_PATH,
+        PWA_LIVE_ROUTE_VERSION,
         writePwaLiveRoute,
     } from "$lib/util/pwa_live_mode";
     import EXIF from "$lib/vendor/exif-js/exif.js";
@@ -147,19 +146,6 @@
 
     let loading = $state(false);
     let standalonePwa = $state(false);
-    let liveMode = $state(false);
-    let liveZoomPreset: PwaLiveZoomPreset = $state(
-        DEFAULT_PWA_LIVE_ZOOM_PRESET,
-    );
-    const liveZoomPresetItems: Array<{
-        value: PwaLiveZoomPreset;
-        label: string;
-    }> = [
-        { value: "near", label: "live-zoom-near" },
-        { value: "medium", label: "live-zoom-medium" },
-        { value: "far", label: "live-zoom-far" },
-    ];
-    let liveTrackingZoom = $derived(PWA_LIVE_ZOOM_LEVELS[liveZoomPreset]);
 
     let editingBasicInfo: boolean = $state(false);
 
@@ -907,9 +893,7 @@
                     ))),
     );
     let mapInteractionMode = $state(isNewTrail);
-    let canModifyTrail = $derived(
-        trailCanBeEdited && mapInteractionMode && !liveMode,
-    );
+    let canModifyTrail = $derived(trailCanBeEdited && mapInteractionMode);
 
     async function requestLiveMode() {
         if (!standalonePwa || isNewTrail || !trailCanBeEdited || loading) {
@@ -920,7 +904,7 @@
         await tick();
         await submitLiveMode();
 
-        if (!liveMode && Object.keys($errors).length > 0) {
+        if (Object.keys($errors).length > 0) {
             show_toast({
                 type: "warning",
                 icon: "warning",
@@ -935,39 +919,47 @@
             return;
         }
 
-        writePwaLiveRoute({
-            trailId,
-            path: `${page.url.pathname}${page.url.search}`,
-            zoomPreset: liveZoomPreset,
-        });
-        mapInteractionMode = false;
-        liveMode = true;
-        await tick();
-        map?.resize();
-    }
-
-    async function exitLiveMode() {
-        clearPwaLiveRoute();
-        liveMode = false;
-        liveZoomPreset = DEFAULT_PWA_LIVE_ZOOM_PRESET;
-        mapInteractionMode = false;
-        await tick();
-        map?.resize();
-    }
-
-    function selectLiveZoomPreset(preset: PwaLiveZoomPreset) {
-        liveZoomPreset = preset;
-
-        const trailId = $formData.id ?? data.trail.id;
-        if (!liveMode || !trailId || trailId === "new") {
+        const gpxData =
+            $formData.expand?.gpx_data ?? valhallaStore.route.toString();
+        const hasRoutePoints = Boolean(
+            valhallaStore.route.trk?.some((track) =>
+                track.trkseg?.some(
+                    (segment) => (segment.trkpt?.length ?? 0) > 0,
+                ),
+            ),
+        );
+        if (!gpxData.trim() || !hasRoutePoints) {
+            show_toast({
+                type: "warning",
+                icon: "warning",
+                text: $_("trail-has-no-gpx"),
+            });
             return;
         }
 
-        writePwaLiveRoute({
-            trailId,
-            path: `${page.url.pathname}${page.url.search}`,
-            zoomPreset: preset,
-        });
+        try {
+            writePwaLiveRoute({
+                version: PWA_LIVE_ROUTE_VERSION,
+                trailId,
+                sourcePath: `${page.url.pathname}${page.url.search}`,
+                zoomPreset: DEFAULT_PWA_LIVE_ZOOM_PRESET,
+                trail: {
+                    name: $formData.name,
+                    gpxData,
+                },
+            });
+        } catch (error) {
+            console.error(error);
+            show_toast({
+                type: "error",
+                icon: "close",
+                text: "Der Livemodus konnte nicht lokal gespeichert werden.",
+            });
+            return;
+        }
+
+        await cachePwaLiveShell();
+        await goto(PWA_LIVE_PATH, { replaceState: true });
     }
 
     $effect(() => {
@@ -1042,16 +1034,6 @@
 
     onMount(async () => {
         standalonePwa = isStandalonePwa();
-        const storedLiveRoute = readPwaLiveRoute();
-        if (
-            standalonePwa &&
-            storedLiveRoute &&
-            isCurrentPwaLiveRoute(storedLiveRoute, page.url)
-        ) {
-            liveZoomPreset = storedLiveRoute.zoomPreset;
-            liveMode = true;
-            mapInteractionMode = false;
-        }
 
         clearAnchors();
         clearRoute();
@@ -3448,10 +3430,7 @@
     >
 </svelte:head>
 
-<main
-    class="grid grid-cols-1 md:grid-cols-[400px_1fr]"
-    class:live-mode={liveMode}
->
+<main class="grid grid-cols-1 md:grid-cols-[400px_1fr]">
     <form
         id="trail-form"
         class="overflow-y-auto overflow-x-hidden flex flex-col gap-4 px-8 order-1 md:order-none mt-8 md:mt-0"
@@ -3464,9 +3443,7 @@
                         {$_("map")} / {$_("edit")}
                     </p>
                     <p class="text-sm text-gray-500">
-                        {#if liveMode}
-                            {$_("live-mode")}
-                        {:else if mapInteractionMode}
+                        {#if mapInteractionMode}
                             {$_("edit")}
                         {:else}
                             <i class="fa fa-lock mr-2"></i>Ansicht gesperrt
@@ -4054,36 +4031,7 @@
             >
         {/if}
     </form>
-    <div class="relative" class:live-map-shell={liveMode}>
-        {#if liveMode}
-            <button
-                type="button"
-                class="live-mode-exit btn-secondary"
-                aria-label={$_("exit-live-mode")}
-                title={$_("exit-live-mode")}
-                onclick={exitLiveMode}
-            >
-                <i class="fa fa-xmark mr-2"></i>{$_("exit-live-mode")}
-            </button>
-            <div
-                class="live-mode-zoom-presets rounded-full border border-input-border bg-menu-background/90 p-1 shadow-lg backdrop-blur"
-                role="group"
-                aria-label={$_("live-zoom-level")}
-            >
-                {#each liveZoomPresetItems as preset}
-                    <button
-                        type="button"
-                        class="min-h-11 min-w-16 rounded-full px-3 text-sm font-semibold transition-colors"
-                        class:bg-primary={liveZoomPreset === preset.value}
-                        class:text-white={liveZoomPreset === preset.value}
-                        aria-pressed={liveZoomPreset === preset.value}
-                        onclick={() => selectLiveZoomPreset(preset.value)}
-                    >
-                        {$_(preset.label)}
-                    </button>
-                {/each}
-            </div>
-        {/if}
+    <div class="relative">
         {#if drawingActive && canModifyTrail}
             <div
                 in:fly={{ easing: backInOut, x: -30 }}
@@ -4104,10 +4052,8 @@
                 waypoints={$formData.expand?.waypoints_via_trail}
                 drawing={canModifyTrail && drawingActive}
                 crosshairCursor={canModifyTrail}
-                showElevation={!liveMode}
+                showElevation={true}
                 showTerrain={true}
-                liveTrackUserLocation={liveMode}
-                liveTrackingZoom={liveMode ? liveTrackingZoom : undefined}
                 autoGeolocateOnDrawing={page.params.id === "new"}
                 onmarkerdragend={canModifyTrail ? moveMarker : undefined}
                 activeTrail={0}
@@ -4142,45 +4088,6 @@
 <style>
     #trail-map {
         height: calc(50vh);
-    }
-
-    .live-mode {
-        position: fixed;
-        inset: 0;
-        z-index: 9999;
-        display: block;
-        width: 100%;
-        height: 100%;
-        overflow: hidden;
-        background: rgb(var(--background));
-    }
-
-    .live-mode form {
-        display: none;
-    }
-
-    .live-map-shell,
-    .live-mode #trail-map {
-        width: 100%;
-        height: 100%;
-    }
-
-    .live-mode-exit {
-        position: absolute;
-        z-index: 60;
-        top: max(1rem, env(safe-area-inset-top));
-        left: 50%;
-        transform: translateX(-50%);
-    }
-
-    .live-mode-zoom-presets {
-        position: absolute;
-        z-index: 60;
-        bottom: calc(1rem + env(safe-area-inset-bottom));
-        left: 50%;
-        display: flex;
-        gap: 0.25rem;
-        transform: translateX(-50%);
     }
 
     .readonly-edit-block {
