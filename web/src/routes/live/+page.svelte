@@ -12,6 +12,7 @@
         type PwaLiveRoute,
         type PwaLiveZoomPreset,
     } from "$lib/util/pwa_live_mode";
+    import * as M from "maplibre-gl";
     import { onMount } from "svelte";
 
     let liveRoute: PwaLiveRoute | null = $state(null);
@@ -21,6 +22,7 @@
     );
     let online = $state(true);
     let offlineMapMode = $state(false);
+    let liveMap: M.Map | null = $state(null);
 
     const zoomPresets: Array<{
         value: PwaLiveZoomPreset;
@@ -34,6 +36,59 @@
     let liveTrackingZoom = $derived(
         PWA_LIVE_ZOOM_LEVELS[liveZoomPreset],
     );
+
+    function scheduleLiveMapResize() {
+        const map = liveMap;
+        if (!map || typeof window === "undefined") {
+            return;
+        }
+
+        window.requestAnimationFrame(() => {
+            if (liveMap !== map) {
+                return;
+            }
+            map.resize();
+            window.requestAnimationFrame(() => {
+                if (liveMap === map) {
+                    map.resize();
+                }
+            });
+        });
+    }
+
+    function handleLiveMapInit(map: M.Map) {
+        liveMap = map;
+        scheduleLiveMapResize();
+    }
+
+    $effect(() => {
+        const map = liveMap;
+        if (!map || typeof window === "undefined") {
+            return;
+        }
+
+        const handleViewportChange = () => scheduleLiveMapResize();
+        const viewport = window.visualViewport;
+        const delayedResize = window.setTimeout(
+            handleViewportChange,
+            250,
+        );
+
+        window.addEventListener("resize", handleViewportChange);
+        window.addEventListener("orientationchange", handleViewportChange);
+        viewport?.addEventListener("resize", handleViewportChange);
+        scheduleLiveMapResize();
+
+        return () => {
+            window.clearTimeout(delayedResize);
+            window.removeEventListener("resize", handleViewportChange);
+            window.removeEventListener(
+                "orientationchange",
+                handleViewportChange,
+            );
+            viewport?.removeEventListener("resize", handleViewportChange);
+        };
+    });
 
     function loadLiveRoute() {
         const storedRoute = readPwaLiveRoute();
@@ -82,6 +137,9 @@
     }
 
     onMount(() => {
+        document.documentElement.classList.add("live-mode-document");
+        document.body.classList.add("live-mode-document");
+
         const updateConnectionState = () => {
             online = navigator.onLine;
         };
@@ -93,6 +151,9 @@
         loadLiveRoute();
 
         return () => {
+            liveMap = null;
+            document.documentElement.classList.remove("live-mode-document");
+            document.body.classList.remove("live-mode-document");
             window.removeEventListener("online", updateConnectionState);
             window.removeEventListener("offline", updateConnectionState);
         };
@@ -117,6 +178,8 @@
                 liveTrackUserLocation={true}
                 {liveTrackingZoom}
                 offlineMode={offlineMapMode}
+                bind:map={liveMap}
+                oninit={handleLiveMapInit}
             ></MapWithElevationMaplibre>
         </div>
 
@@ -175,12 +238,22 @@
     .live-shell {
         position: fixed;
         inset: 0;
+        width: 100%;
+        height: 100%;
         z-index: 9999;
         display: flex;
         min-height: 0;
         flex-direction: column;
         overflow: hidden;
         background: rgb(var(--background));
+    }
+
+    :global(html.live-mode-document),
+    :global(html.live-mode-document body) {
+        width: 100%;
+        height: 100%;
+        min-height: 100%;
+        overflow: hidden;
     }
 
     .live-map {

@@ -47,6 +47,12 @@ Die Live-Seite lädt ihre Routengeometrie nicht über die Trail-API. Sie baut da
 Trail-Modell aus dem lokalen GPX-Snapshot auf und startet die
 MapLibre-Geolokalisierung mit hoher Genauigkeit.
 
+Beim clientseitigen Wechsel aus dem Routen-Editor stabilisiert die Live-Seite
+den iOS-Standalone-Viewport nach dem ersten Rendern. MapLibre erhält außerdem
+bei verzögerten `resize`-, `visualViewport`- und Orientierungsänderungen ein
+erneutes `resize()`, damit die Kartenfläche im Portrait- und Querformat den
+gesamten verfügbaren Bildschirm ausfüllt.
+
 ## Kartenverhalten
 
 Bei einem Online-Start verwendet der Livemodus die reguläre ausgewählte
