@@ -12,6 +12,14 @@
         type PwaLiveRoute,
         type PwaLiveZoomPreset,
     } from "$lib/util/pwa_live_mode";
+    import {
+        buildPwaLiveTilePlan,
+        extractPwaLiveCoordinateSegments,
+        getPwaLiveTileAvailableBytes,
+        isPwaLiveTileWorkerMessage,
+        type PwaLiveTileClientMessage,
+        type PwaLiveTileStatus,
+    } from "$lib/util/pwa_live_tiles";
     import * as M from "maplibre-gl";
     import { onMount } from "svelte";
 
@@ -21,8 +29,13 @@
         DEFAULT_PWA_LIVE_ZOOM_PRESET,
     );
     let online = $state(true);
-    let offlineMapMode = $state(false);
     let liveMap: M.Map | null = $state(null);
+    let tileStatus: PwaLiveTileStatus = $state("preparing");
+    let tileDetail = $state("");
+    let tileCompleted = $state(0);
+    let tileTotal = $state(0);
+    let tileIncludedZooms: number[] = $state([]);
+    let liveGpx: GPX | null = null;
 
     const zoomPresets: Array<{
         value: PwaLiveZoomPreset;
@@ -90,11 +103,11 @@
         };
     });
 
-    function loadLiveRoute() {
+    function loadLiveRoute(): { route: PwaLiveRoute; gpx: GPX } | null {
         const storedRoute = readPwaLiveRoute();
         if (!storedRoute) {
             location.replace(PWA_START_PATH);
-            return;
+            return null;
         }
 
         let gpx: GPX;
@@ -103,7 +116,7 @@
         } catch {
             clearPwaLiveRoute();
             location.replace(PWA_START_PATH);
-            return;
+            return null;
         }
 
         const trail = new Trail(storedRoute.trail.name, {
@@ -114,6 +127,151 @@
         liveRoute = storedRoute;
         liveZoomPreset = storedRoute.zoomPreset;
         liveTrail = trail;
+        return { route: storedRoute, gpx };
+    }
+
+    async function getActiveServiceWorker(): Promise<ServiceWorker | null> {
+        if (!("serviceWorker" in navigator)) {
+            return null;
+        }
+
+        const registration = await navigator.serviceWorker.getRegistration();
+        if (!registration) {
+            return null;
+        }
+        return (
+            navigator.serviceWorker.controller ??
+            registration.active ??
+            registration.waiting
+        );
+    }
+
+    async function postTileMessage(
+        message: PwaLiveTileClientMessage,
+    ): Promise<boolean> {
+        try {
+            const worker = await getActiveServiceWorker();
+            if (!worker) {
+                return false;
+            }
+            worker.postMessage(message);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    async function prepareLiveTiles(
+        route: PwaLiveRoute | null = liveRoute,
+        gpx: GPX | null = liveGpx,
+    ) {
+        if (!route || !gpx) {
+            return;
+        }
+
+        tileStatus = "preparing";
+        tileDetail = "";
+        const plan = buildPwaLiveTilePlan(
+            route.trailId,
+            route.offlineMap.routeFingerprint,
+            extractPwaLiveCoordinateSegments(gpx),
+        );
+        tileTotal = plan.tileUrls.length;
+        tileCompleted = 0;
+        tileIncludedZooms = plan.includedZooms;
+
+        const availableBytes = await getPwaLiveTileAvailableBytes(
+            navigator.storage,
+        );
+        const posted = await postTileMessage({
+            type: "PREPARE_PWA_LIVE_TILES",
+            plan,
+            availableBytes,
+            downloadAllowed: navigator.onLine,
+        });
+        if (!posted) {
+            tileStatus = "source-error";
+            tileDetail =
+                "Der Service Worker für die Offlinekarte ist nicht verfügbar.";
+        }
+    }
+
+    function handleTileWorkerMessage(event: MessageEvent<unknown>) {
+        if (!isPwaLiveTileWorkerMessage(event.data)) {
+            return;
+        }
+        const state = event.data.state;
+        if (
+            state.routeFingerprint !==
+            liveRoute?.offlineMap.routeFingerprint
+        ) {
+            return;
+        }
+
+        tileStatus = state.status;
+        tileDetail = state.detail ?? "";
+        tileCompleted = state.completedTiles;
+        tileTotal = state.totalTiles;
+        tileIncludedZooms = state.includedZooms;
+    }
+
+    async function cancelLiveTileDownload() {
+        const routeFingerprint = liveRoute?.offlineMap.routeFingerprint;
+        if (!routeFingerprint) {
+            return;
+        }
+        await postTileMessage({
+            type: "CANCEL_PWA_LIVE_TILES",
+            routeFingerprint,
+        });
+    }
+
+    function tileProgressPercent(): number {
+        if (tileTotal <= 0) {
+            return 0;
+        }
+        return Math.min(100, Math.round((tileCompleted / tileTotal) * 100));
+    }
+
+    function tileStatusLabel(): string {
+        switch (tileStatus) {
+            case "preparing":
+                return "Offlinekarte wird vorbereitet";
+            case "downloading":
+                return `Offlinekarte wird geladen · ${tileProgressPercent()} %`;
+            case "ready": {
+                const zoomRange =
+                    tileIncludedZooms.length > 0
+                        ? ` · Zoom ${tileIncludedZooms[0]}–${tileIncludedZooms.at(-1)}`
+                        : "";
+                return `Offlinekarte bereit${zoomRange}`;
+            }
+            case "partial":
+                return "Offlinekarte unvollständig";
+            case "cancelled":
+                return "Download abgebrochen";
+            case "storage-error":
+                return "Nicht genügend Speicher";
+            case "rate-limited":
+                return "OpenTopoMap begrenzt den Download";
+            case "source-error":
+                return "Offlinekarte nicht verfügbar";
+            case "too-large":
+                return "Route für Offlinekarte zu groß";
+        }
+    }
+
+    function canRetryTileDownload(): boolean {
+        return (
+            online &&
+            [
+                "partial",
+                "cancelled",
+                "storage-error",
+                "rate-limited",
+                "source-error",
+            ].includes(tileStatus)
+        );
     }
 
     function selectZoomPreset(preset: PwaLiveZoomPreset) {
@@ -145,10 +303,17 @@
         };
 
         updateConnectionState();
-        offlineMapMode = !navigator.onLine;
         window.addEventListener("online", updateConnectionState);
         window.addEventListener("offline", updateConnectionState);
-        loadLiveRoute();
+        navigator.serviceWorker?.addEventListener(
+            "message",
+            handleTileWorkerMessage,
+        );
+        const loadedRoute = loadLiveRoute();
+        if (loadedRoute) {
+            liveGpx = loadedRoute.gpx;
+            void prepareLiveTiles(loadedRoute.route, loadedRoute.gpx);
+        }
 
         return () => {
             liveMap = null;
@@ -156,6 +321,10 @@
             document.body.classList.remove("live-mode-document");
             window.removeEventListener("online", updateConnectionState);
             window.removeEventListener("offline", updateConnectionState);
+            navigator.serviceWorker?.removeEventListener(
+                "message",
+                handleTileWorkerMessage,
+            );
         };
     });
 </script>
@@ -171,13 +340,13 @@
                 trails={[liveTrail]}
                 displayWaypoints={false}
                 showElevation={false}
-                showStyleSwitcher={!offlineMapMode}
-                showTerrain={!offlineMapMode}
+                showStyleSwitcher={false}
+                showTerrain={false}
                 fitBounds="instant"
                 activeTrail={0}
                 liveTrackUserLocation={true}
                 {liveTrackingZoom}
-                offlineMode={offlineMapMode}
+                offlineMode={true}
                 bind:map={liveMap}
                 oninit={handleLiveMapInit}
             ></MapWithElevationMaplibre>
@@ -203,11 +372,45 @@
             </button>
         </header>
 
-        {#if !online}
-            <div class="offline-badge" role="status">
-                <i class="fa fa-cloud-arrow-down mr-2"></i>Offline
+        <div class="live-statuses">
+            {#if !online}
+                <div class="live-status-badge offline-badge" role="status">
+                    <i class="fa fa-cloud-arrow-down mr-2"></i>Offline
+                </div>
+            {/if}
+
+            <div
+                class="live-status-badge tile-status-badge"
+                class:tile-status-error={[
+                    "storage-error",
+                    "rate-limited",
+                    "source-error",
+                    "too-large",
+                ].includes(tileStatus)}
+                role="status"
+                aria-live="polite"
+                title={tileDetail || tileStatusLabel()}
+            >
+                <span>{tileStatusLabel()}</span>
+                {#if tileStatus === "downloading"}
+                    <button
+                        type="button"
+                        class="tile-status-action"
+                        onclick={cancelLiveTileDownload}
+                    >
+                        Download abbrechen
+                    </button>
+                {:else if canRetryTileDownload()}
+                    <button
+                        type="button"
+                        class="tile-status-action"
+                        onclick={() => prepareLiveTiles()}
+                    >
+                        Erneut versuchen
+                    </button>
+                {/if}
             </div>
-        {/if}
+        </div>
 
         <div
             class="zoom-presets rounded-full border border-input-border bg-menu-background/90 p-1 shadow-lg backdrop-blur"
@@ -283,18 +486,55 @@
         backdrop-filter: blur(10px);
     }
 
-    .offline-badge {
+    .live-statuses {
         position: absolute;
         z-index: 60;
         top: calc(max(0.75rem, env(safe-area-inset-top)) + 4.75rem);
         left: 50%;
+        display: flex;
+        width: min(32rem, calc(100% - 1.5rem));
+        flex-direction: column;
+        align-items: center;
+        gap: 0.5rem;
         transform: translateX(-50%);
+        pointer-events: none;
+    }
+
+    .live-status-badge {
+        display: flex;
+        max-width: 100%;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        gap: 0.65rem;
         border-radius: 9999px;
         padding: 0.4rem 0.8rem;
         color: white;
         background: rgb(31 41 55 / 0.88);
         font-size: 0.875rem;
         font-weight: 600;
+        text-align: center;
+        pointer-events: auto;
+    }
+
+    .tile-status-badge {
+        background: rgb(22 101 52 / 0.9);
+    }
+
+    .tile-status-error {
+        background: rgb(153 27 27 / 0.92);
+    }
+
+    .tile-status-action {
+        min-height: 2rem;
+        flex: 0 0 auto;
+        border: 1px solid rgb(255 255 255 / 0.55);
+        border-radius: 9999px;
+        padding: 0.2rem 0.65rem;
+        color: white;
+        background: rgb(255 255 255 / 0.14);
+        font: inherit;
+        white-space: nowrap;
     }
 
     .zoom-presets {

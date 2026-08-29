@@ -83,9 +83,21 @@ Pflichten daraus folgen, hängt von der tatsächlichen Verwendung ab. Neben der
 ODbL können Datenbankrechte relevant sein; siehe
 [§ 87b Urheberrechtsgesetz](https://www.gesetze-im-internet.de/urhg/__87b.html).
 
+## OpenTopoMap-Kartenkacheln
+
+Der PWA-Livemodus kann einen kleinen, auf die aktive Route begrenzten
+Offlinecache mit Rasterkacheln von
+[OpenTopoMap](https://www.opentopomap.org/) anlegen. Die Kartenansicht zeigt die
+Namensnennung für OpenTopoMap und OpenStreetMap an. Das Downloadprofil ist auf
+einen 500-Meter-Routenkorridor, die Zoomstufen 12 bis 15, 1.200 Tiles und 60 MB
+begrenzt. Der öffentliche Dienst wird ohne Zusicherung dauerhafter
+Verfügbarkeit genutzt. Betreiber müssen die
+[Nutzungshinweise von OpenTopoMap](https://services.opentopomap.org/about/)
+beachten.
+
 ## Sichtbarkeit in der Anwendung
 
 Der globale Footer enthält einen dezenten Link zu `/legal` und einen separaten
 Link zum [Quellcode dieses Forks](https://github.com/desolator7/wanderer-poi).
 Die bestehenden Links zum Upstream-Projekt und dessen About-Seite bleiben davon
-unberührt. Die Rechtseite trägt die Kennzeichnung `Ver. 161.26.008`.
+unberührt. Die Rechtseite trägt die Kennzeichnung `Ver. 161.26.009`.

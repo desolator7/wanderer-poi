@@ -81,6 +81,20 @@
             </li>
         </ul>
 
+        <h2>OpenTopoMap-Kartenkacheln</h2>
+
+        <p>
+            Der PWA-Livemodus kann einen kleinen, auf die aktive Route
+            begrenzten Offlinecache mit Kartenkacheln von
+            <a href="https://www.opentopomap.org/">OpenTopoMap</a> anlegen. Die
+            Kartenansicht zeigt die erforderliche Namensnennung für
+            OpenTopoMap und OpenStreetMap an. Der öffentliche Dienst wird ohne
+            Zusicherung dauerhafter Verfügbarkeit genutzt; seine
+            <a href="https://services.opentopomap.org/about/"
+                >Nutzungshinweise</a
+            > sind zu beachten.
+        </p>
+
         <h2>Beschreibende Verwendung und Datenbankrechte</h2>
 
         <p>
@@ -96,6 +110,6 @@
             >.
         </p>
 
-        <p class="text-xs opacity-60">Ver. 161.26.008</p>
+        <p class="text-xs opacity-60">Ver. 161.26.009</p>
     </article>
 </main>

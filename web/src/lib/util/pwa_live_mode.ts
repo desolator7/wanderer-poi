@@ -1,5 +1,7 @@
+import { PWA_LIVE_TILE_PROFILE_ID } from "$lib/util/pwa_live_tiles";
+
 export const PWA_LIVE_ROUTE_STORAGE_KEY = "wanderer-pwa-live-route";
-export const PWA_LIVE_ROUTE_VERSION = 1;
+export const PWA_LIVE_ROUTE_VERSION = 2;
 export const PWA_LIVE_PATH = "/live";
 export const PWA_LIVE_DATA_PATH = "/live/__data.json";
 export const PWA_START_PATH = "/pwa-start.html";
@@ -19,6 +21,10 @@ export interface PwaLiveRoute {
     trailId: string;
     sourcePath: string;
     zoomPreset: PwaLiveZoomPreset;
+    offlineMap: {
+        profileId: typeof PWA_LIVE_TILE_PROFILE_ID;
+        routeFingerprint: string;
+    };
     trail: {
         name: string;
         gpxData: string;
@@ -58,6 +64,11 @@ export function readPwaLiveRoute(
             (value.sourcePath !== expectedSourcePath &&
                 !value.sourcePath.startsWith(`${expectedSourcePath}?`)) ||
             !Object.hasOwn(PWA_LIVE_ZOOM_LEVELS, value.zoomPreset ?? "") ||
+            typeof value.offlineMap !== "object" ||
+            value.offlineMap === null ||
+            value.offlineMap.profileId !== PWA_LIVE_TILE_PROFILE_ID ||
+            typeof value.offlineMap.routeFingerprint !== "string" ||
+            !/^[a-f0-9]{64}$/.test(value.offlineMap.routeFingerprint) ||
             typeof value.trail !== "object" ||
             value.trail === null ||
             typeof value.trail.name !== "string" ||
