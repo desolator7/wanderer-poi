@@ -120,6 +120,10 @@
         PWA_LIVE_ROUTE_VERSION,
         writePwaLiveRoute,
     } from "$lib/util/pwa_live_mode";
+    import {
+        PWA_LIVE_TILE_PROFILE_ID,
+        createPwaLiveRouteFingerprint,
+    } from "$lib/util/pwa_live_tiles";
     import EXIF from "$lib/vendor/exif-js/exif.js";
     import { validator } from "@felte/validator-zod";
     import cryptoRandomString from "crypto-random-string";
@@ -938,11 +942,17 @@
         }
 
         try {
+            const routeFingerprint =
+                await createPwaLiveRouteFingerprint(gpxData);
             writePwaLiveRoute({
                 version: PWA_LIVE_ROUTE_VERSION,
                 trailId,
                 sourcePath: `${page.url.pathname}${page.url.search}`,
                 zoomPreset: DEFAULT_PWA_LIVE_ZOOM_PRESET,
+                offlineMap: {
+                    profileId: PWA_LIVE_TILE_PROFILE_ID,
+                    routeFingerprint,
+                },
                 trail: {
                     name: $formData.name,
                     gpxData,

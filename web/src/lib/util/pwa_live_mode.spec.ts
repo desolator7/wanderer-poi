@@ -34,6 +34,11 @@ function createRoute(): PwaLiveRoute {
         trailId: "trail-1",
         sourcePath: "/trail/edit/trail-1?share=secret",
         zoomPreset: "near",
+        offlineMap: {
+            profileId: "opentopomap-route-v1",
+            routeFingerprint:
+                "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        },
         trail: {
             name: "Testweg",
             gpxData: "<gpx><trk /></gpx>",
@@ -43,6 +48,7 @@ function createRoute(): PwaLiveRoute {
 
 describe("PWA live mode", () => {
     it("uses stable local routes and fixed zoom levels", () => {
+        expect(PWA_LIVE_ROUTE_VERSION).toBe(2);
         expect(PWA_START_PATH).toBe("/pwa-start.html");
         expect(PWA_LIVE_PATH).toBe("/live");
         expect(PWA_LIVE_ZOOM_LEVELS).toEqual({
@@ -99,6 +105,20 @@ describe("PWA live mode", () => {
             JSON.stringify({
                 ...createRoute(),
                 trail: { name: "Testweg", gpxData: "" },
+            }),
+        ],
+        [
+            "old snapshot version",
+            JSON.stringify({ ...createRoute(), version: 1 }),
+        ],
+        [
+            "invalid offline map profile",
+            JSON.stringify({
+                ...createRoute(),
+                offlineMap: {
+                    profileId: "other",
+                    routeFingerprint: "invalid",
+                },
             }),
         ],
     ])("removes %s", (_name, value) => {

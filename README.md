@@ -33,7 +33,8 @@ The POI work keeps the upstream trail features and adds the following parts:
 - KML and KMZ import
 - POI markers in the global map
 - POI selection in the trail route editor
-- an offline-first PWA live mode with a local route snapshot and GPS tracking
+- an offline-first PWA live mode with a local route snapshot, GPS tracking,
+  and a bounded OpenTopoMap route cache
 - API routes for POIs, categories, attributes, and imports
 
 The fork focuses on local POI records. It does not define a separate product,
@@ -69,8 +70,9 @@ Die installierte PWA startet über einen lokalen Start-Router. Bei aktivem
 Livemodus öffnet sie direkt die lokal gespeicherte Route unter `/live`, ohne
 zuvor die serverabhängige Startseite zu laden. Der Livemodus zeigt die Route
 und die Geräteposition auch ohne Netzwerk. Eine kartografische Basiskarte ist
-offline nur verfügbar, wenn die dafür benötigten Kartendaten bereits durch den
-Browser vorgehalten werden; andernfalls verwendet die Ansicht eine lokale
+offline entlang der aktiven Route verfügbar, sobald der begrenzte
+OpenTopoMap-Download abgeschlossen ist. Außerhalb des vorbereiteten
+Routenkorridors oder bei fehlenden Tiles verwendet die Ansicht eine lokale
 Grundfläche.
 
 Der technische Ist-Stand und die Grenzen sind unter

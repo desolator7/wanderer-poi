@@ -27,6 +27,7 @@ Snapshot enthält:
 - die Routen-ID,
 - den Rücksprungpfad zum Routen-Editor,
 - die gewählte Live-Zoomstufe,
+- das Offlinekartenprofil und den SHA-256-Fingerabdruck der Route,
 - den Routennamen,
 - die vollständigen GPX-Daten.
 
@@ -55,9 +56,15 @@ gesamten verfügbaren Bildschirm ausfüllt.
 
 ## Kartenverhalten
 
-Bei einem Online-Start verwendet der Livemodus die reguläre ausgewählte
-Basiskarte. Bei einem Offline-Kaltstart wird eine lokale MapLibre-Grundfläche
-ohne externe Quellen verwendet. Darauf bleiben folgende Elemente sichtbar:
+Der Livemodus verwendet unabhängig von der allgemeinen Karteneinstellung einen
+festen OpenTopoMap-Rasterstil. Dadurch stimmen die beim Online-Start sichtbaren
+URLs mit den später offline ausgelieferten Tiles überein. Der Stil fordert nur
+die Zoomstufen 12 bis 15 an; beim stärkeren Hineinzoomen vergrößert MapLibre die
+vorhandene Zoomstufe 15.
+
+Kann ein Tile nicht aus dem Cache geladen werden, bleibt an dieser Stelle die
+lokale MapLibre-Grundfläche sichtbar. Darauf bleiben weiterhin folgende
+Elemente verfügbar:
 
 - die gespeicherte Route,
 - Start- und Zielmarkierung,
@@ -65,11 +72,48 @@ ohne externe Quellen verwendet. Darauf bleiben folgende Elemente sichtbar:
 - die drei lokalen Zoomstufen,
 - Name, Offline-Status und Schaltfläche zum Beenden.
 
-Im lokalen Kartenmodus werden keine Basiskarten-, Overlay-, Terrain-,
-Overpass- oder Glyph-Anfragen gestartet. Eine vollständige kartografische
-Offline-Karte erfordert einen getrennten, mengenbegrenzten Karten-Cache oder
-ein Offline-Kartenpaket. Kartenkacheln werden nicht in `localStorage`
-gespeichert.
+Andere Basiskarten, Overlays, Terrain, Overpass und externe Glyphen sind im
+Livemodus deaktiviert.
+
+## Begrenzter Tile-Cache
+
+Nach dem Öffnen von `/live` berechnet die PWA aus den GPX-Segmenten einen
+500-Meter-Korridor. Der Download beginnt im Hintergrund, während Route,
+GPS-Verfolgung und Bedienelemente bereits benutzbar sind. Die vollständige
+Route wird zuerst in Zoom 12 und anschließend in den Zoomstufen 13, 14 und 15
+aufgenommen. Passt eine weitere vollständige Stufe nicht in das Tile-Limit,
+wird diese Stufe ausgelassen und kein einseitiger Routenabschnitt bevorzugt.
+
+Für das Profil gelten folgende Grenzen:
+
+- maximal 1.200 Tiles,
+- maximal 60 MB tatsächliche Antwortdaten,
+- höchstens zwei parallele Downloadanfragen,
+- 10 MB Speicherreserve für die übrigen Anwendungsdaten.
+
+Die PWA versucht vor dem Download, persistenten Browser-Speicher zu erhalten.
+Bei Speichermangel, Netzverlust oder einer Providerbegrenzung bleibt der
+vorhandene Teilcache nutzbar. Der Status im Livemodus zeigt Fortschritt und
+Fehler an und bietet „Download abbrechen“ oder „Erneut versuchen“ an. Ein
+abgebrochener oder unterbrochener Download wird bei einem späteren Online-Start
+anhand des Cachemanifests fortgesetzt.
+
+Es wird nur der Cache der aktiven Route verwaltet. Eine unveränderte Route
+verwendet ihren Cache erneut; eine andere oder geänderte Route ersetzt ihn.
+Beim Beenden des Livemodus bleibt der aktuelle Cache für einen späteren Start
+derselben Route erhalten.
+
+Die Rasterbilder und das Cachemanifest liegen im Cache Storage. `localStorage`
+enthält weiterhin nur den kleinen Routensnapshot und ist für Binärdaten nicht
+geeignet. Wird die PWA durch das Betriebssystem beendet oder suspendiert, ist
+kein weiterer Hintergrunddownload garantiert. Beim nächsten Start wird der
+gespeicherte Stand abgeglichen.
+
+OpenTopoMap erlaubt die Nutzung in Anwendungen mit sichtbarer Attribution,
+weist aber darauf hin, den öffentlichen Server nicht durch Massendownloads zu
+belasten. Das kleine Profil und die Downloadgrenzen dienen dieser Vorgabe.
+Maßgeblich bleiben die
+[Nutzungshinweise von OpenTopoMap](https://services.opentopomap.org/about).
 
 ## Position und Berechtigungen
 
@@ -104,4 +148,6 @@ Folgende Zustände müssen geprüft werden:
 - Standortberechtigung erteilt, abgelehnt und noch nicht entschieden,
 - Beenden des Livemodus online und offline,
 - Nah-, Mittel- und Weit-Zoom,
+- vollständiger, abgebrochener und fortgesetzter Tile-Download,
+- Speichermangel, Netzverlust und Providerbegrenzung,
 - Hoch- und Querformat auf der installierten iOS-PWA.

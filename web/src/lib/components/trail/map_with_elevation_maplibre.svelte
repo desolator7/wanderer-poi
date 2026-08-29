@@ -17,6 +17,7 @@
         FontawesomeMarker,
     } from "$lib/util/maplibre_util";
     import { decodePolyline } from "$lib/util/polyline_util";
+    import { createPwaLiveMapStyle } from "$lib/util/pwa_live_tiles";
     import type { ElevationProfileControl } from "$lib/vendor/maplibre-elevation-profile/elevationprofile-control";
     import { FullscreenControl } from "$lib/vendor/maplibre-fullscreen/fullscreen-control";
     import MaplibreGraticule from "$lib/vendor/maplibre-graticule/maplibre-graticule";
@@ -177,19 +178,7 @@
         "#17becf", // teal
     ];
 
-    const offlineMapStyle: M.StyleSpecification = {
-        version: 8,
-        sources: {},
-        layers: [
-            {
-                id: "offline-background",
-                type: "background",
-                paint: {
-                    "background-color": "#d9e2d0",
-                },
-            },
-        ],
-    };
+    const offlineMapStyle = createPwaLiveMapStyle();
 
     let clusterPopup: M.Popup | null = null;
     let poiMarkers: M.Marker[] = $state([]);

@@ -78,7 +78,8 @@
     </main>
     <script>
         const LIVE_ROUTE_KEY = "wanderer-pwa-live-route";
-        const LIVE_ROUTE_VERSION = 1;
+        const LIVE_ROUTE_VERSION = 2;
+        const LIVE_TILE_PROFILE = "opentopomap-route-v1";
 
         function hasValidLiveRoute() {
             try {
@@ -87,6 +88,8 @@
                     typeof value?.trailId === "string" &&
                     value.trailId !== "new" &&
                     typeof value?.sourcePath === "string" &&
+                    value?.offlineMap?.profileId === LIVE_TILE_PROFILE &&
+                    /^[a-f0-9]{64}$/.test(value?.offlineMap?.routeFingerprint ?? "") &&
                     typeof value?.trail?.name === "string" &&
                     typeof value?.trail?.gpxData === "string" &&
                     value.trail.gpxData.trim().length > 0;
