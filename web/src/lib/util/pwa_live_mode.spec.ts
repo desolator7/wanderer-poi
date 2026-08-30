@@ -4,27 +4,33 @@ import {
     PWA_LIVE_DATA_PATH,
     PWA_LIVE_PATH,
     PWA_LIVE_ROUTE_STORAGE_KEY,
+    PWA_LIVE_ROUTE_RECOVERY_STORAGE_KEY,
     PWA_LIVE_ROUTE_VERSION,
     PWA_LIVE_ZOOM_LEVELS,
     PWA_START_PATH,
     cachePwaLiveShell,
     clearPwaLiveRoute,
+    deactivatePwaLiveRoute,
     isPwaLiveOfflineMapPreset,
     isStandalonePwa,
     readPwaLiveRoute,
+    reactivatePwaLiveRoute,
     writePwaLiveRoute,
     type PwaLiveRoute,
 } from "./pwa_live_mode";
 
 function createStorage(initialValue: string | null = null) {
-    let value = initialValue;
+    const values = new Map<string, string>();
+    if (initialValue !== null) {
+        values.set(PWA_LIVE_ROUTE_STORAGE_KEY, initialValue);
+    }
     return {
-        getItem: vi.fn(() => value),
-        setItem: vi.fn((_key: string, nextValue: string) => {
-            value = nextValue;
+        getItem: vi.fn((key: string) => values.get(key) ?? null),
+        setItem: vi.fn((key: string, nextValue: string) => {
+            values.set(key, nextValue);
         }),
-        removeItem: vi.fn(() => {
-            value = null;
+        removeItem: vi.fn((key: string) => {
+            values.delete(key);
         }),
     };
 }
@@ -89,6 +95,9 @@ describe("PWA live mode", () => {
         writePwaLiveRoute(route, storage);
 
         expect(readPwaLiveRoute(storage)).toEqual(route);
+        expect(storage.removeItem).toHaveBeenCalledWith(
+            PWA_LIVE_ROUTE_RECOVERY_STORAGE_KEY,
+        );
     });
 
     it.each([
@@ -137,13 +146,35 @@ describe("PWA live mode", () => {
         expect(storage.removeItem).toHaveBeenCalledWith(
             PWA_LIVE_ROUTE_STORAGE_KEY,
         );
+        expect(storage.removeItem).toHaveBeenCalledWith(
+            PWA_LIVE_ROUTE_RECOVERY_STORAGE_KEY,
+        );
     });
 
-    it("clears the active route explicitly", () => {
+    it("marks and reactivates the stored route without duplicating it", () => {
+        const storage = createStorage(JSON.stringify(createRoute()));
+
+        deactivatePwaLiveRoute(storage);
+        expect(storage.setItem).toHaveBeenCalledWith(
+            PWA_LIVE_ROUTE_RECOVERY_STORAGE_KEY,
+            "1",
+        );
+        expect(readPwaLiveRoute(storage)).toEqual(createRoute());
+
+        reactivatePwaLiveRoute(storage);
+        expect(storage.removeItem).toHaveBeenCalledWith(
+            PWA_LIVE_ROUTE_RECOVERY_STORAGE_KEY,
+        );
+    });
+
+    it("clears the active route and recovery marker explicitly", () => {
         const storage = createStorage();
         clearPwaLiveRoute(storage);
         expect(storage.removeItem).toHaveBeenCalledWith(
             PWA_LIVE_ROUTE_STORAGE_KEY,
+        );
+        expect(storage.removeItem).toHaveBeenCalledWith(
+            PWA_LIVE_ROUTE_RECOVERY_STORAGE_KEY,
         );
     });
 

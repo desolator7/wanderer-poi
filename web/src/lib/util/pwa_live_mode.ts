@@ -1,6 +1,8 @@
 import { PWA_LIVE_TILE_PROFILE_ID } from "$lib/util/pwa_live_tiles";
 
 export const PWA_LIVE_ROUTE_STORAGE_KEY = "wanderer-pwa-live-route";
+export const PWA_LIVE_ROUTE_RECOVERY_STORAGE_KEY =
+    "wanderer-pwa-live-route-recovery";
 export const PWA_LIVE_ROUTE_VERSION = 2;
 export const PWA_LIVE_PATH = "/live";
 export const PWA_LIVE_DATA_PATH = "/live/__data.json";
@@ -88,21 +90,36 @@ export function readPwaLiveRoute(
         return value as PwaLiveRoute;
     } catch {
         storage.removeItem(PWA_LIVE_ROUTE_STORAGE_KEY);
+        storage.removeItem(PWA_LIVE_ROUTE_RECOVERY_STORAGE_KEY);
         return null;
     }
 }
 
 export function writePwaLiveRoute(
     route: PwaLiveRoute,
-    storage: Pick<Storage, "setItem"> = localStorage,
+    storage: Pick<Storage, "setItem" | "removeItem"> = localStorage,
 ): void {
     storage.setItem(PWA_LIVE_ROUTE_STORAGE_KEY, JSON.stringify(route));
+    storage.removeItem(PWA_LIVE_ROUTE_RECOVERY_STORAGE_KEY);
+}
+
+export function deactivatePwaLiveRoute(
+    storage: Pick<Storage, "setItem"> = localStorage,
+): void {
+    storage.setItem(PWA_LIVE_ROUTE_RECOVERY_STORAGE_KEY, "1");
+}
+
+export function reactivatePwaLiveRoute(
+    storage: Pick<Storage, "removeItem"> = localStorage,
+): void {
+    storage.removeItem(PWA_LIVE_ROUTE_RECOVERY_STORAGE_KEY);
 }
 
 export function clearPwaLiveRoute(
     storage: Pick<Storage, "removeItem"> = localStorage,
 ): void {
     storage.removeItem(PWA_LIVE_ROUTE_STORAGE_KEY);
+    storage.removeItem(PWA_LIVE_ROUTE_RECOVERY_STORAGE_KEY);
 }
 
 export async function cachePwaLiveShell(

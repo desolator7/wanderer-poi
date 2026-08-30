@@ -1,9 +1,11 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it } from "vitest";
+import { runInNewContext } from "node:vm";
+import { describe, expect, it, vi } from "vitest";
 import {
     PWA_LIVE_PATH,
     PWA_LIVE_DATA_PATH,
+    PWA_LIVE_ROUTE_RECOVERY_STORAGE_KEY,
     PWA_LIVE_ROUTE_STORAGE_KEY,
     PWA_START_PATH,
 } from "./pwa_live_mode";
@@ -19,6 +21,73 @@ import {
 } from "./pwa_live_runtime_map";
 
 const projectRoot = resolve(import.meta.dirname, "../../..");
+
+function executeStartRouter(
+    online: boolean,
+    storedValues: Record<string, string>,
+) {
+    const startDocument = readFileSync(
+        resolve(projectRoot, "static/pwa-start.html"),
+        "utf8",
+    );
+    const script = startDocument.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+    if (!script) {
+        throw new Error("PWA start script missing");
+    }
+
+    const values = new Map(Object.entries(storedValues));
+    const listeners = new Map<string, () => void>();
+    const elements = {
+        status: { textContent: "" },
+        resume: {
+            hidden: true,
+            addEventListener: (_type: string, listener: () => void) => {
+                listeners.set("resume", listener);
+            },
+        },
+        retry: {
+            addEventListener: (_type: string, listener: () => void) => {
+                listeners.set("retry", listener);
+            },
+        },
+    };
+    const replace = vi.fn();
+    const localStorage = {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => values.set(key, value),
+        removeItem: (key: string) => values.delete(key),
+    };
+
+    runInNewContext(script, {
+        document: {
+            getElementById: (id: keyof typeof elements) => elements[id],
+        },
+        localStorage,
+        location: { replace },
+        navigator: { onLine: online },
+        window: { addEventListener: vi.fn() },
+    });
+
+    return { elements, listeners, replace, values };
+}
+
+function storedLiveRoute(): string {
+    return JSON.stringify({
+        version: 2,
+        trailId: "trail-1",
+        sourcePath: "/trail/edit/trail-1",
+        zoomPreset: "farOffline",
+        offlineMap: {
+            profileId: "opentopomap-route-v1",
+            routeFingerprint:
+                "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        },
+        trail: {
+            name: "Testweg",
+            gpxData: "<gpx><trk /></gpx>",
+        },
+    });
+}
 
 describe("PWA start router", () => {
     it("uses a stable manifest identity and the cached start document", () => {
@@ -41,10 +110,70 @@ describe("PWA start router", () => {
         );
 
         expect(startDocument).toContain(PWA_LIVE_ROUTE_STORAGE_KEY);
+        expect(startDocument).toContain(
+            PWA_LIVE_ROUTE_RECOVERY_STORAGE_KEY,
+        );
         expect(startDocument).toContain(PWA_LIVE_TILE_PROFILE_ID);
         expect(startDocument).toContain(`location.replace("${PWA_LIVE_PATH}")`);
         expect(startDocument).toContain("navigator.onLine");
         expect(startDocument).toContain("Keine Offline-Route aktiv");
+    });
+
+    it("offers the retained live session on the offline start screen", () => {
+        const startDocument = readFileSync(
+            resolve(projectRoot, "static/pwa-start.html"),
+            "utf8",
+        );
+        const livePage = readFileSync(
+            resolve(projectRoot, "src/routes/live/+page.svelte"),
+            "utf8",
+        );
+
+        expect(startDocument).toContain(
+            "Letzte Live-Sitzung fortsetzen",
+        );
+        expect(startDocument).toContain(
+            'localStorage.getItem(LIVE_RECOVERY_KEY) === "1"',
+        );
+        expect(startDocument).toContain(
+            "localStorage.removeItem(LIVE_RECOVERY_KEY)",
+        );
+        expect(startDocument).toContain(
+            "Die letzte Live-Sitzung kann wiederhergestellt werden.",
+        );
+        expect(livePage).toContain("deactivatePwaLiveRoute()");
+        expect(livePage).toContain("reactivatePwaLiveRoute()");
+    });
+
+    it("restores an inactive session offline and retains its snapshot", () => {
+        const router = executeStartRouter(false, {
+            [PWA_LIVE_ROUTE_STORAGE_KEY]: storedLiveRoute(),
+            [PWA_LIVE_ROUTE_RECOVERY_STORAGE_KEY]: "1",
+        });
+
+        expect(router.replace).not.toHaveBeenCalled();
+        expect(router.elements.resume.hidden).toBe(false);
+        expect(router.elements.status.textContent).toContain(
+            "Die letzte Live-Sitzung kann wiederhergestellt werden.",
+        );
+
+        router.listeners.get("resume")?.();
+
+        expect(router.replace).toHaveBeenCalledWith(PWA_LIVE_PATH);
+        expect(router.values.has(PWA_LIVE_ROUTE_STORAGE_KEY)).toBe(true);
+        expect(
+            router.values.has(PWA_LIVE_ROUTE_RECOVERY_STORAGE_KEY),
+        ).toBe(false);
+    });
+
+    it("keeps the existing online redirect for an inactive session", () => {
+        const router = executeStartRouter(true, {
+            [PWA_LIVE_ROUTE_STORAGE_KEY]: storedLiveRoute(),
+            [PWA_LIVE_ROUTE_RECOVERY_STORAGE_KEY]: "1",
+        });
+
+        expect(router.replace).toHaveBeenCalledWith("/");
+        expect(router.values.has(PWA_LIVE_ROUTE_STORAGE_KEY)).toBe(true);
     });
 
     it("keeps the live navigation shell in the versioned service-worker cache", () => {
