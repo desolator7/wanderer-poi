@@ -80,8 +80,40 @@ Elemente verfügbar:
 
 Andere Basiskarten, Overlays, Terrain, Overpass und externe Glyphen sind nur im
 Modus „Weit (Offline)“ deaktiviert. Die drei Online-Modi verwenden die
-regulären Kartenfunktionen und benötigen für neue Kartenkacheln eine
-Netzwerkverbindung.
+regulären Kartenfunktionen. Neue Kartenbereiche benötigen eine
+Netzwerkverbindung; bereits betrachtete Bereiche können aus dem flüchtigen
+Runtime-Cache kommen.
+
+## Flüchtiger Runtime-Cache
+
+In den Modi „Nah“, „Mittel“ und „Weit“ markiert die Live-Seite ausschließlich
+die von MapLibre angeforderten Kartenressourcen. Dazu gehören Style-Dateien,
+Raster- und Vector-Tiles, Glyphen, Sprites, Terrain und kachelbasierte
+Overlays. Normale Anwendungs- und Overpass-API-Anfragen werden nicht erfasst.
+Der Service Worker entfernt die interne Markierung vor der Anfrage; sie wird
+nicht an den Kartenanbieter übertragen.
+
+Der Cache speichert nur Ressourcen, die bei der sichtbaren Kartennutzung
+tatsächlich angefordert wurden. Er lädt keine weiteren Gebiete, Routenkorridore
+oder Zoomstufen vor. Eingebaute und benutzerdefinierte Kartenquellen werden
+automatisch gleich behandelt. Ein Instanzbetreiber muss deshalb selbst prüfen,
+ob die Nutzungsbedingungen seiner konfigurierten Quellen dieses lokale
+Zwischenspeichern erlauben.
+
+Antworten mit `no-store` werden nicht gespeichert. `Cache-Control`, `Expires`,
+`no-cache` und `must-revalidate` bleiben maßgeblich. Fehlt eine auswertbare
+Laufzeit oder kann der Browser die Header einer opaque Antwort nicht lesen,
+gilt ein Fallback von sieben Tagen. Abgelaufene Ressourcen werden offline
+nicht ausgeliefert.
+
+Der Runtime-Cache ist auf höchstens 100 MB begrenzt und hält mindestens 10 MB
+Browserreserve frei, sofern die Storage-Estimate-API verfügbar ist. Zuerst
+werden abgelaufene, danach die am längsten nicht verwendeten Ressourcen
+entfernt. Der Cache besitzt bewusst keine Bereitschaftsanzeige, weil sein
+Inhalt opportunistisch und niemals als vollständig anzusehen ist. Die
+Cachezustandsanzeige unter „Weit (Offline)“ gehört ausschließlich zum
+vorbereiteten Routencache. Beide Caches liegen getrennt im Cache Storage und
+werden durch „PWA-Cache leeren“ gemeinsam entfernt.
 
 ## Begrenzter Tile-Cache
 
@@ -160,6 +192,8 @@ Folgende Zustände müssen geprüft werden:
 - Beenden des Livemodus online und offline,
 - Nah-, Mittel-, Weit- und Weit-(Offline)-Modus,
 - Wechsel zwischen regulärer Onlinekarte und gecachter OpenTopoMap,
+- Wiederverwendung betrachteter Onlinekarten bei unterbrochener Verbindung,
+- Ablauf und LRU-Bereinigung des flüchtigen Runtime-Caches,
 - vollständiger, abgebrochener und fortgesetzter Tile-Download,
 - Speichermangel, Netzverlust und Providerbegrenzung,
 - Hoch- und Querformat auf der installierten iOS-PWA.

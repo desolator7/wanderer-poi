@@ -95,6 +95,25 @@
             > sind zu beachten.
         </p>
 
+        <h2>Flüchtiger Cache für Onlinekarten</h2>
+
+        <p>
+            Die Online-Modi des PWA-Livemodus speichern nur Kartenressourcen,
+            die während der sichtbaren Nutzung tatsächlich angefordert werden.
+            Es werden keine zusätzlichen Gebiete oder Zoomstufen vorgeladen.
+            Die Anwendung berücksichtigt auswertbare HTTP-Cachevorgaben; ohne
+            auswertbare Laufzeit gilt ein Fallback von sieben Tagen. Der Cache
+            ist auf 100 MB begrenzt.
+        </p>
+
+        <p>
+            Dies gilt automatisch auch für benutzerdefinierte Kartenquellen.
+            Instanzbetreiber müssen die Lizenz-, Namensnennungs- und
+            Nutzungsbedingungen jeder eingebundenen Quelle selbst prüfen.
+            Die technische Möglichkeit zum Zwischenspeichern begründet keine
+            Erlaubnis des jeweiligen Anbieters.
+        </p>
+
         <h2>Beschreibende Verwendung und Datenbankrechte</h2>
 
         <p>
@@ -110,6 +129,6 @@
             >.
         </p>
 
-        <p class="text-xs opacity-60">Ver. 161.26.010</p>
+        <p class="text-xs opacity-60">Ver. 161.26.011</p>
     </article>
 </main>

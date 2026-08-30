@@ -34,7 +34,8 @@ The POI work keeps the upstream trail features and adds the following parts:
 - POI markers in the global map
 - POI selection in the trail route editor
 - an offline-first PWA live mode with a local route snapshot, GPS tracking,
-  and a bounded OpenTopoMap route cache
+  a transient cache for viewed online maps, and a bounded OpenTopoMap route
+  cache
 - API routes for POIs, categories, attributes, and imports
 
 The fork focuses on local POI records. It does not define a separate product,
@@ -72,9 +73,11 @@ zuvor die serverabhängige Startseite zu laden. Der Livemodus zeigt die Route
 und die Geräteposition auch ohne Netzwerk. Eine kartografische Basiskarte ist
 im Modus „Weit (Offline)“ entlang der aktiven Route verfügbar, sobald der
 begrenzte OpenTopoMap-Download abgeschlossen ist. Die Modi „Nah“, „Mittel“ und
-„Weit“ zeigen dagegen die reguläre Onlinekarte. Außerhalb des vorbereiteten
-Routenkorridors oder bei fehlenden Tiles verwendet die Offlineansicht eine
-lokale Grundfläche.
+„Weit“ zeigen dagegen die reguläre Onlinekarte und speichern nur die dabei
+tatsächlich angeforderten Kartenressourcen in einem flüchtigen Runtime-Cache.
+Bereits betrachtete Bereiche können deshalb vorübergehend auch ohne Netzwerk
+sichtbar bleiben. Außerhalb des vorbereiteten Routenkorridors oder bei
+fehlenden Ressourcen verwendet die Offlineansicht eine lokale Grundfläche.
 
 Der technische Ist-Stand und die Grenzen sind unter
 [PWA-Livemodus](docs/pwa-live-mode.md) beschrieben.

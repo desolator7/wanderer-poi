@@ -2,6 +2,19 @@
 
 import { build, files, version } from "$service-worker";
 import {
+    PWA_LIVE_RUNTIME_MAP_CACHE_NAME,
+    PWA_LIVE_RUNTIME_MAP_MANIFEST_PATH,
+    PWA_LIVE_RUNTIME_MAP_MAX_BYTES,
+    calculatePwaLiveRuntimeMapByteLimit,
+    createEmptyPwaLiveRuntimeMapManifest,
+    getPwaLiveRuntimeMapCachePolicy,
+    isPwaLiveRuntimeMapCacheManifest,
+    pwaLiveRuntimeMapResponseByteSize,
+    selectPwaLiveRuntimeMapEvictions,
+    unmarkPwaLiveRuntimeMapUrl,
+    type PwaLiveRuntimeMapCacheManifest,
+} from "$lib/util/pwa_live_runtime_map";
+import {
     PWA_LIVE_TILE_CACHE_NAME,
     PWA_LIVE_TILE_DOWNLOAD_CONCURRENCY,
     PWA_LIVE_TILE_ESTIMATED_BYTES,
@@ -39,6 +52,11 @@ const LIVE_TILE_MANIFEST_URL = new URL(
     PWA_LIVE_TILE_MANIFEST_PATH,
     self.location.origin,
 ).toString();
+const LIVE_RUNTIME_MAP_MANIFEST_URL = new URL(
+    PWA_LIVE_RUNTIME_MAP_MANIFEST_PATH,
+    self.location.origin,
+).toString();
+const LIVE_RUNTIME_MAP_TOUCH_INTERVAL_MS = 60_000;
 
 interface ActiveTileDownload {
     routeFingerprint: string;
@@ -48,6 +66,16 @@ interface ActiveTileDownload {
 }
 
 let activeTileDownload: ActiveTileDownload | null = null;
+let runtimeMapMutationQueue = Promise.resolve();
+
+function enqueueRuntimeMapMutation<T>(task: () => Promise<T>): Promise<T> {
+    const result = runtimeMapMutationQueue.then(task, task);
+    runtimeMapMutationQueue = result.then(
+        () => undefined,
+        () => undefined,
+    );
+    return result;
+}
 
 function createTileState(
     plan: PwaLiveTilePlan,
@@ -533,6 +561,248 @@ async function cancelTileDownload(routeFingerprint: string): Promise<void> {
     await job.promise;
 }
 
+async function readRuntimeMapManifest(
+    cache: Cache,
+): Promise<PwaLiveRuntimeMapCacheManifest> {
+    try {
+        const response = await cache.match(LIVE_RUNTIME_MAP_MANIFEST_URL);
+        if (!response) {
+            return createEmptyPwaLiveRuntimeMapManifest();
+        }
+        const value: unknown = await response.json();
+        if (isPwaLiveRuntimeMapCacheManifest(value)) {
+            return value;
+        }
+    } catch {
+        // A broken manifest is replaced on the next write.
+    }
+    return createEmptyPwaLiveRuntimeMapManifest();
+}
+
+async function writeRuntimeMapManifest(
+    cache: Cache,
+    manifest: PwaLiveRuntimeMapCacheManifest,
+): Promise<void> {
+    await cache.put(
+        LIVE_RUNTIME_MAP_MANIFEST_URL,
+        new Response(JSON.stringify(manifest), {
+            headers: {
+                "cache-control": "no-store",
+                "content-type": "application/json",
+            },
+        }),
+    );
+}
+
+function runtimeMapManifestBytes(
+    manifest: PwaLiveRuntimeMapCacheManifest,
+): number {
+    return Object.values(manifest.entries).reduce(
+        (total, entry) => total + entry.size,
+        0,
+    );
+}
+
+async function getRuntimeMapByteLimit(
+    retainedBytes: number,
+): Promise<number> {
+    try {
+        const estimate = await self.navigator.storage?.estimate();
+        if (
+            typeof estimate?.quota === "number" &&
+            typeof estimate.usage === "number"
+        ) {
+            return calculatePwaLiveRuntimeMapByteLimit(
+                retainedBytes,
+                estimate.quota,
+                estimate.usage,
+            );
+        }
+    } catch {
+        // The fixed cap still applies when the estimate API is unavailable.
+    }
+    return PWA_LIVE_RUNTIME_MAP_MAX_BYTES;
+}
+
+async function deleteRuntimeMapEntries(
+    cache: Cache,
+    manifest: PwaLiveRuntimeMapCacheManifest,
+    urls: string[],
+): Promise<void> {
+    await Promise.all(
+        urls.map((url) => cache.delete(url, { ignoreVary: true })),
+    );
+    for (const url of urls) {
+        delete manifest.entries[url];
+    }
+}
+
+async function pruneRuntimeMapCache(): Promise<void> {
+    await enqueueRuntimeMapMutation(async () => {
+        const cache = await caches.open(PWA_LIVE_RUNTIME_MAP_CACHE_NAME);
+        const manifest = await readRuntimeMapManifest(cache);
+        const byteLimit = await getRuntimeMapByteLimit(
+            runtimeMapManifestBytes(manifest),
+        );
+        const evictions = selectPwaLiveRuntimeMapEvictions(
+            manifest.entries,
+            "",
+            0,
+            byteLimit,
+        );
+        if (evictions.length === 0) {
+            return;
+        }
+        await deleteRuntimeMapEntries(cache, manifest, evictions);
+        await writeRuntimeMapManifest(cache, manifest);
+    });
+}
+
+async function touchRuntimeMapEntry(url: string, now: number): Promise<void> {
+    await enqueueRuntimeMapMutation(async () => {
+        const cache = await caches.open(PWA_LIVE_RUNTIME_MAP_CACHE_NAME);
+        const manifest = await readRuntimeMapManifest(cache);
+        const entry = manifest.entries[url];
+        if (
+            !entry ||
+            now - entry.lastAccessedAt < LIVE_RUNTIME_MAP_TOUCH_INTERVAL_MS
+        ) {
+            return;
+        }
+        entry.lastAccessedAt = now;
+        await writeRuntimeMapManifest(cache, manifest);
+    });
+}
+
+async function removeRuntimeMapEntry(url: string): Promise<void> {
+    await enqueueRuntimeMapMutation(async () => {
+        const cache = await caches.open(PWA_LIVE_RUNTIME_MAP_CACHE_NAME);
+        const manifest = await readRuntimeMapManifest(cache);
+        if (!manifest.entries[url]) {
+            return;
+        }
+        await deleteRuntimeMapEntries(cache, manifest, [url]);
+        await writeRuntimeMapManifest(cache, manifest);
+    });
+}
+
+async function storeRuntimeMapResponse(
+    request: Request,
+    response: Response,
+    now: number,
+): Promise<void> {
+    const policy = getPwaLiveRuntimeMapCachePolicy(response.headers, now);
+    if (!policy.cacheable) {
+        await removeRuntimeMapEntry(request.url);
+        return;
+    }
+
+    const byteSize = await pwaLiveRuntimeMapResponseByteSize(response);
+    await enqueueRuntimeMapMutation(async () => {
+        const cache = await caches.open(PWA_LIVE_RUNTIME_MAP_CACHE_NAME);
+        const manifest = await readRuntimeMapManifest(cache);
+        const currentBytes = runtimeMapManifestBytes(manifest);
+        const byteLimit = await getRuntimeMapByteLimit(currentBytes);
+        const evictions = selectPwaLiveRuntimeMapEvictions(
+            manifest.entries,
+            request.url,
+            byteSize,
+            byteLimit,
+            now,
+        );
+        await deleteRuntimeMapEntries(cache, manifest, evictions);
+
+        const remainingBytes = runtimeMapManifestBytes(manifest) -
+            (manifest.entries[request.url]?.size ?? 0);
+        if (byteSize > byteLimit || remainingBytes + byteSize > byteLimit) {
+            if (manifest.entries[request.url]) {
+                await deleteRuntimeMapEntries(cache, manifest, [request.url]);
+                await writeRuntimeMapManifest(cache, manifest);
+            } else if (evictions.length > 0) {
+                await writeRuntimeMapManifest(cache, manifest);
+            }
+            return;
+        }
+
+        try {
+            await cache.put(request, response.clone());
+        } catch {
+            if (evictions.length > 0) {
+                await writeRuntimeMapManifest(cache, manifest);
+            }
+            return;
+        }
+
+        manifest.entries[request.url] = {
+            url: request.url,
+            size: byteSize,
+            cachedAt: now,
+            expiresAt: policy.expiresAt,
+            lastAccessedAt: now,
+        };
+        await writeRuntimeMapManifest(cache, manifest);
+    });
+}
+
+function createRuntimeMapRequestOperation(
+    markedRequest: Request,
+    upstreamUrl: string,
+): { response: Promise<Response>; completion: Promise<void> } {
+    let cacheCompletion: Promise<void> = Promise.resolve();
+    const response = (async () => {
+        const upstreamRequest = new Request(upstreamUrl, markedRequest);
+        const upstreamRequestUrl = new URL(upstreamUrl);
+        if (
+            upstreamRequestUrl.origin === self.location.origin &&
+            ASSET_PATHS.has(upstreamRequestUrl.pathname)
+        ) {
+            const appShellResponse = await caches.match(upstreamRequest, {
+                ignoreSearch: true,
+            });
+            if (appShellResponse) {
+                return appShellResponse;
+            }
+        }
+        const now = Date.now();
+        const cache = await caches.open(PWA_LIVE_RUNTIME_MAP_CACHE_NAME);
+        const manifest = await readRuntimeMapManifest(cache);
+        const entry = manifest.entries[upstreamUrl];
+        if (entry && entry.expiresAt > now) {
+            const cachedResponse = await cache.match(upstreamRequest);
+            if (cachedResponse) {
+                cacheCompletion = touchRuntimeMapEntry(upstreamUrl, now);
+                return cachedResponse;
+            }
+        }
+
+        let networkResponse: Response;
+        try {
+            networkResponse = await fetch(upstreamRequest);
+        } catch (error) {
+            if (entry) {
+                cacheCompletion = removeRuntimeMapEntry(upstreamUrl);
+            }
+            throw error;
+        }
+
+        if (networkResponse.ok || networkResponse.type === "opaque") {
+            cacheCompletion = storeRuntimeMapResponse(
+                upstreamRequest,
+                networkResponse,
+                now,
+            );
+        } else if (entry) {
+            cacheCompletion = removeRuntimeMapEntry(upstreamUrl);
+        }
+        return networkResponse;
+    })();
+    const completion = response.then(
+        () => cacheCompletion,
+        () => cacheCompletion,
+    );
+    return { response, completion };
+}
+
 self.addEventListener("install", (event) => {
     event.waitUntil(
         (async () => {
@@ -569,17 +839,21 @@ self.addEventListener("install", (event) => {
 
 self.addEventListener("activate", (event) => {
     event.waitUntil(
-        caches.keys().then((keys) =>
-            Promise.all(
-                keys
-                    .filter(
-                        (key) =>
-                            key !== CACHE_NAME &&
-                            key !== PWA_LIVE_TILE_CACHE_NAME,
-                    )
-                    .map((key) => caches.delete(key)),
+        Promise.all([
+            caches.keys().then((keys) =>
+                Promise.all(
+                    keys
+                        .filter(
+                            (key) =>
+                                key !== CACHE_NAME &&
+                                key !== PWA_LIVE_TILE_CACHE_NAME &&
+                                key !== PWA_LIVE_RUNTIME_MAP_CACHE_NAME,
+                        )
+                        .map((key) => caches.delete(key)),
+                ),
             ),
-        ),
+            pruneRuntimeMapCache(),
+        ]),
     );
 
     void self.clients.claim();
@@ -620,6 +894,17 @@ self.addEventListener("fetch", (event) => {
     }
 
     const requestUrl = new URL(event.request.url);
+    const runtimeMapUrl = unmarkPwaLiveRuntimeMapUrl(requestUrl.toString());
+    if (runtimeMapUrl) {
+        const operation = createRuntimeMapRequestOperation(
+            event.request,
+            runtimeMapUrl,
+        );
+        event.respondWith(operation.response);
+        event.waitUntil(operation.completion);
+        return;
+    }
+
     if (isPwaLiveTileUrl(requestUrl)) {
         event.respondWith(
             (async () => {

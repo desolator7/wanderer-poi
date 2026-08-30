@@ -21,6 +21,7 @@
         type PwaLiveTileClientMessage,
         type PwaLiveTileStatus,
     } from "$lib/util/pwa_live_tiles";
+    import { markPwaLiveRuntimeMapUrl } from "$lib/util/pwa_live_runtime_map";
     import * as M from "maplibre-gl";
     import { onMount, tick } from "svelte";
 
@@ -31,6 +32,7 @@
     );
     let online = $state(true);
     let offlineMapMode = $state(false);
+    let runtimeMapCacheEnabled = $state(false);
     let liveMap: M.Map | null = $state(null);
     let tileStatus: PwaLiveTileStatus = $state("preparing");
     let tileDetail = $state("");
@@ -52,6 +54,13 @@
     let liveTrackingZoom = $derived(
         PWA_LIVE_ZOOM_LEVELS[liveZoomPreset],
     );
+
+    function transformLiveMapRequest(url: string) {
+        return {
+            url: markPwaLiveRuntimeMapUrl(url, window.location.href),
+        };
+    }
+
     function scheduleLiveMapResize() {
         const map = liveMap;
         if (!map || typeof window === "undefined") {
@@ -318,10 +327,20 @@
         const updateConnectionState = () => {
             online = navigator.onLine;
         };
+        const updateRuntimeMapCacheState = () => {
+            runtimeMapCacheEnabled = Boolean(
+                navigator.serviceWorker?.controller,
+            );
+        };
 
         updateConnectionState();
+        updateRuntimeMapCacheState();
         window.addEventListener("online", updateConnectionState);
         window.addEventListener("offline", updateConnectionState);
+        navigator.serviceWorker?.addEventListener(
+            "controllerchange",
+            updateRuntimeMapCacheState,
+        );
         navigator.serviceWorker?.addEventListener(
             "message",
             handleTileWorkerMessage,
@@ -339,6 +358,10 @@
             window.removeEventListener("online", updateConnectionState);
             window.removeEventListener("offline", updateConnectionState);
             navigator.serviceWorker?.removeEventListener(
+                "controllerchange",
+                updateRuntimeMapCacheState,
+            );
+            navigator.serviceWorker?.removeEventListener(
                 "message",
                 handleTileWorkerMessage,
             );
@@ -353,7 +376,7 @@
 <main class="live-shell">
     {#if liveRoute && liveTrail}
         <div class="live-map" aria-label="Karte der aktiven Route">
-            {#key offlineMapMode}
+            {#key `${offlineMapMode}:${runtimeMapCacheEnabled}`}
                 <MapWithElevationMaplibre
                     trails={[liveTrail]}
                     displayWaypoints={false}
@@ -365,6 +388,9 @@
                     liveTrackUserLocation={true}
                     {liveTrackingZoom}
                     offlineMode={offlineMapMode}
+                    mapOptions={runtimeMapCacheEnabled && !offlineMapMode
+                        ? { transformRequest: transformLiveMapRequest }
+                        : undefined}
                     bind:map={liveMap}
                     oninit={handleLiveMapInit}
                 ></MapWithElevationMaplibre>
