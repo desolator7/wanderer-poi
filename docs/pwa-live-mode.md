@@ -56,11 +56,17 @@ gesamten verfügbaren Bildschirm ausfüllt.
 
 ## Kartenverhalten
 
-Der Livemodus verwendet unabhängig von der allgemeinen Karteneinstellung einen
-festen OpenTopoMap-Rasterstil. Dadurch stimmen die beim Online-Start sichtbaren
-URLs mit den später offline ausgelieferten Tiles überein. Der Stil fordert nur
-die Zoomstufen 12 bis 15 an; beim stärkeren Hineinzoomen vergrößert MapLibre die
-vorhandene Zoomstufe 15.
+Der Livemodus bietet vier Auswahlmöglichkeiten. „Nah“ verwendet Zoom 17,
+„Mittel“ Zoom 15 und „Weit“ Zoom 14. Diese drei Modi zeigen die regulär
+konfigurierte Onlinekarte. „Weit (Offline)“ verwendet ebenfalls Zoom 14,
+schaltet aber als einziger Modus auf den gecachten OpenTopoMap-Rasterstil um.
+Ein Wechsel zwischen Online- und Offlinestil baut die Kartenansicht neu auf,
+damit keine Quellen oder Layer des vorherigen Stils erhalten bleiben.
+
+Der Offlinestil fordert nur die Zoomstufen 12 bis 15 an; beim stärkeren
+Hineinzoomen vergrößert MapLibre die vorhandene Zoomstufe 15. Der Tile-Download
+läuft unabhängig von der aktuell gewählten Kartenansicht im Hintergrund, damit
+„Weit (Offline)“ nach Abschluss direkt verfügbar ist.
 
 Kann ein Tile nicht aus dem Cache geladen werden, bleibt an dieser Stelle die
 lokale MapLibre-Grundfläche sichtbar. Darauf bleiben weiterhin folgende
@@ -69,11 +75,13 @@ Elemente verfügbar:
 - die gespeicherte Route,
 - Start- und Zielmarkierung,
 - die aktuelle Geräteposition,
-- die drei lokalen Zoomstufen,
+- die vier lokalen Zoom- und Kartenmodi,
 - Name, Offline-Status und Schaltfläche zum Beenden.
 
-Andere Basiskarten, Overlays, Terrain, Overpass und externe Glyphen sind im
-Livemodus deaktiviert.
+Andere Basiskarten, Overlays, Terrain, Overpass und externe Glyphen sind nur im
+Modus „Weit (Offline)“ deaktiviert. Die drei Online-Modi verwenden die
+regulären Kartenfunktionen und benötigen für neue Kartenkacheln eine
+Netzwerkverbindung.
 
 ## Begrenzter Tile-Cache
 
@@ -94,7 +102,10 @@ Für das Profil gelten folgende Grenzen:
 Die PWA versucht vor dem Download, persistenten Browser-Speicher zu erhalten.
 Bei Speichermangel, Netzverlust oder einer Providerbegrenzung bleibt der
 vorhandene Teilcache nutzbar. Der Status im Livemodus zeigt Fortschritt und
-Fehler an und bietet „Download abbrechen“ oder „Erneut versuchen“ an. Ein
+Fehler an und bietet „Download abbrechen“ oder „Erneut versuchen“ an. Eine
+Icon-Zeile unter „Weit (Offline)“ zeigt parallel den Cachezustand: blauer
+Spinner, grünes Häkchen, gelbes Warnsymbol oder rotes Fehlersymbol. Nach dem
+erfolgreichen Abschluss verschwindet die ausführliche Statusleiste. Ein
 abgebrochener oder unterbrochener Download wird bei einem späteren Online-Start
 anhand des Cachemanifests fortgesetzt.
 
@@ -147,7 +158,8 @@ Folgende Zustände müssen geprüft werden:
 - Offline-Kaltstart ohne aktiven Livemodus,
 - Standortberechtigung erteilt, abgelehnt und noch nicht entschieden,
 - Beenden des Livemodus online und offline,
-- Nah-, Mittel- und Weit-Zoom,
+- Nah-, Mittel-, Weit- und Weit-(Offline)-Modus,
+- Wechsel zwischen regulärer Onlinekarte und gecachter OpenTopoMap,
 - vollständiger, abgebrochener und fortgesetzter Tile-Download,
 - Speichermangel, Netzverlust und Providerbegrenzung,
 - Hoch- und Querformat auf der installierten iOS-PWA.

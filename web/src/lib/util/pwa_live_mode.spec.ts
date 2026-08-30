@@ -9,6 +9,7 @@ import {
     PWA_START_PATH,
     cachePwaLiveShell,
     clearPwaLiveRoute,
+    isPwaLiveOfflineMapPreset,
     isStandalonePwa,
     readPwaLiveRoute,
     writePwaLiveRoute,
@@ -33,7 +34,7 @@ function createRoute(): PwaLiveRoute {
         version: PWA_LIVE_ROUTE_VERSION,
         trailId: "trail-1",
         sourcePath: "/trail/edit/trail-1?share=secret",
-        zoomPreset: "near",
+        zoomPreset: "farOffline",
         offlineMap: {
             profileId: "opentopomap-route-v1",
             routeFingerprint:
@@ -52,11 +53,19 @@ describe("PWA live mode", () => {
         expect(PWA_START_PATH).toBe("/pwa-start.html");
         expect(PWA_LIVE_PATH).toBe("/live");
         expect(PWA_LIVE_ZOOM_LEVELS).toEqual({
-            near: 18,
-            medium: 16,
-            far: 15,
+            near: 17,
+            medium: 15,
+            far: 14,
+            farOffline: 14,
         });
         expect(DEFAULT_PWA_LIVE_ZOOM_PRESET).toBe("medium");
+    });
+
+    it("uses the tile cache only for the explicit offline preset", () => {
+        expect(isPwaLiveOfflineMapPreset("near")).toBe(false);
+        expect(isPwaLiveOfflineMapPreset("medium")).toBe(false);
+        expect(isPwaLiveOfflineMapPreset("far")).toBe(false);
+        expect(isPwaLiveOfflineMapPreset("farOffline")).toBe(true);
     });
 
     it("detects standard and iOS standalone PWAs", () => {
