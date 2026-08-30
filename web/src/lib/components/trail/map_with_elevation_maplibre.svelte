@@ -8,6 +8,13 @@
     import type { Waypoint } from "$lib/models/waypoint";
     import { currentUser } from "$lib/stores/user_store";
     import { theme } from "$lib/stores/theme_store";
+    import {
+        readCompassHeading,
+        shouldAcceptCompassSource,
+        unwrapCompassHeading,
+        type CompassHeadingSource,
+        type DeviceCompassOrientation,
+    } from "$lib/util/device_compass";
     import { findStartAndEndPoints } from "$lib/util/geojson_util";
     import {
         createMarkerFromWaypoint,
@@ -1017,10 +1024,8 @@
     let lastLivePosition: GeolocationPosition | undefined;
     let userHeadingIcon: SVGSVGElement | null = null;
     let deviceCompassHeading: number | null = null;
+    let deviceCompassSource: CompassHeadingSource | null = null;
     let removeDeviceCompassPermissionClickListener: (() => void) | null = null;
-    type DeviceOrientationEventWithCompass = DeviceOrientationEvent & {
-        webkitCompassHeading?: number;
-    };
     type DeviceOrientationEventConstructorWithPermission =
         typeof DeviceOrientationEvent & {
             requestPermission?: () => Promise<PermissionState>;
@@ -1116,30 +1121,22 @@
         updateUserHeadingMarkerRotation();
     }
 
-    function getCompassHeading(event: DeviceOrientationEventWithCompass) {
-        if (
-            typeof event.webkitCompassHeading === "number" &&
-            Number.isFinite(event.webkitCompassHeading)
-        ) {
-            return event.webkitCompassHeading;
-        }
-
-        if (event.absolute && typeof event.alpha === "number") {
-            return (360 - event.alpha) % 360;
-        }
-
-        return null;
-    }
-
     function handleDeviceOrientation(event: DeviceOrientationEvent) {
-        const heading = getCompassHeading(
-            event as DeviceOrientationEventWithCompass,
+        const reading = readCompassHeading(
+            event as DeviceOrientationEvent & DeviceCompassOrientation,
         );
-        if (heading === null) {
+        if (
+            reading === null ||
+            !shouldAcceptCompassSource(deviceCompassSource, reading.source)
+        ) {
             return;
         }
 
-        deviceCompassHeading = heading;
+        deviceCompassSource = reading.source;
+        deviceCompassHeading = unwrapCompassHeading(
+            deviceCompassHeading,
+            reading.heading,
+        );
         syncUserHeadingMarker();
     }
 
