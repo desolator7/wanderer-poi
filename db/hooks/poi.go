@@ -3,7 +3,6 @@ package hooks
 import (
 	"fmt"
 	"reflect"
-	"time"
 
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
@@ -11,24 +10,9 @@ import (
 
 const poiPrivateAttributesField = "private_attributes"
 
-var poiSystemAttributeKeys = map[string]struct{}{
-	"data_license":  {},
-	"data_source":   {},
-	"osm_element":   {},
-	"osm_relation":  {},
-	"osm_timestamp": {},
-	"osm_version":   {},
-}
-
-type poiAttributeDefinition struct {
-	valueType         string
-	valueStorage      string
-	publicWriteAccess string
-}
-
-type poiAttributeViolation struct {
-	forbidden bool
-	message   string
+type poiAttributeRules struct {
+	privateKeys map[string]struct{}
+	adminKeys   map[string]struct{}
 }
 
 // EnrichPoiPrivateAttributes prevents private per-user values from leaking in
@@ -54,7 +38,7 @@ func EnrichPoiPrivateAttributes(e *core.RecordEnrichEvent) error {
 	return e.Next()
 }
 
-// CreatePoiAttributes validates configured values and moves private attribute
+// CreatePoiAttributes enforces configured write rules and moves private attribute
 // values into a server-assigned user bucket. Direct writes to the raw
 // private_attributes field are ignored for regular users.
 func CreatePoiAttributes(e *core.RecordRequestEvent) error {
@@ -91,7 +75,7 @@ func preparePoiAttributes(
 		return e.BadRequestError("Eine POI-Kategorie ist erforderlich.", nil)
 	}
 
-	definitions, err := findPoiAttributeDefinitions(e.App, categoryID)
+	rules, err := findPoiAttributeRules(e.App, categoryID)
 	if err != nil {
 		return e.InternalServerError("Die POI-Attributdefinitionen konnten nicht geladen werden.", err)
 	}
@@ -105,23 +89,19 @@ func preparePoiAttributes(
 		return e.InternalServerError("Die gespeicherten POI-Attribute sind ungültig.", err)
 	}
 
-	if violation := validatePoiAttributeTypes(attributes, definitions); violation != nil {
-		return e.BadRequestError(violation.message, nil)
-	}
-
 	categoryChanged := originalRecord != nil && originalRecord.GetString("category") != categoryID
 	if !auth.IsSuperuser() {
-		if violation := authorizePoiAttributeWrite(
-			attributes,
-			originalAttributes,
-			definitions,
-			categoryChanged,
-		); violation != nil {
-			if violation.forbidden {
-				return e.ForbiddenError(violation.message, nil)
+		for key := range rules.adminKeys {
+			if categoryChanged {
+				delete(attributes, key)
+				continue
 			}
-
-			return e.BadRequestError(violation.message, nil)
+			if poiAttributeChanged(attributes, originalAttributes, key) {
+				return e.ForbiddenError(
+					fmt.Sprintf("Das POI-Attribut %q darf nur durch Administratoren geändert werden.", key),
+					nil,
+				)
+			}
 		}
 	}
 
@@ -132,11 +112,7 @@ func preparePoiAttributes(
 
 	userValues, _ := privateAttributes[auth.Id].(map[string]any)
 	userValues = cloneValues(userValues)
-	for key, definition := range definitions {
-		if definition.valueStorage != "private" {
-			continue
-		}
-
+	for key := range rules.privateKeys {
 		value, exists := attributes[key]
 		if !exists {
 			continue
@@ -156,10 +132,10 @@ func preparePoiAttributes(
 	return nil
 }
 
-func findPoiAttributeDefinitions(
+func findPoiAttributeRules(
 	app core.App,
 	categoryID string,
-) (map[string]poiAttributeDefinition, error) {
+) (poiAttributeRules, error) {
 	records, err := app.FindRecordsByFilter(
 		"poi_attributes",
 		"category = {:category}",
@@ -169,129 +145,23 @@ func findPoiAttributeDefinitions(
 		dbx.Params{"category": categoryID},
 	)
 	if err != nil {
-		return nil, err
+		return poiAttributeRules{}, err
 	}
 
-	definitions := make(map[string]poiAttributeDefinition, len(records))
+	rules := poiAttributeRules{
+		privateKeys: make(map[string]struct{}),
+		adminKeys:   make(map[string]struct{}),
+	}
 	for _, record := range records {
 		key := record.GetString("key")
-		definition := poiAttributeDefinition{
-			valueType:         record.GetString("type"),
-			valueStorage:      record.GetString("value_storage"),
-			publicWriteAccess: record.GetString("public_write_access"),
-		}
-
-		if key == "" {
-			return nil, fmt.Errorf("poi attribute definition has an empty key")
-		}
-		if _, exists := definitions[key]; exists {
-			return nil, fmt.Errorf("duplicate poi attribute definition %q", key)
-		}
-		if definition.valueType != "string" &&
-			definition.valueType != "boolean" &&
-			definition.valueType != "date" {
-			return nil, fmt.Errorf("unsupported type %q for POI attribute %q", definition.valueType, key)
-		}
-		if definition.valueStorage != "public" && definition.valueStorage != "private" {
-			return nil, fmt.Errorf("unsupported storage %q for POI attribute %q", definition.valueStorage, key)
-		}
-		if definition.publicWriteAccess != "all" && definition.publicWriteAccess != "admin" {
-			return nil, fmt.Errorf(
-				"unsupported write access %q for POI attribute %q",
-				definition.publicWriteAccess,
-				key,
-			)
-		}
-
-		definitions[key] = definition
-	}
-
-	return definitions, nil
-}
-
-func validatePoiAttributeTypes(
-	attributes map[string]any,
-	definitions map[string]poiAttributeDefinition,
-) *poiAttributeViolation {
-	for key, value := range attributes {
-		definition, exists := definitions[key]
-		if !exists || value == nil {
-			continue
-		}
-
-		valid := false
-		switch definition.valueType {
-		case "string":
-			_, valid = value.(string)
-		case "boolean":
-			_, valid = value.(bool)
-		case "date":
-			date, ok := value.(string)
-			if ok {
-				_, parseErr := time.Parse("2006-01-02", date)
-				valid = parseErr == nil
-			}
-		}
-
-		if !valid {
-			return &poiAttributeViolation{
-				message: fmt.Sprintf("Das POI-Attribut %q hat einen ungültigen Wert.", key),
-			}
+		if record.GetString("value_storage") == "private" {
+			rules.privateKeys[key] = struct{}{}
+		} else if record.GetString("public_write_access") == "admin" {
+			rules.adminKeys[key] = struct{}{}
 		}
 	}
 
-	return nil
-}
-
-func authorizePoiAttributeWrite(
-	attributes map[string]any,
-	originalAttributes map[string]any,
-	definitions map[string]poiAttributeDefinition,
-	categoryChanged bool,
-) *poiAttributeViolation {
-	for key, definition := range definitions {
-		if definition.valueStorage != "public" || definition.publicWriteAccess != "admin" {
-			continue
-		}
-
-		_, exists := attributes[key]
-		if categoryChanged && exists {
-			return &poiAttributeViolation{
-				forbidden: true,
-				message:   fmt.Sprintf("Das POI-Attribut %q darf nur durch Administratoren gesetzt werden.", key),
-			}
-		}
-		if !categoryChanged && poiAttributeChanged(attributes, originalAttributes, key) {
-			return &poiAttributeViolation{
-				forbidden: true,
-				message:   fmt.Sprintf("Das POI-Attribut %q darf nur durch Administratoren geändert werden.", key),
-			}
-		}
-	}
-
-	for key := range attributes {
-		if _, exists := definitions[key]; exists {
-			continue
-		}
-
-		if _, isSystemAttribute := poiSystemAttributeKeys[key]; isSystemAttribute {
-			if poiAttributeChanged(attributes, originalAttributes, key) {
-				return &poiAttributeViolation{
-					forbidden: true,
-					message:   fmt.Sprintf("Das systemverwaltete POI-Attribut %q darf nicht geändert werden.", key),
-				}
-			}
-			continue
-		}
-
-		if categoryChanged || poiAttributeChanged(attributes, originalAttributes, key) {
-			return &poiAttributeViolation{
-				message: fmt.Sprintf("Das POI-Attribut %q ist für diese Kategorie nicht definiert.", key),
-			}
-		}
-	}
-
-	return nil
+	return rules, nil
 }
 
 func poiAttributeChanged(attributes map[string]any, originalAttributes map[string]any, key string) bool {
