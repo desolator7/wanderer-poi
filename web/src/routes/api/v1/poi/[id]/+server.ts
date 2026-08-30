@@ -38,6 +38,7 @@ export async function POST(event: RequestEvent) {
             safeData.attributes,
             userId,
             isAdmin,
+            categoryId !== existing.category,
         );
 
         const r = await event.locals.pb.collection("pois").update<Poi>(id, {

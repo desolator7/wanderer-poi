@@ -11,8 +11,6 @@ services:
     environment:
       <<: *cenv
       MEILI_NO_ANALYTICS: "true"
-    ports:
-      - 7700:7700
     networks:
       - wanderer
     volumes:
@@ -38,8 +36,6 @@ services:
       POCKETBASE_ENCRYPTION_KEY: ${POCKETBASE_ENCRYPTION_KEY:?Set POCKETBASE_ENCRYPTION_KEY in .env}
       POCKETBASE_CRON_SYNC_SCHEDULE: ${POCKETBASE_CRON_SYNC_SCHEDULE:-0 0 29 2 *}
       ORIGIN: ${ORIGIN:?Set ORIGIN in .env}
-    ports:
-      - "8090:8090"
     networks:
       - wanderer
     restart: unless-stopped

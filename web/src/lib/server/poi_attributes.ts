@@ -2,7 +2,11 @@ import type { Poi } from "$lib/models/poi";
 import type { PoiAttribute, PoiAttributeValue } from "$lib/models/poi_attribute";
 import type PocketBase from "pocketbase";
 
-export function canEditAttributeValue(attribute: PoiAttribute, userId: string | undefined, isAdmin: boolean) {
+export function canEditAttributeValue(
+    attribute: PoiAttribute,
+    userId: string | undefined,
+    isAdmin: boolean,
+) {
     if (attribute.value_storage === "private") {
         return Boolean(userId);
     }
@@ -15,15 +19,20 @@ export function canEditAttributeValue(attribute: PoiAttribute, userId: string | 
 }
 
 export async function getPoiAttributeDefinitions(pb: PocketBase, categoryId: string) {
-    try {
-        return await pb.collection("poi_attributes").getFullList<PoiAttribute>({
-            filter: `category=\"${categoryId}\"`,
-            requestKey: null,
-        });
-    } catch (_) {
-        return [];
-    }
+    return pb.collection("poi_attributes").getFullList<PoiAttribute>({
+        filter: `category=\"${categoryId}\"`,
+        requestKey: null,
+    });
 }
+
+const poiSystemAttributeKeys = new Set([
+    "data_license",
+    "data_source",
+    "osm_element",
+    "osm_relation",
+    "osm_timestamp",
+    "osm_version",
+]);
 
 export function applyPrivateAttributesForUser(
     poi: Poi,
@@ -38,9 +47,7 @@ export function applyPrivateAttributesForUser(
             continue;
         }
 
-        const userValue = userId
-            ? privateAttributes[userId]?.[definition.key]
-            : undefined;
+        const userValue = userId ? privateAttributes[userId]?.[definition.key] : undefined;
         attributes[definition.key] = (userValue ?? null) as PoiAttributeValue;
     }
 
@@ -73,9 +80,27 @@ export function splitAttributeUpdates(
     incomingAttributes: Record<string, PoiAttributeValue> | undefined,
     userId: string | undefined,
     isAdmin: boolean,
+    categoryChanged = false,
 ) {
-    const nextPublic = { ...(poi.attributes ?? {}) };
+    const nextPublic = categoryChanged
+        ? Object.fromEntries(
+              Object.entries(poi.attributes ?? {}).filter(([key]) =>
+                  poiSystemAttributeKeys.has(key),
+              ),
+          )
+        : { ...(poi.attributes ?? {}) };
     const nextPrivate = { ...(poi.private_attributes ?? {}) };
+
+    if (userId) {
+        const privateKeys = new Set(
+            definitions
+                .filter((definition) => definition.value_storage === "private")
+                .map((definition) => definition.key),
+        );
+        nextPrivate[userId] = Object.fromEntries(
+            Object.entries(nextPrivate[userId] ?? {}).filter(([key]) => privateKeys.has(key)),
+        );
+    }
 
     if (!incomingAttributes) {
         return { attributes: nextPublic, private_attributes: nextPrivate };
@@ -83,13 +108,16 @@ export function splitAttributeUpdates(
 
     if (!definitions.length) {
         return {
-            attributes: { ...nextPublic, ...incomingAttributes },
+            attributes: nextPublic,
             private_attributes: nextPrivate,
         };
     }
 
     for (const definition of definitions) {
-        const hasIncoming = Object.prototype.hasOwnProperty.call(incomingAttributes, definition.key);
+        const hasIncoming = Object.prototype.hasOwnProperty.call(
+            incomingAttributes,
+            definition.key,
+        );
         if (!hasIncoming) {
             continue;
         }
