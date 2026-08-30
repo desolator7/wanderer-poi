@@ -56,7 +56,6 @@
 
         button {
             min-height: 2.75rem;
-            margin-top: 1.5rem;
             padding: 0.65rem 1.25rem;
             border: 0;
             border-radius: 0.65rem;
@@ -64,6 +63,24 @@
             color: #07120a;
             font: inherit;
             font-weight: 700;
+        }
+
+        button[hidden] {
+            display: none;
+        }
+
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
+        }
+
+        #retry {
+            border: 1px solid #64748b;
+            background: transparent;
+            color: #f8fafc;
         }
     </style>
 </head>
@@ -74,20 +91,37 @@
         <p id="status">
             Für den Livemodus muss zuerst online eine Route geöffnet und gespeichert werden.
         </p>
-        <button id="retry" type="button">Erneut versuchen</button>
+        <div class="actions">
+            <button id="resume" type="button" hidden>
+                Letzte Live-Sitzung fortsetzen
+            </button>
+            <button id="retry" type="button">Erneut versuchen</button>
+        </div>
     </main>
     <script>
         const LIVE_ROUTE_KEY = "wanderer-pwa-live-route";
+        const LIVE_RECOVERY_KEY = "wanderer-pwa-live-route-recovery";
         const LIVE_ROUTE_VERSION = 2;
         const LIVE_TILE_PROFILE = "opentopomap-route-v1";
+        const LIVE_ZOOM_PRESETS = new Set([
+            "near",
+            "medium",
+            "far",
+            "farOffline",
+        ]);
 
-        function hasValidLiveRoute() {
+        function readValidLiveRoute() {
             try {
                 const value = JSON.parse(localStorage.getItem(LIVE_ROUTE_KEY));
+                const expectedSourcePath = `/trail/edit/${value?.trailId}`;
                 const valid = value?.version === LIVE_ROUTE_VERSION &&
                     typeof value?.trailId === "string" &&
+                    value.trailId.length > 0 &&
                     value.trailId !== "new" &&
                     typeof value?.sourcePath === "string" &&
+                    (value.sourcePath === expectedSourcePath ||
+                        value.sourcePath.startsWith(`${expectedSourcePath}?`)) &&
+                    LIVE_ZOOM_PRESETS.has(value?.zoomPreset) &&
                     value?.offlineMap?.profileId === LIVE_TILE_PROFILE &&
                     /^[a-f0-9]{64}$/.test(value?.offlineMap?.routeFingerprint ?? "") &&
                     typeof value?.trail?.name === "string" &&
@@ -95,16 +129,24 @@
                     value.trail.gpxData.trim().length > 0;
                 if (!valid && value !== null) {
                     localStorage.removeItem(LIVE_ROUTE_KEY);
+                    localStorage.removeItem(LIVE_RECOVERY_KEY);
                 }
-                return valid;
+                return valid ? value : null;
             } catch {
                 localStorage.removeItem(LIVE_ROUTE_KEY);
-                return false;
+                localStorage.removeItem(LIVE_RECOVERY_KEY);
+                return null;
             }
         }
 
         function routePwaStart() {
-            if (hasValidLiveRoute()) {
+            const liveRoute = readValidLiveRoute();
+            const recoveryAvailable = liveRoute !== null &&
+                localStorage.getItem(LIVE_RECOVERY_KEY) === "1";
+            const resumeButton = document.getElementById("resume");
+            resumeButton.hidden = true;
+
+            if (liveRoute && !recoveryAvailable) {
                 location.replace("/live");
                 return;
             }
@@ -115,9 +157,30 @@
             }
 
             document.getElementById("status").textContent =
-                "Die App ist offline und es ist keine lokal gespeicherte Route aktiv.";
+                recoveryAvailable
+                    ? "Die App ist offline und es ist keine lokal gespeicherte Route aktiv. Die letzte Live-Sitzung kann wiederhergestellt werden."
+                    : "Die App ist offline und es ist keine lokal gespeicherte Route aktiv.";
+            resumeButton.hidden = !recoveryAvailable;
         }
 
+        document.getElementById("resume").addEventListener("click", () => {
+            const liveRoute = readValidLiveRoute();
+            if (
+                !liveRoute ||
+                localStorage.getItem(LIVE_RECOVERY_KEY) !== "1"
+            ) {
+                routePwaStart();
+                return;
+            }
+
+            try {
+                localStorage.removeItem(LIVE_RECOVERY_KEY);
+                location.replace("/live");
+            } catch {
+                document.getElementById("status").textContent =
+                    "Die letzte Live-Sitzung konnte nicht wiederhergestellt werden.";
+            }
+        });
         document.getElementById("retry").addEventListener("click", routePwaStart);
         window.addEventListener("online", routePwaStart);
         routePwaStart();

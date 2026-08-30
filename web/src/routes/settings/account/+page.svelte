@@ -14,6 +14,7 @@
         api_tokens_delete,
     } from "$lib/stores/api_token_store";
     import { show_toast } from "$lib/stores/toast_store.svelte";
+    import { clearPwaLiveRoute } from "$lib/util/pwa_live_mode";
     import {
         currentUser,
         logout,
@@ -127,6 +128,8 @@
         if (!browser) return;
 
         try {
+            clearPwaLiveRoute();
+
             if ("caches" in window) {
                 const cacheKeys = await caches.keys();
                 await Promise.all(cacheKeys.map((cacheKey) => caches.delete(cacheKey)));

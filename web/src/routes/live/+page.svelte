@@ -7,8 +7,10 @@
         PWA_LIVE_ZOOM_LEVELS,
         PWA_START_PATH,
         clearPwaLiveRoute,
+        deactivatePwaLiveRoute,
         isPwaLiveOfflineMapPreset,
         readPwaLiveRoute,
+        reactivatePwaLiveRoute,
         writePwaLiveRoute,
         type PwaLiveRoute,
         type PwaLiveZoomPreset,
@@ -136,6 +138,7 @@
         });
         trail.expand!.gpx = gpx;
         liveRoute = storedRoute;
+        reactivatePwaLiveRoute();
         liveZoomPreset = storedRoute.zoomPreset;
         offlineMapMode = isPwaLiveOfflineMapPreset(
             storedRoute.zoomPreset,
@@ -316,7 +319,11 @@
 
     function exitLiveMode() {
         const sourcePath = liveRoute?.sourcePath ?? "/";
-        clearPwaLiveRoute();
+        try {
+            deactivatePwaLiveRoute();
+        } catch {
+            clearPwaLiveRoute();
+        }
         location.replace(navigator.onLine ? sourcePath : PWA_START_PATH);
     }
 

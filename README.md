@@ -78,6 +78,9 @@ tatsächlich angeforderten Kartenressourcen in einem flüchtigen Runtime-Cache.
 Bereits betrachtete Bereiche können deshalb vorübergehend auch ohne Netzwerk
 sichtbar bleiben. Außerhalb des vorbereiteten Routenkorridors oder bei
 fehlenden Ressourcen verwendet die Offlineansicht eine lokale Grundfläche.
+Wird der Livemodus versehentlich beendet, bleibt der letzte Routensnapshot
+gespeichert. Solange das Gerät offline ist, kann die letzte Live-Sitzung über
+den lokalen Start-Router erneut geöffnet werden.
 
 Der technische Ist-Stand und die Grenzen sind unter
 [PWA-Livemodus](docs/pwa-live-mode.md) beschrieben.

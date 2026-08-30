@@ -10,10 +10,14 @@ benötigt wird.
 
 Der Start-Router liest den lokalen Livemodus-Snapshot:
 
-- Ist ein gültiger Snapshot vorhanden, öffnet er `/live`.
-- Ist kein Snapshot vorhanden und das Gerät online, öffnet er `/`.
-- Ist kein Snapshot vorhanden und das Gerät offline, bleibt er auf einer
-  lokalen Hinweisseite.
+- Ist ein gültiger aktiver Snapshot vorhanden, öffnet er `/live`.
+- Ist eine beendete Live-Sitzung gespeichert und das Gerät offline, bleibt er
+  auf einer lokalen Hinweisseite. Dort kann die letzte Live-Sitzung erneut
+  geöffnet werden.
+- Ist keine Live-Sitzung aktiv und das Gerät online, öffnet er `/`.
+- Ist weder eine aktive noch eine beendete Live-Sitzung gespeichert und das
+  Gerät offline, bleibt er auf der lokalen Hinweisseite ohne
+  Wiederherstellungsaktion.
 
 Der Manifest-Eintrag `id` bleibt `/`. Damit besitzt die PWA unabhängig vom
 technischen Startpfad eine stabile Anwendungskennung.
@@ -113,7 +117,8 @@ entfernt. Der Cache besitzt bewusst keine Bereitschaftsanzeige, weil sein
 Inhalt opportunistisch und niemals als vollständig anzusehen ist. Die
 Cachezustandsanzeige unter „Weit (Offline)“ gehört ausschließlich zum
 vorbereiteten Routencache. Beide Caches liegen getrennt im Cache Storage und
-werden durch „PWA-Cache leeren“ gemeinsam entfernt.
+werden durch „PWA-Cache leeren“ gemeinsam entfernt. Dabei werden auch der
+lokale Routensnapshot und eine mögliche Wiederherstellungsmarkierung gelöscht.
 
 ## Begrenzter Tile-Cache
 
@@ -171,10 +176,17 @@ Kartenausschnitt nachzuführen.
 
 ## Beenden
 
-Beim Beenden entfernt die Anwendung den lokalen Snapshot. Ist das Gerät online,
+Beim Beenden behält die Anwendung den lokalen Snapshot und markiert ihn als
+inaktiv. Sie legt keine zweite Kopie der GPX-Daten an. Ist das Gerät online,
 öffnet sie anschließend den gespeicherten Routen-Editor. Ist das Gerät offline,
-kehrt sie zum lokalen Start-Router zurück und zeigt dort den Hinweis, dass keine
-Offline-Route aktiv ist.
+kehrt sie zum lokalen Start-Router zurück. Dieser zeigt den Hinweis, dass keine
+Offline-Route aktiv ist, und bietet „Letzte Live-Sitzung fortsetzen“ an.
+
+Die Wiederherstellungsaktion entfernt nur die Inaktiv-Markierung und öffnet
+`/live`; der Routensnapshot bleibt gespeichert. Beim nächsten Beenden kann
+dieselbe Sitzung deshalb erneut wiederhergestellt werden. Sobald das Gerät auf
+der Hinweisseite wieder online ist, folgt der Start-Router weiterhin seinem
+normalen Verhalten und öffnet `/`.
 
 ## Prüfung nach einer Aktualisierung
 
@@ -188,6 +200,8 @@ Folgende Zustände müssen geprüft werden:
 - Online-Start mit aktivem Livemodus,
 - Offline-Kaltstart mit aktivem Livemodus,
 - Offline-Kaltstart ohne aktiven Livemodus,
+- Wiederherstellung der letzten beendeten Live-Sitzung im Offlinezustand,
+- Rückkehr zur Startseite, wenn die Wiederherstellungsseite wieder online ist,
 - Standortberechtigung erteilt, abgelehnt und noch nicht entschieden,
 - Beenden des Livemodus online und offline,
 - Nah-, Mittel-, Weit- und Weit-(Offline)-Modus,
