@@ -1,6 +1,7 @@
 # [Unreleased]
 
 ## Features
+- Transient PWA live map cache: Near, medium, and far reuse only map resources that were requested during normal viewing, honour provider cache headers, and evict expired or least recently used entries within an adaptive 100 MB limit.
 - Selectable PWA live map modes: Near, medium, and far use the configured online map at zoom levels 17, 15, and 14, while the separate far offline mode uses the cached OpenTopoMap tiles at zoom level 14.
 - Route-based OpenTopoMap cache for the PWA live mode: The app downloads a bounded 500 m map corridor at zoom levels 12–15 in the background, keeps one active route cache, and exposes progress, cancellation, retry, and offline resume states.
 - Offline-first PWA live mode: The installed app now starts through a cached router and restores the active route and GPS tracking from a local snapshot without loading the server-backed home page first.

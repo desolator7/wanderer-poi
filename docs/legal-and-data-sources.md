@@ -95,9 +95,25 @@ Verfügbarkeit genutzt. Betreiber müssen die
 [Nutzungshinweise von OpenTopoMap](https://services.opentopomap.org/about/)
 beachten.
 
+## Flüchtiger Cache für Onlinekarten
+
+Die Online-Modi des PWA-Livemodus speichern ausschließlich Kartenressourcen,
+die MapLibre während der sichtbaren Nutzung tatsächlich anfordert. Es werden
+keine zusätzlichen Gebiete oder Zoomstufen vorgeladen. Die Anwendung beachtet
+auswertbare HTTP-Cachevorgaben; ohne auswertbare Laufzeit gilt ein Fallback von
+sieben Tagen. Der separate Runtime-Cache ist auf 100 MB begrenzt und entfernt
+abgelaufene beziehungsweise zuletzt lange nicht verwendete Einträge.
+
+Diese technische Zwischenspeicherung gilt automatisch auch für durch einen
+Instanzbetreiber konfigurierte Kartenquellen. Sie ist keine Aussage darüber,
+ob ein Anbieter die konkrete Nutzung gestattet. Betreiber müssen die
+Lizenz-, Namensnennungs- und Nutzungsbedingungen jeder eingebundenen Quelle
+selbst prüfen. Quellen mit einem ausdrücklichen Verbot lokaler Speicherung
+dürfen nicht als Kartenquelle konfiguriert werden.
+
 ## Sichtbarkeit in der Anwendung
 
 Der globale Footer enthält einen dezenten Link zu `/legal` und einen separaten
 Link zum [Quellcode dieses Forks](https://github.com/desolator7/wanderer-poi).
 Die bestehenden Links zum Upstream-Projekt und dessen About-Seite bleiben davon
-unberührt. Die Rechtseite trägt die Kennzeichnung `Ver. 161.26.010`.
+unberührt. Die Rechtseite trägt die Kennzeichnung `Ver. 161.26.011`.

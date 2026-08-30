@@ -12,6 +12,11 @@ import {
     PWA_LIVE_TILE_MIN_ZOOM,
     PWA_LIVE_TILE_PROFILE_ID,
 } from "./pwa_live_tiles";
+import {
+    PWA_LIVE_RUNTIME_MAP_CACHE_NAME,
+    PWA_LIVE_RUNTIME_MAP_MAX_BYTES,
+    PWA_LIVE_RUNTIME_MAP_STORAGE_RESERVE,
+} from "./pwa_live_runtime_map";
 
 const projectRoot = resolve(import.meta.dirname, "../../..");
 
@@ -76,6 +81,35 @@ describe("PWA start router", () => {
         expect(PWA_LIVE_TILE_MAX_ZOOM).toBe(15);
     });
 
+    it("keeps viewed online map resources in a separate bounded cache", () => {
+        const serviceWorker = readFileSync(
+            resolve(projectRoot, "src/service-worker.ts"),
+            "utf8",
+        );
+        const livePage = readFileSync(
+            resolve(projectRoot, "src/routes/live/+page.svelte"),
+            "utf8",
+        );
+
+        expect(serviceWorker).toContain(
+            "unmarkPwaLiveRuntimeMapUrl(requestUrl.toString())",
+        );
+        expect(serviceWorker).toContain(
+            "key !== PWA_LIVE_RUNTIME_MAP_CACHE_NAME",
+        );
+        expect(serviceWorker).toContain("createRuntimeMapRequestOperation");
+        expect(serviceWorker).toContain(
+            "ASSET_PATHS.has(upstreamRequestUrl.pathname)",
+        );
+        expect(livePage).toContain("transformRequest: transformLiveMapRequest");
+        expect(livePage).toContain("navigator.serviceWorker?.controller");
+        expect(PWA_LIVE_RUNTIME_MAP_CACHE_NAME).toBe(
+            "wanderer-live-runtime-map-v1",
+        );
+        expect(PWA_LIVE_RUNTIME_MAP_MAX_BYTES).toBe(100 * 1024 * 1024);
+        expect(PWA_LIVE_RUNTIME_MAP_STORAGE_RESERVE).toBe(10 * 1024 * 1024);
+    });
+
     it("preserves the full-height iOS standalone viewport behavior", () => {
         const appDocument = readFileSync(
             resolve(projectRoot, "src/app.html"),
@@ -96,7 +130,9 @@ describe("PWA start router", () => {
             'window.addEventListener("orientationchange"',
         );
         expect(livePage).toContain("window.visualViewport");
-        expect(livePage).toContain("{#key offlineMapMode}");
+        expect(livePage).toContain(
+            '{#key `${offlineMapMode}:${runtimeMapCacheEnabled}`}',
+        );
         expect(livePage).toContain(
             "showStyleSwitcher={!offlineMapMode}",
         );
