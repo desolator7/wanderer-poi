@@ -250,9 +250,6 @@ The access rules use the POI author and the `public` field.
 - Users can update and delete only their own POIs.
 - Users can update and delete only their own categories.
 - Users can update and delete only their own attribute definitions.
-- PocketBase validates POI attribute types and rejects new or modified values
-  without a definition for the selected category. Existing server-managed
-  import metadata remains unchanged.
 - Public attributes marked `admin` can be changed only by a PocketBase
   superuser, including through the builtin PocketBase record API.
 - Private attribute values are stored per user and can be changed only through

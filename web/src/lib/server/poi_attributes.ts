@@ -25,15 +25,6 @@ export async function getPoiAttributeDefinitions(pb: PocketBase, categoryId: str
     });
 }
 
-const poiSystemAttributeKeys = new Set([
-    "data_license",
-    "data_source",
-    "osm_element",
-    "osm_relation",
-    "osm_timestamp",
-    "osm_version",
-]);
-
 export function applyPrivateAttributesForUser(
     poi: Poi,
     definitions: PoiAttribute[],
@@ -80,27 +71,9 @@ export function splitAttributeUpdates(
     incomingAttributes: Record<string, PoiAttributeValue> | undefined,
     userId: string | undefined,
     isAdmin: boolean,
-    categoryChanged = false,
 ) {
-    const nextPublic = categoryChanged
-        ? Object.fromEntries(
-              Object.entries(poi.attributes ?? {}).filter(([key]) =>
-                  poiSystemAttributeKeys.has(key),
-              ),
-          )
-        : { ...(poi.attributes ?? {}) };
+    const nextPublic = { ...(poi.attributes ?? {}) };
     const nextPrivate = { ...(poi.private_attributes ?? {}) };
-
-    if (userId) {
-        const privateKeys = new Set(
-            definitions
-                .filter((definition) => definition.value_storage === "private")
-                .map((definition) => definition.key),
-        );
-        nextPrivate[userId] = Object.fromEntries(
-            Object.entries(nextPrivate[userId] ?? {}).filter(([key]) => privateKeys.has(key)),
-        );
-    }
 
     if (!incomingAttributes) {
         return { attributes: nextPublic, private_attributes: nextPrivate };
@@ -108,7 +81,7 @@ export function splitAttributeUpdates(
 
     if (!definitions.length) {
         return {
-            attributes: nextPublic,
+            attributes: { ...nextPublic, ...incomingAttributes },
             private_attributes: nextPrivate,
         };
     }
