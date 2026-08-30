@@ -104,8 +104,8 @@ func setupEventHandlers(app *pocketbase.PocketBase, client meilisearch.ServiceMa
 
 	app.OnRecordCreateRequest("waypoints").BindFunc(hooks.CreateWaypointHandler())
 	app.OnRecordEnrich("pois").BindFunc(hooks.EnrichPoiPrivateAttributes)
-	app.OnRecordCreateRequest("pois").BindFunc(hooks.CreatePoiPrivateAttributes)
-	app.OnRecordUpdateRequest("pois").BindFunc(hooks.UpdatePoiPrivateAttributes)
+	app.OnRecordCreateRequest("pois").BindFunc(hooks.CreatePoiAttributes)
+	app.OnRecordUpdateRequest("pois").BindFunc(hooks.UpdatePoiAttributes)
 
 	app.OnRecordCreateRequest("comments").BindFunc(hooks.CreateCommentHandler())
 	app.OnRecordUpdateRequest("comments").BindFunc(hooks.UpdateCommentHandler())

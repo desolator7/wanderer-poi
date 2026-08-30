@@ -46,7 +46,7 @@ export async function PUT(event: RequestEvent) {
         const isAdmin = event.locals.pb.authStore.isSuperuser;
 
         const split = splitAttributeUpdates(
-            { ...safeData, private_attributes: {} } as Poi,
+            { ...safeData, attributes: {}, private_attributes: {} } as Poi,
             definitions,
             safeData.attributes,
             userId,

@@ -250,6 +250,13 @@ The access rules use the POI author and the `public` field.
 - Users can update and delete only their own POIs.
 - Users can update and delete only their own categories.
 - Users can update and delete only their own attribute definitions.
+- PocketBase validates POI attribute types and rejects new or modified values
+  without a definition for the selected category. Existing server-managed
+  import metadata remains unchanged.
+- Public attributes marked `admin` can be changed only by a PocketBase
+  superuser, including through the builtin PocketBase record API.
+- Private attribute values are stored per user and can be changed only through
+  the authenticated user's server-assigned bucket.
 
 Categories and attribute definitions become readable to other users when they
 are attached to public POIs. This lets the public POI view render the category
@@ -350,14 +357,20 @@ docker compose up -d
 
 The compose file starts these services:
 
-| Service | Local image | Port |
+| Service | Local image | Host access |
 | --- | --- | --- |
-| `search` | `getmeili/meilisearch:v1.36.0` | `7700` |
-| `db` | `wanderer-poi-db:local` | `8090` |
+| `search` | `getmeili/meilisearch:v1.36.0` | Internal Docker network only |
+| `db` | `wanderer-poi-db:local` | Internal Docker network only |
 | `web` | `wanderer-poi-web:local` | `3000` |
 
 Open [http://localhost:3000](http://localhost:3000) after the services pass
 their health checks.
+
+The default compose configuration does not publish the PocketBase or
+Meilisearch ports on the host. If temporary dashboard access is required, bind
+PocketBase port `8090` to `127.0.0.1` in a local compose override and remove the
+override after use. Do not publish the database or search ports on a public
+interface.
 
 The compose file stores PocketBase data in `data/pb_data`, Meilisearch data in
 `data/data.ms`, and uploaded files in `data/uploads`. These paths are local
