@@ -1498,7 +1498,9 @@
                 handleDeviceOrientationEvent,
             );
         }
-        map?.remove();
+        const mapToRemove = map;
+        map = null;
+        mapToRemove?.remove();
     });
 
     function handleKeydown(e: KeyboardEvent) {

@@ -7,6 +7,7 @@
         PWA_LIVE_ZOOM_LEVELS,
         PWA_START_PATH,
         clearPwaLiveRoute,
+        isPwaLiveOfflineMapPreset,
         readPwaLiveRoute,
         writePwaLiveRoute,
         type PwaLiveRoute,
@@ -21,7 +22,7 @@
         type PwaLiveTileStatus,
     } from "$lib/util/pwa_live_tiles";
     import * as M from "maplibre-gl";
-    import { onMount } from "svelte";
+    import { onMount, tick } from "svelte";
 
     let liveRoute: PwaLiveRoute | null = $state(null);
     let liveTrail: Trail | null = $state(null);
@@ -29,6 +30,7 @@
         DEFAULT_PWA_LIVE_ZOOM_PRESET,
     );
     let online = $state(true);
+    let offlineMapMode = $state(false);
     let liveMap: M.Map | null = $state(null);
     let tileStatus: PwaLiveTileStatus = $state("preparing");
     let tileDetail = $state("");
@@ -44,12 +46,12 @@
         { value: "near", label: "Nah" },
         { value: "medium", label: "Mittel" },
         { value: "far", label: "Weit" },
+        { value: "farOffline", label: "Weit (Offline)" },
     ];
 
     let liveTrackingZoom = $derived(
         PWA_LIVE_ZOOM_LEVELS[liveZoomPreset],
     );
-
     function scheduleLiveMapResize() {
         const map = liveMap;
         if (!map || typeof window === "undefined") {
@@ -126,6 +128,9 @@
         trail.expand!.gpx = gpx;
         liveRoute = storedRoute;
         liveZoomPreset = storedRoute.zoomPreset;
+        offlineMapMode = isPwaLiveOfflineMapPreset(
+            storedRoute.zoomPreset,
+        );
         liveTrail = trail;
         return { route: storedRoute, gpx };
     }
@@ -261,6 +266,12 @@
         }
     }
 
+    function tileStatusIconLabel(): string {
+        return tileStatus === "ready"
+            ? "Offlinekarte bereit"
+            : tileStatusLabel();
+    }
+
     function canRetryTileDownload(): boolean {
         return (
             online &&
@@ -274,9 +285,15 @@
         );
     }
 
-    function selectZoomPreset(preset: PwaLiveZoomPreset) {
+    async function selectZoomPreset(preset: PwaLiveZoomPreset) {
         if (!liveRoute) {
             return;
+        }
+
+        const nextOfflineMapMode = isPwaLiveOfflineMapPreset(preset);
+        if (offlineMapMode !== nextOfflineMapMode) {
+            offlineMapMode = nextOfflineMapMode;
+            await tick();
         }
 
         const updatedRoute: PwaLiveRoute = {
@@ -336,20 +353,22 @@
 <main class="live-shell">
     {#if liveRoute && liveTrail}
         <div class="live-map" aria-label="Karte der aktiven Route">
-            <MapWithElevationMaplibre
-                trails={[liveTrail]}
-                displayWaypoints={false}
-                showElevation={false}
-                showStyleSwitcher={false}
-                showTerrain={false}
-                fitBounds="instant"
-                activeTrail={0}
-                liveTrackUserLocation={true}
-                {liveTrackingZoom}
-                offlineMode={true}
-                bind:map={liveMap}
-                oninit={handleLiveMapInit}
-            ></MapWithElevationMaplibre>
+            {#key offlineMapMode}
+                <MapWithElevationMaplibre
+                    trails={[liveTrail]}
+                    displayWaypoints={false}
+                    showElevation={false}
+                    showStyleSwitcher={!offlineMapMode}
+                    showTerrain={!offlineMapMode}
+                    fitBounds="instant"
+                    activeTrail={0}
+                    liveTrackUserLocation={true}
+                    {liveTrackingZoom}
+                    offlineMode={offlineMapMode}
+                    bind:map={liveMap}
+                    oninit={handleLiveMapInit}
+                ></MapWithElevationMaplibre>
+            {/key}
         </div>
 
         <header class="live-header">
@@ -379,37 +398,39 @@
                 </div>
             {/if}
 
-            <div
-                class="live-status-badge tile-status-badge"
-                class:tile-status-error={[
-                    "storage-error",
-                    "rate-limited",
-                    "source-error",
-                    "too-large",
-                ].includes(tileStatus)}
-                role="status"
-                aria-live="polite"
-                title={tileDetail || tileStatusLabel()}
-            >
-                <span>{tileStatusLabel()}</span>
-                {#if tileStatus === "downloading"}
-                    <button
-                        type="button"
-                        class="tile-status-action"
-                        onclick={cancelLiveTileDownload}
-                    >
-                        Download abbrechen
-                    </button>
-                {:else if canRetryTileDownload()}
-                    <button
-                        type="button"
-                        class="tile-status-action"
-                        onclick={() => prepareLiveTiles()}
-                    >
-                        Erneut versuchen
-                    </button>
-                {/if}
-            </div>
+            {#if tileStatus !== "ready"}
+                <div
+                    class="live-status-badge tile-status-badge"
+                    class:tile-status-error={[
+                        "storage-error",
+                        "rate-limited",
+                        "source-error",
+                        "too-large",
+                    ].includes(tileStatus)}
+                    role="status"
+                    aria-live="polite"
+                    title={tileDetail || tileStatusLabel()}
+                >
+                    <span>{tileStatusLabel()}</span>
+                    {#if tileStatus === "downloading"}
+                        <button
+                            type="button"
+                            class="tile-status-action"
+                            onclick={cancelLiveTileDownload}
+                        >
+                            Download abbrechen
+                        </button>
+                    {:else if canRetryTileDownload()}
+                        <button
+                            type="button"
+                            class="tile-status-action"
+                            onclick={() => prepareLiveTiles()}
+                        >
+                            Erneut versuchen
+                        </button>
+                    {/if}
+                </div>
+            {/if}
         </div>
 
         <div
@@ -420,13 +441,59 @@
             {#each zoomPresets as preset}
                 <button
                     type="button"
-                    class="min-h-11 min-w-16 rounded-full px-3 text-sm font-semibold transition-colors"
+                    class="inline-flex min-h-11 flex-col items-center justify-center gap-0.5 whitespace-nowrap rounded-full px-2.5 text-sm font-semibold leading-tight transition-colors"
                     class:bg-primary={liveZoomPreset === preset.value}
                     class:text-white={liveZoomPreset === preset.value}
                     aria-pressed={liveZoomPreset === preset.value}
                     onclick={() => selectZoomPreset(preset.value)}
                 >
-                    {preset.label}
+                    <span>{preset.label}</span>
+                    {#if preset.value === "farOffline"}
+                        <span
+                            class="offline-map-status-icon"
+                            class:offline-map-status-pending={[
+                                "preparing",
+                                "downloading",
+                            ].includes(tileStatus)}
+                            class:offline-map-status-ready={tileStatus ===
+                                "ready"}
+                            class:offline-map-status-warning={[
+                                "partial",
+                                "cancelled",
+                            ].includes(tileStatus)}
+                            class:offline-map-status-error={[
+                                "storage-error",
+                                "rate-limited",
+                                "source-error",
+                                "too-large",
+                            ].includes(tileStatus)}
+                            role="status"
+                            aria-label={tileStatusIconLabel()}
+                            title={tileDetail || tileStatusIconLabel()}
+                        >
+                            {#if ["preparing", "downloading"].includes(tileStatus)}
+                                <i
+                                    class="fa fa-spinner fa-spin"
+                                    aria-hidden="true"
+                                ></i>
+                            {:else if tileStatus === "ready"}
+                                <i
+                                    class="fa fa-circle-check"
+                                    aria-hidden="true"
+                                ></i>
+                            {:else if ["partial", "cancelled"].includes(tileStatus)}
+                                <i
+                                    class="fa fa-triangle-exclamation"
+                                    aria-hidden="true"
+                                ></i>
+                            {:else}
+                                <i
+                                    class="fa fa-circle-exclamation"
+                                    aria-hidden="true"
+                                ></i>
+                            {/if}
+                        </span>
+                    {/if}
                 </button>
             {/each}
         </div>
@@ -535,6 +602,27 @@
         background: rgb(255 255 255 / 0.14);
         font: inherit;
         white-space: nowrap;
+    }
+
+    .offline-map-status-icon {
+        font-size: 0.75rem;
+        line-height: 1;
+    }
+
+    .offline-map-status-pending {
+        color: rgb(37 99 235);
+    }
+
+    .offline-map-status-ready {
+        color: rgb(22 163 74);
+    }
+
+    .offline-map-status-warning {
+        color: rgb(217 119 6);
+    }
+
+    .offline-map-status-error {
+        color: rgb(220 38 38);
     }
 
     .zoom-presets {

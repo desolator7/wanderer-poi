@@ -7,12 +7,19 @@ export const PWA_LIVE_DATA_PATH = "/live/__data.json";
 export const PWA_START_PATH = "/pwa-start.html";
 
 export const PWA_LIVE_ZOOM_LEVELS = {
-    near: 18,
-    medium: 16,
-    far: 15,
+    near: 17,
+    medium: 15,
+    far: 14,
+    farOffline: 14,
 } as const;
 
 export type PwaLiveZoomPreset = keyof typeof PWA_LIVE_ZOOM_LEVELS;
+
+export function isPwaLiveOfflineMapPreset(
+    preset: PwaLiveZoomPreset,
+): boolean {
+    return preset === "farOffline";
+}
 
 export const DEFAULT_PWA_LIVE_ZOOM_PRESET: PwaLiveZoomPreset = "medium";
 

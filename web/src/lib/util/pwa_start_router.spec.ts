@@ -96,6 +96,29 @@ describe("PWA start router", () => {
             'window.addEventListener("orientationchange"',
         );
         expect(livePage).toContain("window.visualViewport");
-        expect(livePage).toContain("offlineMode={true}");
+        expect(livePage).toContain("{#key offlineMapMode}");
+        expect(livePage).toContain(
+            "showStyleSwitcher={!offlineMapMode}",
+        );
+        expect(livePage).toContain("offlineMode={offlineMapMode}");
+        expect(livePage).toContain(
+            "offlineMapMode = nextOfflineMapMode",
+        );
+        expect(livePage).toContain("await tick()");
+    });
+
+    it("moves the completed tile status into the offline zoom button", () => {
+        const livePage = readFileSync(
+            resolve(projectRoot, "src/routes/live/+page.svelte"),
+            "utf8",
+        );
+
+        expect(livePage).toContain('{#if tileStatus !== "ready"}');
+        expect(livePage).toContain('preset.value === "farOffline"');
+        expect(livePage).toContain("fa-spinner fa-spin");
+        expect(livePage).toContain("fa-circle-check");
+        expect(livePage).toContain("fa-triangle-exclamation");
+        expect(livePage).toContain("fa-circle-exclamation");
+        expect(livePage).toContain("aria-label={tileStatusIconLabel()}");
     });
 });

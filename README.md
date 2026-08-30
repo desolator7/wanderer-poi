@@ -70,10 +70,11 @@ Die installierte PWA startet über einen lokalen Start-Router. Bei aktivem
 Livemodus öffnet sie direkt die lokal gespeicherte Route unter `/live`, ohne
 zuvor die serverabhängige Startseite zu laden. Der Livemodus zeigt die Route
 und die Geräteposition auch ohne Netzwerk. Eine kartografische Basiskarte ist
-offline entlang der aktiven Route verfügbar, sobald der begrenzte
-OpenTopoMap-Download abgeschlossen ist. Außerhalb des vorbereiteten
-Routenkorridors oder bei fehlenden Tiles verwendet die Ansicht eine lokale
-Grundfläche.
+im Modus „Weit (Offline)“ entlang der aktiven Route verfügbar, sobald der
+begrenzte OpenTopoMap-Download abgeschlossen ist. Die Modi „Nah“, „Mittel“ und
+„Weit“ zeigen dagegen die reguläre Onlinekarte. Außerhalb des vorbereiteten
+Routenkorridors oder bei fehlenden Tiles verwendet die Offlineansicht eine
+lokale Grundfläche.
 
 Der technische Ist-Stand und die Grenzen sind unter
 [PWA-Livemodus](docs/pwa-live-mode.md) beschrieben.
