@@ -584,8 +584,8 @@
                     </div>
                 {/if}
             </div>
-            <div class="flex justify-between items-end w-full gap-y-4">
-                <div class=" overflow-hidden">
+            <div class="grid w-full gap-y-4">
+                <div class="min-w-0 overflow-hidden">
                     {#if editingName}
                         <div class="flex flex-col gap-3 mb-3">
                             <input
