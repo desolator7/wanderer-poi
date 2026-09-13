@@ -85,6 +85,17 @@ den lokalen Start-Router erneut geöffnet werden.
 Der technische Ist-Stand und die Grenzen sind unter
 [PWA-Livemodus](docs/pwa-live-mode.md) beschrieben.
 
+## Authentication
+
+The productive instance uses Authentik as its only interactive login method.
+Local password login and local registration are disabled. The existing
+`instance-user` account is linked to its Authentik identity; `verena` is created by
+PocketBase during her first successful OIDC login.
+
+The current provider, callback, and access-group configuration is documented
+in [Authentik OIDC authentication](docs/authentik-oidc.md). Client credentials
+remain runtime secrets and are not stored in this repository.
+
 ## POI features
 
 ### POI records

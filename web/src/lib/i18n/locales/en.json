@@ -280,6 +280,7 @@
   "list-share-warning-update": "Added trails will be shared with everyone that has access to this list.",
   "location": "Location",
   "login": "Login",
+  "login-with-provider": "Login with {provider}",
   "login-details": "Login details",
   "logout": "Logout",
   "longitude": "Longitude",

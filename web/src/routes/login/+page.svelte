@@ -149,7 +149,9 @@
                             src={(provider as any).img}
                             alt="Provider logo"
                         />
-                        Login with {provider.displayName}
+                        {$_("login-with-provider", {
+                            values: { provider: provider.displayName },
+                        })}
                     </a>
                 {/each}
             </div>

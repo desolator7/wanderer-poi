@@ -63,7 +63,7 @@ services:
       ORIGIN: ${ORIGIN:?Set ORIGIN in .env}
       BODY_SIZE_LIMIT: Infinity
       PUBLIC_POCKETBASE_URL: http://db:8090
-      PUBLIC_DISABLE_SIGNUP: "false"
+      PUBLIC_DISABLE_SIGNUP: "true"
       UPLOAD_FOLDER: /app/uploads
       UPLOAD_USER:
       UPLOAD_PASSWORD:

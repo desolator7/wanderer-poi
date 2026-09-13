@@ -280,6 +280,7 @@
   "list-share-warning-update": "Hinzugefügte Routen werden mit allen geteilt, die Zugriff auf diese Liste haben.",
   "location": "Standort",
   "login": "Login",
+  "login-with-provider": "Mit {provider} anmelden",
   "login-details": "Anmeldedaten",
   "logout": "Logout",
   "longitude": "Längengrad",
