@@ -88,6 +88,8 @@
             trail: Trail,
         ) => void;
         oninit?: (map: M.Map) => void;
+        onlocation?: (position: GeolocationPosition) => void;
+        onlocationerror?: (error: GeolocationPositionError) => void;
         autoGeolocateOnDrawing?: boolean;
         liveTrackUserLocation?: boolean;
         liveTrackingZoom?: number;
@@ -140,6 +142,8 @@
         oncontextmenu,
         onUnclusteredClick,
         oninit,
+        onlocation,
+        onlocationerror,
         autoGeolocateOnDrawing = false,
         liveTrackUserLocation = false,
         liveTrackingZoom = undefined,
@@ -1284,6 +1288,7 @@
             lastLivePosition = position;
             applyLiveTrackingCamera(position);
             syncUserHeadingMarker();
+            onlocation?.(position);
         });
         geolocateControl.on("trackuserlocationend", () => {
             hideUserHeadingMarker();
@@ -1295,7 +1300,10 @@
                 });
             }
         });
-        geolocateControl.on("error", hideUserHeadingMarker);
+        geolocateControl.on("error", (error) => {
+            hideUserHeadingMarker();
+            onlocationerror?.(error as GeolocationPositionError);
+        });
         map.addControl(geolocateControl);
         startDeviceCompass();
         watchGeolocateButtonForCompassPermission();

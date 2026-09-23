@@ -956,6 +956,9 @@
                 trail: {
                     name: $formData.name,
                     gpxData,
+                    ...(Number.isFinite(Number($formData.duration)) && Number($formData.duration) > 0
+                        ? { plannedDurationSeconds: Number($formData.duration) }
+                        : {}),
                 },
             });
         } catch (error) {

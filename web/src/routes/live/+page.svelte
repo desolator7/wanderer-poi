@@ -1,5 +1,6 @@
 <script lang="ts">
     import MapWithElevationMaplibre from "$lib/components/trail/map_with_elevation_maplibre.svelte";
+    import LiveRouteProgressPanel from "$lib/components/trail/live_route_progress.svelte";
     import GPX from "$lib/models/gpx/gpx";
     import { Trail } from "$lib/models/trail";
     import {
@@ -24,6 +25,13 @@
         type PwaLiveTileStatus,
     } from "$lib/util/pwa_live_tiles";
     import { markPwaLiveRuntimeMapUrl } from "$lib/util/pwa_live_runtime_map";
+    import {
+        buildLiveRouteModel,
+        updateLiveProgress,
+        LIVE_POSITION_MAX_AGE_MS,
+        type LiveRouteModel,
+        type LiveProgressState,
+    } from "$lib/util/pwa_live_progress";
     import * as M from "maplibre-gl";
     import { onMount, tick } from "svelte";
 
@@ -42,6 +50,35 @@
     let tileTotal = $state(0);
     let tileIncludedZooms: number[] = $state([]);
     let liveGpx: GPX | null = null;
+    let routeModel = $state.raw<LiveRouteModel | null>(null);
+    let progressState = $state.raw<LiveProgressState>({ status: "waiting", progress: null });
+    let lastPositionTimestamp: number | null = null;
+    let liveOverlay = $state<HTMLDivElement>();
+    let overlayHeight = $state(168);
+
+    function handleLivePosition(position: GeolocationPosition) {
+        if (!routeModel) return;
+        // Ignore delayed events from an older map instance or cached GPS fix.
+        if (lastPositionTimestamp !== null && position.timestamp < lastPositionTimestamp) return;
+        lastPositionTimestamp = position.timestamp;
+        progressState = updateLiveProgress(routeModel, position, progressState.progress);
+    }
+
+    function handleLivePositionError(error: GeolocationPositionError) {
+        progressState = {
+            ...progressState,
+            status: error.code === 1 ? "denied" : error.code === 3 ? "stale" : "unavailable",
+        };
+    }
+
+    $effect(() => {
+        if (!liveOverlay) return;
+        const observer = new ResizeObserver(([entry]) => {
+            overlayHeight = entry.target.getBoundingClientRect().height;
+        });
+        observer.observe(liveOverlay);
+        return () => observer.disconnect();
+    });
 
     const zoomPresets: Array<{
         value: PwaLiveZoomPreset;
@@ -137,6 +174,8 @@
             gpx_data: storedRoute.trail.gpxData,
         });
         trail.expand!.gpx = gpx;
+        routeModel = buildLiveRouteModel(gpx, storedRoute.trail.plannedDurationSeconds);
+        if (!routeModel.edges.length) progressState = { status: "invalid-route", progress: null };
         liveRoute = storedRoute;
         reactivatePwaLiveRoute();
         liveZoomPreset = storedRoute.zoomPreset;
@@ -357,8 +396,16 @@
             liveGpx = loadedRoute.gpx;
             void prepareLiveTiles(loadedRoute.route, loadedRoute.gpx);
         }
+        const stalePositionTimer = window.setInterval(() => {
+            if (lastPositionTimestamp !== null &&
+                Date.now() - lastPositionTimestamp > LIVE_POSITION_MAX_AGE_MS &&
+                ["on-route", "off-route", "inaccurate"].includes(progressState.status)) {
+                progressState = { ...progressState, status: "stale" };
+            }
+        }, 1000);
 
         return () => {
+            window.clearInterval(stalePositionTimer);
             liveMap = null;
             document.documentElement.classList.remove("live-mode-document");
             document.body.classList.remove("live-mode-document");
@@ -380,7 +427,7 @@
     <title>Livemodus | wanderer</title>
 </svelte:head>
 
-<main class="live-shell">
+<main class="live-shell" style:--live-overlay-height={`${overlayHeight}px`}>
     {#if liveRoute && liveTrail}
         <div class="live-map" aria-label="Karte der aktiven Route">
             {#key `${offlineMapMode}:${runtimeMapCacheEnabled}`}
@@ -400,30 +447,21 @@
                         : undefined}
                     bind:map={liveMap}
                     oninit={handleLiveMapInit}
+                    onlocation={handleLivePosition}
+                    onlocationerror={handleLivePositionError}
                 ></MapWithElevationMaplibre>
             {/key}
         </div>
 
-        <header class="live-header">
-            <div class="min-w-0">
-                <p class="text-xs font-semibold uppercase tracking-[0.18em] opacity-70">
-                    Livemodus
-                </p>
-                <h1 class="truncate text-base font-semibold">
-                    {liveRoute.trail.name}
-                </h1>
-            </div>
-            <button
-                type="button"
-                class="btn-secondary shrink-0"
-                aria-label="Livemodus beenden"
-                title="Livemodus beenden"
-                onclick={exitLiveMode}
-            >
-                <i class="fa fa-xmark mr-2"></i>Beenden
-            </button>
-        </header>
-
+        <div class="live-overlay" bind:this={liveOverlay}>
+            {#if routeModel}
+                <LiveRouteProgressPanel
+                    name={liveRoute.trail.name}
+                    route={routeModel}
+                    state={progressState}
+                    onexit={exitLiveMode}
+                />
+            {/if}
         <div class="live-statuses">
             {#if !online}
                 <div class="live-status-badge offline-badge" role="status">
@@ -464,6 +502,7 @@
                     {/if}
                 </div>
             {/if}
+        </div>
         </div>
 
         <div
@@ -539,6 +578,9 @@
 
 <style>
     .live-shell {
+        --live-top: max(0.75rem, env(safe-area-inset-top));
+        --live-left: max(0.75rem, env(safe-area-inset-left));
+        --live-right: max(0.75rem, env(safe-area-inset-right));
         position: fixed;
         inset: 0;
         width: 100%;
@@ -568,37 +610,39 @@
         height: 100%;
     }
 
-    .live-header {
+    .live-map :global(.maplibregl-ctrl-top-right) {
+        top: calc(var(--live-top) - 10px);
+        right: calc(var(--live-right) - 10px);
+        z-index: 70;
+    }
+
+    .live-map :global(.maplibregl-ctrl-top-left) {
+        top: calc(var(--live-top) + var(--live-overlay-height));
+        left: calc(var(--live-left) - 10px);
+    }
+
+    .live-overlay {
         position: absolute;
         z-index: 60;
-        top: max(0.75rem, env(safe-area-inset-top));
-        left: 0.75rem;
-        right: 0.75rem;
+        top: var(--live-top);
+        left: var(--live-left);
+        right: calc(var(--live-right) + 44px);
+        max-width: 36rem;
         display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 1rem;
-        border: 1px solid rgb(var(--input-border));
-        border-radius: 0.75rem;
-        padding: 0.5rem 0.75rem;
-        background: rgb(var(--menu-background) / 0.9);
-        box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
-        backdrop-filter: blur(10px);
+        flex-direction: column;
+        gap: 0.5rem;
+        pointer-events: none;
     }
 
     .live-statuses {
-        position: absolute;
-        z-index: 60;
-        top: calc(max(0.75rem, env(safe-area-inset-top)) + 4.75rem);
-        left: 50%;
         display: flex;
-        width: min(32rem, calc(100% - 1.5rem));
         flex-direction: column;
-        align-items: center;
+        align-items: flex-start;
         gap: 0.5rem;
-        transform: translateX(-50%);
         pointer-events: none;
     }
+
+    .live-statuses:empty { display: none; }
 
     .live-status-badge {
         display: flex;

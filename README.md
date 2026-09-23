@@ -82,6 +82,13 @@ Wird der Livemodus versehentlich beendet, bleibt der letzte Routensnapshot
 gespeichert. Solange das Gerät offline ist, kann die letzte Live-Sitzung über
 den lokalen Start-Router erneut geöffnet werden.
 
+Ein kompakter Wischbereich oben zeigt wahlweise Restzeit, Reststrecke und
+zurückgelegte Kilometer ab Routenanfang oder das Höhenprofil mit der aktuellen
+Position. Die Berechnung erfolgt lokal anhand der gespeicherten Route und
+Zeitplanung. Eine GPS-Toleranz von 50 bis 100 Metern berücksichtigt kleine
+Abweichungen; bei größeren Abständen oder fehlendem GPS bleiben die letzten
+gültigen Werte mit einem Hinweis sichtbar. Das X beendet den Livemodus.
+
 Der technische Ist-Stand und die Grenzen sind unter
 [PWA-Livemodus](docs/pwa-live-mode.md) beschrieben.
 

@@ -33,6 +33,7 @@ Snapshot enthält:
 - die gewählte Live-Zoomstufe,
 - das Offlinekartenprofil und den SHA-256-Fingerabdruck der Route,
 - den Routennamen,
+- die geplante Gesamtdauer in Sekunden, sofern im Editor vorhanden,
 - die vollständigen GPX-Daten.
 
 Der Editor speichert die Route zuerst regulär auf dem Server. Erst nach einem
@@ -80,7 +81,7 @@ Elemente verfügbar:
 - Start- und Zielmarkierung,
 - die aktuelle Geräteposition,
 - die vier lokalen Zoom- und Kartenmodi,
-- Name, Offline-Status und Schaltfläche zum Beenden.
+- Routenname, Fortschrittsanzeigen, Höhenprofil, Offline-Status und X zum Beenden.
 
 Andere Basiskarten, Overlays, Terrain, Overpass und externe Glyphen sind nur im
 Modus „Weit (Offline)“ deaktiviert. Die drei Online-Modi verwenden die
@@ -170,9 +171,56 @@ dem lokalen Snapshot. GPS kann ohne Internet funktionieren. Verfügbarkeit und
 Genauigkeit hängen vom Gerät, den Betriebssystemeinstellungen, der erteilten
 Standortberechtigung und dem aktuellen Empfang ab.
 
-Die Anwendung speichert keine Positionshistorie. Sie verwendet nur die
-laufenden Positionsereignisse von MapLibre, um die Markierung und den
-Kartenausschnitt nachzuführen.
+Die Anwendung speichert keine Positionshistorie. Sie verwendet die laufenden
+Positionsereignisse von MapLibre für Markierung, Kartenausschnitt und
+Routenfortschritt. Die letzte gültige Routenposition bleibt nur im Arbeitsspeicher
+der Live-Seite erhalten, auch wenn ein Kartenmoduswechsel die Karte neu aufbaut.
+Nach einem vollständigen Neustart wird sie aus der neuen GPS-Position ermittelt.
+
+## Routenfortschritt und Höhenprofil
+
+Der kompakte Bereich oben enthält zwei horizontal wischbare Seiten. Die erste
+zeigt Restzeit, Reststrecke und zurückgelegte Kilometer; die zweite zeigt das
+Höhenprofil der gesamten Route mit Positionslinie und Höhenpunkt. Die beiden
+Seitenindikatoren sind anklickbar und mit der Tastatur bedienbar. Routenname und
+X zum Beenden bleiben auf beiden Seiten sichtbar. Rechts bleibt Platz für die
+MapLibre-Controls; Statusmeldungen und Maßstab folgen unterhalb des Bereichs.
+Safe Areas werden im Hoch- und Querformat berücksichtigt.
+
+„Zurückgelegt“ bezeichnet die Strecke vom Routenanfang bis zur aktuellen
+Position, auch wenn die Sitzung erst unterwegs gestartet wurde. Sie ist keine
+Aufzeichnung tatsächlich gelaufener Kilometer. Die Position wird auf die
+Verbindungen zwischen den GPX-Punkten projiziert. Lücken zwischen getrennten
+Segmenten zählen nicht zur Streckenlänge. Rückwärtsgehen verringert den
+Fortschritt und erhöht die Reststrecke wieder.
+
+Die Zuordnung erlaubt 50 Meter seitlichen Abstand. Bei ungenauerem GPS steigt
+die Toleranz entsprechend der gemeldeten Genauigkeit bis auf 100 Meter. Bei
+annähernd gleich nahen Routenabschnitten mit höchstens 10 Metern
+Abstandsunterschied hilft die vorherige Routenposition bei der Auswahl. Ohne
+vorherige Position wird der früheste passende Abschnitt in Routenreihenfolge
+gewählt. Ein Start auf einer gemeinsam verlaufenden Hin- und Rückstrecke kann
+deshalb zunächst nicht eindeutig der Rückrichtung zugeordnet werden.
+
+Bei größerem Abstand, GPS-Ungenauigkeit über 100 Meter, Standortfehlern oder
+mehr als 30 Sekunden ohne aktuelle Position werden die Werte nicht aktualisiert.
+Ein Hinweis kennzeichnet sie und den Profilmarker als letzten Stand. Liegt noch
+keine gültige Position vor, erscheinen Platzhalter. Bei erneut gültigem Empfang
+wird die Berechnung automatisch fortgesetzt.
+
+Die Restzeit verwendet vollständige, gültige GPX-Zeitverläufe der verbleibenden
+Abschnitte. Eine im Editor angegebene Gesamtdauer skaliert diese Zeitverläufe.
+Fehlen passende Zeitverläufe, wird die geplante Gesamtdauer proportional zur
+Reststrecke aufgeteilt. Fehlen beide Grundlagen, erscheint „Keine Zeitplanung“.
+Die Schätzung passt sich nicht an das tatsächliche Gehtempo an und zählt bei
+einer Pause nicht herunter. Die Anzeige verwendet Kilometer mit deutschem
+Dezimalkomma sowie Stunden und Minuten.
+
+Das Höhenprofil nutzt ausschließlich die gespeicherten GPX-Höhen. Fehlende Höhen
+und getrennte Segmente bleiben als Lücken sichtbar; es werden keine Nullhöhen
+ergänzt. Liegt die Position in einer Höhenlücke, bleibt nur ihre Entfernungslinie
+sichtbar. Ohne Höhendaten wird ein entsprechender Hinweis angezeigt. Für
+Fortschritt, Zeitberechnung und Profil sind keine Netzwerkabfragen erforderlich.
 
 ## Beenden
 
@@ -210,4 +258,19 @@ Folgende Zustände müssen geprüft werden:
 - Ablauf und LRU-Bereinigung des flüchtigen Runtime-Caches,
 - vollständiger, abgebrochener und fortgesetzter Tile-Download,
 - Speichermangel, Netzverlust und Providerbegrenzung,
-- Hoch- und Querformat auf der installierten iOS-PWA.
+- Hoch- und Querformat auf der installierten iOS-PWA,
+- Wischen zwischen Kennzahlen und Höhenprofil sowie Bedienung der Kartencontrols,
+- GPS-Abweichung, ungenauer Empfang und Wiederaufnahme nach einem Standortfehler,
+- unveränderter Fortschritt und gewählte Wischseite nach einem Kartenmoduswechsel.
+
+Die automatisierten Browserprüfungen verwenden eine lokale Test-Route und
+simulierte GPS-Ereignisse, ohne produktive Routen zu verändern:
+
+```bash
+cd web
+LIVE_MAP_TEST_URL=http://localhost:3000 npx playwright test tests/playwright/live-map.spec.ts --project=chromium --no-deps --workers=1
+```
+
+Sie decken schmale Mobilansichten, Querformat, simulierte Safe Areas,
+Standortfehler und Offlinewechsel ab. Eine Prüfung auf einer tatsächlich
+installierten iOS-PWA ergänzt diese Chromium-Prüfungen.

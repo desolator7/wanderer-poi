@@ -100,6 +100,22 @@ describe("PWA live mode", () => {
         );
     });
 
+    it("retains an optional planned duration in seconds", () => {
+        const storage = createStorage();
+        const route = createRoute();
+        route.trail.plannedDurationSeconds = 7200;
+        writePwaLiveRoute(route, storage);
+        expect(readPwaLiveRoute(storage)?.trail.plannedDurationSeconds).toBe(7200);
+    });
+
+    it.each([0, -1, "3600", null])("rejects an invalid planned duration: %s", (duration) => {
+        const route = createRoute();
+        const storage = createStorage(JSON.stringify({
+            ...route, trail: { ...route.trail, plannedDurationSeconds: duration },
+        }));
+        expect(readPwaLiveRoute(storage)).toBeNull();
+    });
+
     it.each([
         ["malformed JSON", "not-json"],
         [

@@ -37,6 +37,7 @@ export interface PwaLiveRoute {
     trail: {
         name: string;
         gpxData: string;
+        plannedDurationSeconds?: number;
     };
 }
 
@@ -82,7 +83,11 @@ export function readPwaLiveRoute(
             value.trail === null ||
             typeof value.trail.name !== "string" ||
             typeof value.trail.gpxData !== "string" ||
-            !value.trail.gpxData.trim()
+            !value.trail.gpxData.trim() ||
+            (value.trail.plannedDurationSeconds !== undefined &&
+                (typeof value.trail.plannedDurationSeconds !== "number" ||
+                    !Number.isFinite(value.trail.plannedDurationSeconds) ||
+                    value.trail.plannedDurationSeconds <= 0))
         ) {
             throw new Error("Invalid PWA live route");
         }
