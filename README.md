@@ -96,8 +96,10 @@ Der technische Ist-Stand und die Grenzen sind unter
 
 The productive instance uses Authentik as its only interactive login method.
 Local password login and local registration are disabled. The existing
-`instance-user` account is linked to its Authentik identity; `verena` is created by
-PocketBase during her first successful OIDC login.
+`instance-user` account is linked to its Authentik identity. New users register in
+Authentik, verify their email address, and request access to the Wanderer App
+group. PocketBase creates their Wanderer account on the first approved OIDC
+login.
 
 The current provider, callback, and access-group configuration is documented
 in [Authentik OIDC authentication](docs/authentik-oidc.md). Client credentials
