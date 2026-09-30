@@ -18,8 +18,9 @@ services:
     restart: unless-stopped
     healthcheck:
       test: curl --fail http://localhost:7700/health || exit 1
-      interval: 15s
-      retries: 10
+      interval: 120s
+      start_interval: 5s
+      retries: 2
       start_period: 20s
       timeout: 10s
   db:
@@ -43,8 +44,9 @@ services:
       - ./data/pb_data:/pb_data
     healthcheck:
       test: ["CMD", "/curl", "--fail", "http://localhost:8090/health"]
-      interval: 15s
-      retries: 10
+      interval: 120s
+      start_interval: 5s
+      retries: 2
       start_period: 20s
       timeout: 10s
   web:
@@ -85,8 +87,9 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:3000/"]
-      interval: 15s
-      retries: 10
+      interval: 120s
+      start_interval: 5s
+      retries: 2
       start_period: 20s
       timeout: 10s
 # valhalla:
