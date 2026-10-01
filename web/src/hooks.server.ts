@@ -191,4 +191,16 @@ const removeLinkFromHeaders: Handle =
   }
 
 
-export const handle = sequence(csrf(['/api/v1']), auth, removeLinkFromHeaders)
+const healthcheck: Handle = async ({ event, resolve }) => {
+  if (event.url.pathname === '/healthz') {
+    if (event.request.method !== 'GET' && event.request.method !== 'HEAD') {
+      return new Response(null, { status: 405, headers: { Allow: 'GET, HEAD' } })
+    }
+    return new Response(event.request.method === 'HEAD' ? null : 'ok\n', {
+      headers: { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' }
+    })
+  }
+  return resolve(event)
+}
+
+export const handle = sequence(healthcheck, csrf(['/api/v1']), auth, removeLinkFromHeaders)

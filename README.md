@@ -467,3 +467,7 @@ possible. This keeps the fork small and makes upstream comparison easier.
 ## License
 
 This fork uses the [AGPLv3 license](LICENSE), in line with the upstream project.
+
+## Containerbetrieb
+
+[Healthchecks, Logrotation und Betriebseinstellungen](docs/container-operations.md).

@@ -23,6 +23,11 @@ services:
       retries: 2
       start_period: 20s
       timeout: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: '3'
   db:
     container_name: wanderer-db
     image: wanderer-poi-db:local
@@ -49,6 +54,11 @@ services:
       retries: 2
       start_period: 20s
       timeout: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: '3'
   web:
     container_name: wanderer-web
     image: wanderer-poi-web:local
@@ -86,8 +96,8 @@ services:
       - wanderer
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:3000/"]
-      interval: 120s
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--max-time", "5", "--output", "/dev/null", "http://127.0.0.1:3000/healthz"]
+      interval: 300s
       start_interval: 5s
       retries: 2
       start_period: 20s
@@ -107,6 +117,29 @@ services:
 #     - build_admins=True
 #     - build_time_zones=True
 
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: '3'
+  valhalla:
+    image: ghcr.io/valhalla/valhalla-scripted:latest
+    container_name: wanderer-valhalla
+    restart: unless-stopped
+    environment:
+      tile_urls: https://download.geofabrik.de/europe/germany-latest.osm.pbf
+      build_elevation: 'True'
+    volumes:
+    - /docker/appdata/wanderer-poi/data/valhalla:/custom_files
+    ports:
+    - 8002:8002
+    networks:
+    - wanderer
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: '3'
 networks:
   wanderer:
     driver: bridge
