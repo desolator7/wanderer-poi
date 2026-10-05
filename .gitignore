@@ -16,6 +16,13 @@ data*/
 !web/static/data/
 !web/static/data/osm-stamp-points.json
 !web/static/data/osm-stamp-points.json.sha256
+
+plugins/*/dist/
+plugin_dist/
+
 .planning/
+.impeccable/
 .claude/
 CLAUDE.md
+DESIGN.md
+PRODUCT.md

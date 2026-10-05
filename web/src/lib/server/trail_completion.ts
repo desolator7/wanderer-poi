@@ -19,7 +19,7 @@ export async function markTrailsCompletedByCurrentUser<T extends TrailWithUserCo
     trails: T[],
 ) {
     for (const trail of trails) {
-        trail.completed_by_current_user = false;
+        trail.completed_by_current_user = Boolean(actorId && trail.author === actorId && trail.completed);
     }
 
     if (!actorId || trails.length === 0) {
@@ -57,7 +57,7 @@ export async function markTrailsCompletedByCurrentUser<T extends TrailWithUserCo
 
     for (const trail of trails) {
         trail.completed_by_current_user = Boolean(
-            trail.id && completedTrailIds.has(trail.id),
+            trail.completed_by_current_user || (trail.id && completedTrailIds.has(trail.id)),
         );
     }
 

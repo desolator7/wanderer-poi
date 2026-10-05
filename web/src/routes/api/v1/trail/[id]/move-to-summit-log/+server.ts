@@ -51,6 +51,11 @@ export async function POST(event: RequestEvent) {
                 filter: `trail="${escapeFilterValue(sourceTrailId)}"`,
             });
 
+        const sourceReferences = await event.locals.pb.send<{ provider: string; external_id: string }[]>(
+            `/trail/${encodeURIComponent(sourceTrailId)}/external-references`,
+            { method: "GET", fetch: event.fetch },
+        );
+
         if (sourceLogs.length === 0) {
             const newSummitLog: Record<string, any> = {
                 distance: sourceTrail.distance,
@@ -61,11 +66,9 @@ export async function POST(event: RequestEvent) {
                 author: event.locals.user.actor,
                 trail: targetTrail,
             };
-            if (sourceTrail.external_provider) {
-                newSummitLog.external_provider = sourceTrail.external_provider;
-            }
-            if (sourceTrail.external_id) {
-                newSummitLog.external_id = sourceTrail.external_id;
+            if (sourceReferences.length === 1) {
+                newSummitLog.external_provider = sourceReferences[0].provider;
+                newSummitLog.external_id = sourceReferences[0].external_id;
             }
 
             const formData = objectToFormData(newSummitLog);

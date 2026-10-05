@@ -17,6 +17,10 @@ import (
 )
 
 func documentFromTrailRecord(app core.App, r *core.Record, author *core.Record, includeShares bool) (map[string]interface{}, error) {
+	if author == nil {
+		return nil, fmt.Errorf("trail %s has missing author reference %q", r.Id, r.GetString("author"))
+	}
+
 	photos := r.GetStringSlice("photos")
 	thumbnail := ""
 	if len(photos) > 0 {
@@ -34,10 +38,24 @@ func documentFromTrailRecord(app core.App, r *core.Record, author *core.Record, 
 		tags[i] = v.GetString("name")
 	}
 
+	categoryID := r.GetString("category")
+	var categoryIDValue any
+	if categoryID != "" {
+		categoryIDValue = categoryID
+	}
+
+	subcategoryID := r.GetString("subcategory")
+	var subcategoryIDValue any
+	if subcategoryID != "" {
+		subcategoryIDValue = subcategoryID
+	}
+
 	category := ""
+	categoryIcon := ""
 	trailCategory := r.ExpandedOne("category")
 	if trailCategory != nil {
 		category = trailCategory.GetString("name")
+		categoryIcon = trailCategory.GetString("icon")
 	}
 
 	bounds := getStoredBounds(r)
@@ -58,36 +76,41 @@ func documentFromTrailRecord(app core.App, r *core.Record, author *core.Record, 
 	}
 
 	document := map[string]any{
-		"id":                    r.Id,
-		"author":                author.Id,
-		"author_name":           author.GetString("preferred_username"),
-		"author_avatar":         author.GetString("icon"),
-		"name":                  r.GetString("name"),
-		"description":           r.GetString("description"),
-		"location":              r.GetString("location"),
-		"distance":              r.GetFloat("distance"),
-		"elevation_gain":        r.GetFloat("elevation_gain"),
-		"elevation_loss":        r.GetFloat("elevation_loss"),
-		"duration":              r.GetFloat("duration"),
-		"difficulty":            difficultyToNumber(r.GetString("difficulty")),
-		"category":              category,
-		"completed":             r.GetBool("completed") || len(completedBy) > 0,
-		"completed_by":          completedBy,
-		"external_provider":     r.GetString("external_provider"),
-		"date":                  r.GetDateTime("date").Time().Unix(),
-		"created":               r.GetDateTime("created").Time().Unix(),
-		"public":                r.GetBool("public"),
-		"thumbnail":             thumbnail,
-		"gpx":                   r.GetString("gpx"),
-		"tags":                  tags,
-		"polyline":              r.GetString("polyline"),
-		"domain":                domain,
-		"iri":                   r.GetString("iri"),
-		"min_lat":               bounds[0],
-		"max_lat":               bounds[1],
-		"min_lon":               bounds[2],
-		"max_lon":               bounds[3],
-		"bounding_box_diagonal": diagonal,
+		"id":                         r.Id,
+		"author":                     author.Id,
+		"author_name":                author.GetString("preferred_username"),
+		"author_avatar":              author.GetString("icon"),
+		"name":                       r.GetString("name"),
+		"description":                r.GetString("description"),
+		"location":                   r.GetString("location"),
+		"distance":                   r.GetFloat("distance"),
+		"elevation_gain":             r.GetFloat("elevation_gain"),
+		"elevation_loss":             r.GetFloat("elevation_loss"),
+		"duration":                   r.GetFloat("duration"),
+		"difficulty":                 difficultyToNumber(r.GetString("difficulty")),
+		"category":                   category,
+		"category_id":                categoryIDValue,
+		"category_icon":              categoryIcon,
+		"subcategory_id":             subcategoryIDValue,
+		"is_federated":               !author.GetBool("is_local"),
+		"federated_category_name":    r.GetString("federated_category_name"),
+		"federated_subcategory_name": r.GetString("federated_subcategory_name"),
+		"completed":                  r.GetBool("completed"),
+		"completed_by":               completedBy,
+		"date":                       r.GetDateTime("date").Time().Unix(),
+		"created":                    r.GetDateTime("created").Time().Unix(),
+		"public":                     r.GetBool("public"),
+		"thumbnail":                  thumbnail,
+		"gpx":                        r.GetString("gpx"),
+		"tags":                       tags,
+		"polyline":                   r.GetString("polyline"),
+		"domain":                     domain,
+		"iri":                        r.GetString("iri"),
+		"min_lat":                    bounds[0],
+		"max_lat":                    bounds[1],
+		"min_lon":                    bounds[2],
+		"max_lon":                    bounds[3],
+		"bounding_box_diagonal":      diagonal,
 		"_geo": map[string]float64{
 			"lat": r.GetFloat("lat"),
 			"lng": r.GetFloat("lon"),
@@ -181,6 +204,9 @@ func getStoredBounds(r *core.Record) [4]float64 {
 }
 
 func documentFromListRecord(r *core.Record, author *core.Record, includeShares bool) (map[string]any, error) {
+	if author == nil {
+		return nil, fmt.Errorf("list %s has missing author reference %q", r.Id, r.GetString("author"))
+	}
 
 	totalElevationGain := 0.0
 	totalElevationLoss := 0.0
@@ -393,19 +419,6 @@ func UpdateTrail(app core.App, r *core.Record, author *core.Record, client meili
 	return nil
 }
 
-func UpdateTrailShares(trailId string, shares []string, client meilisearch.ServiceManager) error {
-	documents := []map[string]interface{}{
-		{
-			"id":     trailId,
-			"shares": shares,
-		},
-	}
-	if _, err := client.Index("trails").UpdateDocuments(documents, nil); err != nil {
-		return err
-	}
-	return nil
-}
-
 func UpdateTrailLikes(trailId string, likes []string, client meilisearch.ServiceManager) error {
 	documents := []map[string]interface{}{
 		{
@@ -498,19 +511,6 @@ func UpdateActor(r *core.Record, client meilisearch.ServiceManager) error {
 		return err
 	}
 
-	return nil
-}
-
-func UpdateListShares(listId string, shares []string, client meilisearch.ServiceManager) error {
-	documents := []map[string]interface{}{
-		{
-			"id":     listId,
-			"shares": shares,
-		},
-	}
-	if _, err := client.Index("lists").UpdateDocuments(documents, nil); err != nil {
-		return err
-	}
 	return nil
 }
 

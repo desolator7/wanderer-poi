@@ -6,7 +6,7 @@ import type { Waypoint } from "$lib/models/waypoint";
 import type { Poi } from "$lib/models/poi";
 import type { PoiAttribute } from "$lib/models/poi_attribute";
 import { theme } from "$lib/stores/theme_store";
-import M from "maplibre-gl";
+import * as M from "maplibre-gl";
 import { _ } from "svelte-i18n";
 import { get } from "svelte/store";
 import { handleFromRecordWithIRI } from "./activitypub_util";
@@ -135,7 +135,7 @@ export function createMarkerFromWaypoint(
 
 export function createAnchorMarker(lat: number, lon: number, index: number,
     onDeleteClick: () => void, onLoopClick: () => void,
-    onDragStart: (event: Event) => void, onDragEnd: (event: Event) => void): FontawesomeMarker {
+    onDragStart: (event: M.MarkerDragEvent) => void, onDragEnd: (event: M.MarkerDragEvent) => void): M.Marker {
 
     const anchorElement = document.createElement("span")
     anchorElement.className = "route-anchor flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-primary text-sm font-semibold text-white shadow-md"
@@ -225,7 +225,7 @@ export function createEditTrailMapPopup(lnglat: M.LngLat, onCreateWaypointClick:
 
 export function createPopupFromTrail(trail: Trail) {
     const thumbnail = trail.photos.length
-        ? getFileURL(trail, trail.photos.at(trail.thumbnail ?? 0) ?? trail.photos[0])
+        ? getFileURL(trail, trail.photos.at(trail.thumbnail ?? 0) ?? trail.photos[0], "600x0")
         : get(theme) === "light"
             ? emptyStateTrailLight
             : emptyStateTrailDark;

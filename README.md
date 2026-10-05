@@ -3,6 +3,9 @@
 This repository contains an independent, experimental fork of
 [open-wanderer/wanderer](https://github.com/open-wanderer/wanderer).
 
+Current version: **0.21.0 Ver. 161.26.023**, based on upstream release
+`v0.21.0` (`a93566bc`).
+
 The fork adds first-class Points of Interest (POIs) to wanderer. A POI is a
 stored geographic record with coordinates, a name, a description, a category,
 visibility, and optional attributes.
@@ -37,6 +40,13 @@ The POI work keeps the upstream trail features and adds the following parts:
   a transient cache for viewed online maps, and a bounded OpenTopoMap route
   cache
 - API routes for POIs, categories, attributes, and imports
+- personal completion from summit logs or a manual completion on an owned trail,
+  with upstream activity statistics avoiding duplicate counts
+- Komoot, Strava, and Hammerhead plugins with per-user duplicate detection,
+  import exclusions, activity GPX files, and GPX-derived fallback waypoints
+
+Plugin setup, completion behavior, and local deployment are described in
+[Upstream release and fork behavior](docs/upstream-release.md).
 
 The fork focuses on local POI records. It does not define a separate product,
 a stable public API, or a replacement for the upstream project.
@@ -369,7 +379,8 @@ Run these commands from the repository root:
 ~~~bash
 make db-build-docker
 make web-build-docker
-docker compose up -d
+make plugins-install-local
+docker compose up -d --no-build --pull never --no-deps --force-recreate db web
 ~~~
 
 The compose file starts these services:
@@ -424,8 +435,13 @@ make db-vet
 make db-fmt
 ~~~
 
-The web checks run `svelte-check`. The web tests run the Playwright integration
-tests and the Vitest unit tests.
+The web checks run `svelte-check`. Run the unit suite with
+`cd web && npm run test:unit -- --run`. `make web-test` also runs Playwright;
+its setup and teardown create and delete users, so use a separate test database
+for that suite. Writing browser and API tests must use isolated test data.
+
+The plugin checks run with `make plugins-test`; `make plugins-build` validates
+the manifests and compiles the WASM bundles using TinyGo 0.41.1.
 
 The database tests run the Go test suite. `db-vet` runs `go vet`. `db-fmt`
 formats the Go code.

@@ -33,7 +33,20 @@ import { json, type RequestEvent } from "@sveltejs/kit";
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/ListResult'
+ *               type: object
+ *               properties:
+ *                 page:
+ *                   type: integer
+ *                 perPage:
+ *                   type: integer
+ *                 totalItems:
+ *                   type: integer
+ *                 totalPages:
+ *                   type: integer
+ *                 items:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Category'
  *       400:
  *         description: Bad Request
  *       500:
@@ -42,15 +55,6 @@ import { json, type RequestEvent } from "@sveltejs/kit";
 
 export async function GET(event: RequestEvent) {
     try {
-        const allowedCategoryFilter = "name='Hiking'||name='Biking'";
-        const existingFilter = event.url.searchParams.get("filter");
-        event.url.searchParams.set(
-            "filter",
-            existingFilter
-                ? `(${existingFilter}) && (${allowedCategoryFilter})`
-                : allowedCategoryFilter,
-        );
-
         const r = await list<Category>(event, Collection.categories);
         return json(r)
     } catch (e) {

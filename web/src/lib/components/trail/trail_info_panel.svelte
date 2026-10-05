@@ -19,8 +19,15 @@
     import {
         formatDistance,
         formatElevation,
+        formatHTMLAsTextPreview,
         formatTimeHHMM,
     } from "$lib/util/format_util";
+    import {
+        displayCategoryIcon,
+        displayCategoryName,
+        displaySubcategoryIcon,
+        displaySubcategoryLabel,
+    } from "$lib/util/category_util";
 
     import { browser } from "$app/environment";
     import emptyStateTrailDark from "$lib/assets/svgs/empty_states/empty_state_trail_dark.svg";
@@ -30,7 +37,7 @@
     import * as M from "maplibre-gl";
     import "photoswipe/style.css";
     import { onMount, untrack } from "svelte";
-    import { _ } from "svelte-i18n";
+    import { _, locale } from "svelte-i18n";
     import Button from "../base/button.svelte";
     import Chip from "../base/chip.svelte";
     import SkeletonNotificationCard from "../base/skeleton_notification_card.svelte";
@@ -65,6 +72,7 @@
     import Combobox, { type ComboboxItem } from "../base/combobox.svelte";
     import { tags_index } from "$lib/stores/tag_store";
     import TrailMapEditButton from "./trail_map_edit_button.svelte";
+    import { withShareToken } from "$lib/util/url_util";
 
     interface Props {
         initTrail: Trail;
@@ -87,6 +95,17 @@
     let markTrailAsCompletedModal: ConfirmModal;
 
     let trail = $state(untrack(() => initTrail));
+
+    function trailCategoryIcon() {
+        if (trail.expand?.subcategory) {
+            return displaySubcategoryIcon(
+                trail.expand.subcategory,
+                trail.expand?.category,
+            );
+        }
+
+        return displayCategoryIcon(trail.expand?.category);
+    }
 
     const tabs = [
         $_("summit-book"),
@@ -114,6 +133,12 @@
     let summitLogCreateLoading: boolean = $state(false);
 
     let fullDescription: boolean = $state(false);
+
+    const DESCRIPTION_PREVIEW_LENGTH = 300;
+
+    let descriptionPreview = $derived(
+        formatHTMLAsTextPreview(trail.description, DESCRIPTION_PREVIEW_LENGTH),
+    );
     let metadataSaving: boolean = $state(false);
     let editingName: boolean = $state(false);
     let editingDescription: boolean = $state(false);
@@ -152,14 +177,11 @@
     }
 
     async function toggleMapFullScreen() {
-        const searchParams = new URLSearchParams();
-        const shareToken = page.url.searchParams.get("share");
-        if (shareToken) {
-            searchParams.set("share", shareToken);
-        }
-
         goto(
-            `/trail/edit/${trail.id!}${searchParams.size ? `?${searchParams.toString()}` : ""}`,
+            withShareToken(
+                `/trail/edit/${trail.id!}`,
+                page.url.searchParams,
+            ),
         );
     }
 
@@ -218,7 +240,7 @@
 
     function getHeaderPhotos() {
         if (trail.photos.length) {
-            return trail.photos.slice(0, 3).map((p) => getFileURL(trail, p));
+            return trail.photos.slice(0, 3).map((p) => getFileURL(trail, p, "600x0"));
         } else {
             return $theme === "light"
                 ? [emptyStateTrailLight]
@@ -321,8 +343,14 @@
     }
 
     async function markTrailAsCompleted() {
-        trail.completed = true;
-        const updatedTrail: Trail = { ...trail };
+        const oldestSummitLogDate = $summitLogs
+            .map((log) => log.date)
+            .sort()[0];
+        const updatedTrail: Trail = {
+            ...trail,
+            completed: true,
+            completed_at: trail.completed_at || oldestSummitLogDate,
+        };
         await trails_update(trail, updatedTrail);
     }
 
@@ -489,7 +517,6 @@
                             onclick={trail.photos.length
                                 ? () => gallery.openGallery(i)
                                 : null}
-                            autoplay
                             loop
                             src={photo}
                         ></video>
@@ -760,10 +787,20 @@
                         >{#if mode == "overview"}
                             {$_("category")}
                         {:else}
-                            <i class="fa fa-route"></i>
+                            <i class="fa {trailCategoryIcon()}"></i>
                         {/if}</span
                     >
-                    <span class="">{$_(trail.expand.category.name)}</span>
+                    <span class="">
+                        {displayCategoryName(trail.expand.category, $locale)}
+                        {#if trail.expand?.subcategory}
+                            <span class="text-gray-500">
+                                / {displaySubcategoryLabel(
+                                    trail.expand.subcategory,
+                                    $locale,
+                                )}
+                            </span>
+                        {/if}
+                    </span>
                 </div>
             {/if}
         </section>
@@ -812,13 +849,9 @@
                         </div>
                     </div>
                 {:else if trail.description?.length}
-                    <article
-                        class="text-justify whitespace-pre-line text-sm prose dark:prose-invert"
-                    >
-                        {@html !fullDescription
-                            ? trail.description?.substring(0, 300)
-                            : trail.description}
-                        {#if (trail.description?.length ?? 0) > 300 && !fullDescription}
+                    <article class="text-justify whitespace-pre-line text-sm">
+                        {#if descriptionPreview.truncated && !fullDescription}
+                            <div>{descriptionPreview.text}</div>
                             <button
                                 onclick={(e) => {
                                     e.stopPropagation();
@@ -830,6 +863,10 @@
                                     >{$_("read-more")}</span
                                 ></button
                             >
+                        {:else}
+                            <div class="prose dark:prose-invert">
+                                {@html trail.description}
+                            </div>
                         {/if}
                     </article>
                 {:else}
@@ -913,7 +950,7 @@
                                     <img
                                         class="rounded-xl cursor-pointer hover:scale-105 transition-transform"
                                         onclick={() => gallery.openGallery(i)}
-                                        src={getFileURL(trail, photo)}
+                                        src={getFileURL(trail, photo, "600x0")}
                                         alt=""
                                     />
                                 {/if}
@@ -932,6 +969,7 @@
                                     src={getFileURL(
                                         $currentUser,
                                         $currentUser.avatar,
+                                        "100x100",
                                     ) ||
                                         `https://api.dicebear.com/7.x/initials/svg?seed=${$currentUser.username?.toLowerCase()}&backgroundType=gradientLinear`}
                                     alt="avatar"

@@ -15,6 +15,7 @@
     import TrailFilterPanel from "$lib/components/trail/trail_filter_panel.svelte";
     import type { Settings } from "$lib/models/settings";
     import { Poi } from "$lib/models/poi";
+    import type { PoiCategory } from "$lib/models/poi_category";
     import {
         defaultTrailSearchAttributes,
         type Trail,
@@ -59,7 +60,7 @@
     let includePublicPois = $state(true);
     let includeOwnPois = $state(Boolean(page.data.user));
     let selectedPoiCategoryIds = $state(
-        page.data.poiCategories.map((category) => category.id!),
+        page.data.poiCategories.map((category: PoiCategory) => category.id!),
     );
 
     let filteredPois = $derived(
@@ -315,10 +316,11 @@
         } else if (
             settings &&
             settings.mapFocus == "trails" &&
-            (maxBoundingBox.min_lon != 0 ||
-                maxBoundingBox.max_lat != 0 ||
-                maxBoundingBox.max_lon != 0 ||
-                maxBoundingBox.min_lat != 0)
+            (maxBoundingBox.has_trails ??
+                (maxBoundingBox.min_lon != 0 ||
+                    maxBoundingBox.max_lat != 0 ||
+                    maxBoundingBox.max_lon != 0 ||
+                    maxBoundingBox.min_lat != 0))
         ) {
             if (
                 maxBoundingBox.min_lon == maxBoundingBox.max_lon &&
@@ -409,7 +411,7 @@
             updatedPoi.expand = {
                 category:
                     page.data.poiCategories.find(
-                        (category) => category.id === updatedPoi.category,
+                        (category: PoiCategory) => category.id === updatedPoi.category,
                     ) ?? updatedPoi.expand?.category,
             };
             const index = pois.findIndex((item) => item.id === updatedPoi.id);

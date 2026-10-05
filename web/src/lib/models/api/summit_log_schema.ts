@@ -34,7 +34,7 @@ const SummitLogCreateSchema = z.object({
     ),
     external_id: z.string().optional(),
     photos: z.array(z.string()).default([])
-}) satisfies ZodType<Partial<SummitLog>>
+}) satisfies ZodType<Partial<SummitLog>, z.ZodTypeDef, unknown>
 
 const SummitLogUpdateSchema = z.object({
     date: SummitLogDateSchema.optional(),

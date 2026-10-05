@@ -129,6 +129,6 @@
             >.
         </p>
 
-        <p class="text-xs opacity-60">0.19.2 · Ver. 161.26.022</p>
+        <p class="text-xs opacity-60">0.21.0 Ver. 161.26.023</p>
     </article>
 </main>

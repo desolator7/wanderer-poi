@@ -20,6 +20,7 @@
         showWaypoints?: boolean;
         resetLabel?: string;
         resetAriaLabel?: string;
+        allowAutoRouting?: boolean;
     }
 
     let {
@@ -31,6 +32,7 @@
         showWaypoints = $bindable(true),
         resetLabel = "reset",
         resetAriaLabel = "reset-route",
+        allowAutoRouting = true,
     }: Props = $props();
 
     const bikeTypes: SelectItem[] = [
@@ -154,6 +156,7 @@
         <div class=" pt-2 pb-3 px-4 my-2 rounded-xl bg-background shadow-xl">
             <Toggle
                 bind:value={options.autoRouting}
+                disabled={!allowAutoRouting}
                 label={$_("enable-auto-routing")}
             ></Toggle>
             {#if options.modeOfTransport !== "pedestrian"}

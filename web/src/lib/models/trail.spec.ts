@@ -9,6 +9,7 @@ function createTrail(overrides: Partial<Trail>): Trail {
         name: "Trail",
         photos: [],
         public: false,
+        completed: false,
         tags: [],
         ...overrides,
     };
@@ -41,7 +42,7 @@ describe("isTrailPlanned", () => {
         ).toBe(false);
     });
 
-    it("lets loaded summit logs win over stale completed values", () => {
+    it("recognizes summit logs and manual completion independently", () => {
         expect(
             isTrailPlanned(createTrail({
                 completed: false,
@@ -54,6 +55,6 @@ describe("isTrailPlanned", () => {
                 completed: true,
                 expand: { summit_logs_via_trail: [] },
             })),
-        ).toBe(true);
+        ).toBe(false);
     });
 });

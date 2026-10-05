@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -11,13 +12,11 @@ import (
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
-	"github.com/pocketbase/pocketbase/tools/filesystem"
+	"github.com/pocketbase/pocketbase/tools/auth"
 
 	"pocketbase/commands"
 	"pocketbase/hooks"
-	"pocketbase/integrations/hammerhead"
-	"pocketbase/integrations/komoot"
-	"pocketbase/integrations/strava"
+	"pocketbase/pluginsystem"
 	"pocketbase/routes"
 
 	_ "pocketbase/migrations"
@@ -56,6 +55,9 @@ func verifySettings(app core.App) {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "plugin-worker" {
+		os.Exit(pluginsystem.RunPluginWorker(context.Background(), os.Stdin, os.Stdout, os.Stderr))
+	}
 
 	app := pocketbase.New()
 	client := initializeMeilisearch()
@@ -66,6 +68,8 @@ func main() {
 	setupEventHandlers(app, client)
 
 	setupCommands(app)
+
+	configureOIDCScopes()
 
 	if err := app.Start(); err != nil {
 		log.Fatal(err)
@@ -79,6 +83,50 @@ func initializeMeilisearch() meilisearch.ServiceManager {
 	)
 }
 
+// oidcScopesEnv maps each OIDC provider slot to the environment variable that
+// overrides its scopes.
+var oidcScopesEnv = map[string]string{
+	"oidc":  "OIDC_SCOPES",
+	"oidc2": "OIDC2_SCOPES",
+	"oidc3": "OIDC3_SCOPES",
+}
+
+// configureOIDCScopes overrides the scopes requested by the oidc, oidc2 and
+// oidc3 providers with the comma separated list in OIDC_SCOPES, OIDC2_SCOPES
+// and OIDC3_SCOPES respectively. A slot without an override keeps the
+// PocketBase defaults.
+//
+// PocketBase asks every OIDC provider for "openid", "profile" and "email".
+// Not all providers accept those: OpenStreetMap, for instance, rejects the
+// authorization request outright rather than ignoring the unknown scopes, so
+// login fails before the user ever sees a consent screen. Such providers need
+// their own scope list ("openid" in the OSM case).
+func configureOIDCScopes() {
+	for name, env := range oidcScopesEnv {
+		scopes := parseScopes(os.Getenv(env))
+		if len(scopes) == 0 {
+			continue
+		}
+
+		auth.Providers[name] = func() auth.Provider {
+			provider := auth.NewOIDCProvider()
+			provider.SetScopes(scopes)
+			return provider
+		}
+	}
+}
+
+// parseScopes splits a comma separated scope list, dropping empty entries.
+func parseScopes(raw string) []string {
+	scopes := []string{}
+	for _, scope := range strings.Split(raw, ",") {
+		if scope = strings.TrimSpace(scope); scope != "" {
+			scopes = append(scopes, scope)
+		}
+	}
+	return scopes
+}
+
 func registerMigrations(app *pocketbase.PocketBase) {
 	migratecmd.MustRegister(app, app.RootCmd, migratecmd.Config{
 		Dir:         "migrations",
@@ -87,20 +135,46 @@ func registerMigrations(app *pocketbase.PocketBase) {
 }
 
 func setupEventHandlers(app *pocketbase.PocketBase, client meilisearch.ServiceManager) {
+	app.OnRecordAuthWithOAuth2Request().BindFunc(hooks.OAuth2UsernameHandler())
+
 	app.OnRecordAfterCreateSuccess("users").BindFunc(hooks.CreateUserHandler(client))
 	app.OnRecordAfterUpdateSuccess("users").BindFunc(hooks.UpdateUserHandler(client))
 
 	app.OnRecordAfterCreateSuccess("activitypub_actors").BindFunc(hooks.CreateActorHandler(client))
 	app.OnRecordAfterUpdateSuccess("activitypub_actors").BindFunc(hooks.UpdateActorHandler(client))
+	app.OnRecordDelete("activitypub_actors").BindFunc(hooks.CollectActorDeleteRecipientsHandler())
+	app.OnRecordAfterDeleteSuccess("activitypub_actors").BindFunc(hooks.AnnounceActorDeleteHandler())
 	app.OnRecordAfterDeleteSuccess("activitypub_actors").BindFunc(hooks.DeleteActorHandler(client))
 
+	app.OnRecordAfterUpdateSuccess("tags").BindFunc(hooks.UpdateTagIndexHandler(client))
+
+	app.OnRecordCreateRequest("categories").BindFunc(hooks.ValidateCategoryHandler())
+	app.OnRecordUpdateRequest("categories").BindFunc(hooks.ValidateCategoryHandler())
+	app.OnRecordAfterCreateSuccess("categories").BindFunc(hooks.BackfillRemoteTrailCategoryHandler())
+	app.OnRecordAfterUpdateSuccess("categories").BindFunc(hooks.BackfillRemoteTrailCategoryHandler())
+	app.OnRecordCreateRequest("subcategories").BindFunc(hooks.ValidateSubcategoryHandler())
+	app.OnRecordUpdateRequest("subcategories").BindFunc(hooks.ValidateSubcategoryHandler())
+	app.OnRecordAfterCreateSuccess("subcategories").BindFunc(hooks.BackfillRemoteTrailSubcategoryHandler())
+	app.OnRecordAfterUpdateSuccess("subcategories").BindFunc(hooks.BackfillRemoteTrailSubcategoryHandler())
+
+	app.OnRecordCreateRequest("user_category_preferences").BindFunc(hooks.ValidateUserCategoryPreferenceHandler())
+	app.OnRecordUpdateRequest("user_category_preferences").BindFunc(hooks.ValidateUserCategoryPreferenceHandler())
+	app.OnRecordCreateRequest("user_subcategory_preferences").BindFunc(hooks.ValidateUserSubcategoryPreferenceHandler())
+	app.OnRecordUpdateRequest("user_subcategory_preferences").BindFunc(hooks.ValidateUserSubcategoryPreferenceHandler())
+
+	app.OnRecordCreateRequest("trails").BindFunc(hooks.ValidateTrailSubcategoryHandler())
+	app.OnRecordUpdateRequest("trails").BindFunc(hooks.ValidateTrailSubcategoryHandler())
+	app.OnRecordCreate("trails").BindFunc(hooks.SetTrailCompletedAtHandler())
+	app.OnRecordUpdate("trails").BindFunc(hooks.SetTrailCompletedAtHandler())
 	app.OnRecordAfterCreateSuccess("trails").BindFunc(hooks.CreateTrailHandler(client))
 	app.OnRecordAfterUpdateSuccess("trails").BindFunc(hooks.UpdateTrailHandler(client))
+	app.OnRecordDelete("trails").BindFunc(hooks.CollectTrailDeleteRecipientsHandler())
+	app.OnRecordDelete("trails").BindFunc(hooks.PreserveTrailImportExclusionsHandler())
 	app.OnRecordAfterDeleteSuccess("trails").BindFunc(hooks.DeleteTrailHandler(client))
 
 	app.OnRecordCreateRequest("summit_logs").BindFunc(hooks.CreateSummitLogHandler(client))
 	app.OnRecordUpdateRequest("summit_logs").BindFunc(hooks.UpdateSummitLogHandler(client))
-	app.OnRecordDeleteRequest("summit_logs").BindFunc(hooks.DeleteSummitLogHandler(client))
+	app.OnRecordAfterDeleteSuccess("summit_logs").BindFunc(hooks.DeleteSummitLogHandler(client))
 
 	app.OnRecordCreateRequest("waypoints").BindFunc(hooks.CreateWaypointHandler())
 	app.OnRecordEnrich("pois").BindFunc(hooks.EnrichPoiPrivateAttributes)
@@ -109,29 +183,38 @@ func setupEventHandlers(app *pocketbase.PocketBase, client meilisearch.ServiceMa
 
 	app.OnRecordCreateRequest("comments").BindFunc(hooks.CreateCommentHandler())
 	app.OnRecordUpdateRequest("comments").BindFunc(hooks.UpdateCommentHandler())
-	app.OnRecordDeleteRequest("comments").BindFunc(hooks.DeleteCommentHandler(client))
+	app.OnRecordAfterDeleteSuccess("comments").BindFunc(hooks.DeleteCommentHandler(client))
 
-	app.OnRecordCreateRequest("trail_share").BindFunc(hooks.CreateTrailShareHandler(client))
-	app.OnRecordDeleteRequest("trail_share").BindFunc(hooks.DeleteTrailShareHandler(client))
+	app.OnRecordCreateRequest("trail_share").BindFunc(hooks.CreateTrailShareHandler())
+	app.OnRecordUpdateRequest("trail_share").BindFunc(hooks.UpdateShareHandler("trails", "trail"))
+	app.OnRecordAfterCreateSuccess("trail_share").BindFunc(hooks.UpdateTrailShareIndexHandler(client))
+	app.OnRecordAfterUpdateSuccess("trail_share").BindFunc(hooks.UpdateTrailShareIndexHandler(client))
+	app.OnRecordAfterDeleteSuccess("trail_share").BindFunc(hooks.UpdateTrailShareIndexHandler(client))
+	app.OnRecordUpdateRequest("trail_link_share").BindFunc(hooks.UpdateShareHandler("trails", "trail"))
 
 	app.OnRecordAfterCreateSuccess("trail_like").BindFunc(hooks.CreateTrailLikeHandler(client))
 	app.OnRecordAfterDeleteSuccess("trail_like").BindFunc(hooks.DeleteTrailLikeHandler(client))
 
 	app.OnRecordAfterCreateSuccess("lists").BindFunc(hooks.CreateListHandler(client))
 	app.OnRecordAfterUpdateSuccess("lists").BindFunc(hooks.UpdateListHandler(client))
+	app.OnRecordDelete("lists").BindFunc(hooks.CollectListDeleteRecipientsHandler())
 	app.OnRecordAfterDeleteSuccess("lists").BindFunc(hooks.DeleteListHandler(client))
 
-	app.OnRecordCreateRequest("list_share").BindFunc(hooks.CreateListShareHandler(client))
-	app.OnRecordDeleteRequest("list_share").BindFunc(hooks.DeleteListShareHandler(client))
+	app.OnRecordCreateRequest("list_share").BindFunc(hooks.CreateListShareHandler())
+	app.OnRecordUpdateRequest("list_share").BindFunc(hooks.UpdateShareHandler("lists", "list"))
+	app.OnRecordAfterCreateSuccess("list_share").BindFunc(hooks.UpdateListShareIndexHandler(client))
+	app.OnRecordAfterUpdateSuccess("list_share").BindFunc(hooks.UpdateListShareIndexHandler(client))
+	app.OnRecordAfterDeleteSuccess("list_share").BindFunc(hooks.UpdateListShareIndexHandler(client))
 
 	app.OnRecordCreateRequest("follows").BindFunc(hooks.CreateFollowHandler())
 	app.OnRecordDeleteRequest("follows").BindFunc(hooks.DeleteFollowHandler())
 
-	app.OnRecordsListRequest("integrations").BindFunc(hooks.ListIntegrationHandler())
-	app.OnRecordCreate("integrations").BindFunc(hooks.CreateIntegrationHandler())
-	app.OnRecordAfterCreateSuccess("integrations").BindFunc(hooks.CreateUpdateIntegrationSuccessHandler())
-	app.OnRecordUpdate("integrations").BindFunc(hooks.UpdateIntegrationHandler())
-	app.OnRecordAfterUpdateSuccess("integrations").BindFunc(hooks.CreateUpdateIntegrationSuccessHandler())
+	app.OnRecordsListRequest("plugin_instances").BindFunc(hooks.ListPluginInstanceHandler())
+	app.OnRecordViewRequest("plugin_instances").BindFunc(hooks.ViewPluginInstanceHandler())
+	app.OnRecordCreate("plugin_instances").BindFunc(hooks.CreatePluginInstanceHandler())
+	app.OnRecordAfterCreateSuccess("plugin_instances").BindFunc(hooks.CreateUpdatePluginInstanceSuccessHandler())
+	app.OnRecordUpdate("plugin_instances").BindFunc(hooks.UpdatePluginInstanceHandler())
+	app.OnRecordAfterUpdateSuccess("plugin_instances").BindFunc(hooks.CreateUpdatePluginInstanceSuccessHandler())
 
 	app.OnRecordsListRequest("feed", "profile_feed").BindFunc(hooks.ListFeedHandler())
 
@@ -167,16 +250,23 @@ func registerRoutes(se *core.ServeEvent, client meilisearch.ServiceManager) {
 	se.Router.POST("/auth/token", routes.AuthToken)
 	se.Router.POST("/user/email", routes.UserEmailChange)
 	se.Router.POST("/waypoint/cluster", routes.WaypointCluster)
+	se.Router.POST("/category-preferences/reorder", routes.CategoryPreferencesReorder)
+	se.Router.POST("/subcategory-preferences/reorder", routes.SubcategoryPreferencesReorder)
 
 	se.Router.POST("/trail-merge/suggest", routes.TrailMergeSuggest)
 	se.Router.POST("/trail-merge", routes.TrailMerge(client))
+	se.Router.GET("/trail/{id}/external-references", routes.TrailExternalReferences)
 
 	se.Router.GET("/search/token", routes.SearchToken(client))
 
-	se.Router.POST("/integration/strava/token", routes.IntegrationStravaToken)
-	se.Router.POST("/integration/hammerhead/upload", routes.IntegrationHammerheadUpload)
-	se.Router.GET("/integration/hammerhead/login", routes.IntegrationHammerheadLogin)
-	se.Router.GET("/integration/komoot/login", routes.IntegrationKommotLogin)
+	se.Router.GET("/plugins", routes.PluginSystemPluginsList)
+	se.Router.POST("/plugins/trail-send", routes.PluginSystemTrailSend)
+	se.Router.POST("/plugins/auth/validate", routes.PluginSystemSessionAuthValidate)
+	se.Router.POST("/plugins/category-remap/preview", routes.PluginSystemCategoryRemapPreview)
+	se.Router.POST("/plugins/category-remap/apply", routes.PluginSystemCategoryRemapApply)
+	se.Router.POST("/plugins/oauth/start", routes.PluginSystemOAuthStart)
+	se.Router.POST("/plugins/oauth/callback", routes.PluginSystemOAuthCallback)
+	se.Router.POST("/plugins/oauth/revoke", routes.PluginSystemOAuthRevoke)
 
 	se.Router.POST("/activitypub/activity/process", routes.ActivitypubActivityProcess)
 	se.Router.GET("/activitypub/actor", routes.ActivitypubActor)
@@ -199,22 +289,9 @@ func registerCronJobs(app core.App, client meilisearch.ServiceManager) {
 		schedule = "0 2 * * *"
 	}
 
-	app.Cron().MustAdd("integrations", schedule, func() {
-		err := strava.SyncStrava(app, client)
-		if err != nil {
-			warning := fmt.Sprintf("Error syncing with strava: %v", err)
-			fmt.Println(warning)
-			app.Logger().Error(warning)
-		}
-		err = komoot.SyncKomoot(app, client)
-		if err != nil {
-			warning := fmt.Sprintf("Error syncing with komoot: %v", err)
-			fmt.Println(warning)
-			app.Logger().Error(warning)
-		}
-		err = hammerhead.SyncHammerhead(app, client)
-		if err != nil {
-			warning := fmt.Sprintf("Error syncing with hammerhead: %v", err)
+	app.Cron().MustAdd("plugin-sync", schedule, func() {
+		if err := routes.PluginSystemSyncConfigured(context.Background(), app, client); err != nil {
+			warning := fmt.Sprintf("Error syncing with WASM plugins: %v", err)
 			fmt.Println(warning)
 			app.Logger().Error(warning)
 		}
@@ -223,12 +300,25 @@ func registerCronJobs(app core.App, client meilisearch.ServiceManager) {
 
 func initData(app core.App, client meilisearch.ServiceManager) error {
 	initCategories(app)
+	if err := util.SeedDefaultSubcategories(app); err != nil {
+		return err
+	}
+	initPlugins(app)
 	initMeilisearchConfig(client)
 	go func() {
 		backfillPolylines(app)
 		initMeilisearchDocuments(app, client)
 	}()
 	return nil
+}
+
+func initPlugins(app core.App) {
+	manager := pluginsystem.NewManager(app, "")
+	if err := manager.SyncInstalledPlugins(context.Background()); err != nil {
+		warning := fmt.Sprintf("Error discovering WASM plugins: %v", err)
+		fmt.Println(warning)
+		app.Logger().Error(warning)
+	}
 }
 
 func backfillPolylines(app core.App) {
@@ -280,26 +370,29 @@ func initCategories(app core.App) error {
 	if err := query.All(&records); err != nil {
 		return err
 	}
-	if len(records) == 0 {
-		collection, _ := app.FindCollectionByNameOrId("categories")
+	collection, err := app.FindCollectionByNameOrId("categories")
+	if err != nil {
+		return err
+	}
 
-		categories := []string{"Hiking", "Walking", "Climbing", "Skiing", "Canoeing", "Biking"}
-		for _, element := range categories {
+	if len(records) == 0 {
+		for _, element := range util.DefaultCategoryNames() {
 			record := core.NewRecord(collection)
 			record.Set("name", element)
 			record.Set("settings", map[string]any{
 				"wp_merge_enabled": true,
 				"wp_merge_radius":  50,
 			})
-			f, _ := filesystem.NewFileFromPath("migrations/initial_data/" + strings.ToLower(element) + ".jpg")
-			record.Set("img", f)
 			err := app.Save(record)
 			if err != nil {
 				return err
 			}
 		}
 	}
-	return nil
+	if err := util.PrepopulateDefaultCategoryTranslations(app); err != nil {
+		return err
+	}
+	return util.PrepopulateDefaultCategoryIcons(app)
 }
 
 func initMeilisearchConfig(client meilisearch.ServiceManager) {
@@ -307,13 +400,15 @@ func initMeilisearchConfig(client meilisearch.ServiceManager) {
 		"trails": {
 			SearchableAttributes: []string{"author_name", "name", "description", "location", "tags"},
 			FilterableAttributes: []string{
-				"id", "_geo", "author", "category", "completed", "completed_by", "date", "difficulty",
-				"distance", "elevation_gain", "elevation_loss", "likes", "public",
-				"shares", "tags", "min_lat", "max_lat", "min_lon", "max_lon", "bounding_box_diagonal",
+				"id", "_geo", "author", "category_id", "subcategory_id",
+				"is_federated", "completed", "completed_by", "date", "difficulty", "distance",
+				"elevation_gain", "elevation_loss", "likes", "public", "shares",
+				"tags", "min_lat", "max_lat", "min_lon", "max_lon", "bounding_box_diagonal",
 			},
 			SortableAttributes: []string{
 				"author", "created", "date", "difficulty", "distance",
 				"duration", "elevation_gain", "elevation_loss", "like_count", "name",
+				"min_lat", "max_lat", "min_lon", "max_lon",
 			},
 			RankingRules: []string{"words", "typo", "proximity", "attribute", "sort", "exactness"},
 		},
@@ -384,8 +479,8 @@ func initMeilisearchDocuments(app core.App, client meilisearch.ServiceManager) e
 		}
 
 		if err := util.IndexTrails(app, trails, client); err != nil {
+			// Omit this page from the rebuild and advance to the next one.
 			app.Logger().Warn(fmt.Sprintf("Unable to index trails page %d: %v", page, err))
-			continue
 		}
 
 		page++
@@ -411,8 +506,8 @@ func initMeilisearchDocuments(app core.App, client meilisearch.ServiceManager) e
 		}
 
 		if err := util.IndexLists(app, lists, client); err != nil {
+			// Omit this page from the rebuild and advance to the next one.
 			app.Logger().Warn(fmt.Sprintf("Unable to index list page %d: %v", page, err))
-			continue
 		}
 
 		page++
@@ -438,8 +533,8 @@ func initMeilisearchDocuments(app core.App, client meilisearch.ServiceManager) e
 		}
 
 		if err := util.IndexActors(actors, client); err != nil {
+			// Omit this page from the rebuild and advance to the next one.
 			app.Logger().Warn(fmt.Sprintf("Unable to index actor page %d: %v", page, err))
-			continue
 		}
 
 		page++

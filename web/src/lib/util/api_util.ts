@@ -1,4 +1,4 @@
-import { error, json, type NumericRange, type RequestEvent } from "@sveltejs/kit";
+import { error, isHttpError, json, type NumericRange, type RequestEvent } from "@sveltejs/kit";
 import { ClientResponseError, type ListResult } from "pocketbase";
 import { ZodError, type ZodSchema } from "zod";
 import { RecordListOptionsSchema, RecordIdSchema, RecordOptionsSchema } from "$lib/models/api/base_schema";
@@ -62,12 +62,15 @@ export enum Collection {
     comments = "comments",
     feed = "feed",
     follows = "follows",
-    integrations = "integrations",
+    plugin_instances = "plugin_instances",
     list_share = "list_share",
     lists = "lists",
     notifications = "notifications",
     profile_feed = "profile_feed",
     settings = "settings",
+    subcategories = "subcategories",
+    user_category_preferences = "user_category_preferences",
+    user_subcategory_preferences = "user_subcategory_preferences",
     summit_logs = "summit_logs",
     trail_like = "trail_like",
     trail_share = "trail_share",
@@ -160,26 +163,56 @@ export async function uploadCreate<T>(event: RequestEvent, collection: Collectio
     return r
 }
 
-export async function uploadUpdate<T>(event: RequestEvent, collection: Collection) {
+export async function uploadUpdate<T>(event: RequestEvent, collection: Collection, data?: FormData) {
+    const params = event.params
+    const safeParams = RecordIdSchema.parse(params);
+
     const searchParams = Object.fromEntries(event.url.searchParams);
     const safeSearchParams = RecordOptionsSchema.parse(searchParams);
 
-    const data = await event.request.formData();
-    if (!data.has('id')) {
-        throw new Error("data has no id")
+    data ??= await event.request.formData();
+
+    // The path is authoritative. An id in the body is optional but must
+    // agree with it, so a client cannot address one record and update another.
+    const bodyId = data.get('id');
+    if (bodyId !== null && bodyId !== safeParams.id) {
+        throw new ClientResponseError({
+            status: 400,
+            response: { message: "id_mismatch", expected: safeParams.id },
+        });
     }
 
-
-    const r = await event.locals.pb.collection(Collection[collection]).update<T>(data.get('id')!.toString(), data, safeSearchParams)
+    const r = await event.locals.pb.collection(Collection[collection]).update<T>(safeParams.id, data, safeSearchParams)
 
     return r
 }
 
-export async function upload<T>(event: RequestEvent, collection: Collection) {
+/**
+ * Rejects a multipart body that carries none of the collection's file fields.
+ *
+ * PocketBase silently drops multipart parts whose name does not match a
+ * collection field, which would turn a misnamed part into a 200 no-op.
+ * Accepts the field itself as well as PocketBase's "+"/"-" modifiers.
+ */
+export function assertFileField(data: FormData, fileFields: readonly string[]) {
+    const hasFileField = [...data.keys()].some((key) =>
+        fileFields.some((field) => key === field || key === `${field}+` || key === `${field}-`)
+    );
+    if (!hasFileField) {
+        throw new ClientResponseError({
+            status: 400,
+            response: { message: "missing_file", expected: fileFields },
+        });
+    }
+}
+
+export async function upload<T>(event: RequestEvent, collection: Collection, fileFields: readonly string[]) {
     const params = event.params
     const safeParams = RecordIdSchema.parse(params);
 
     const data = await event.request.formData();
+
+    assertFileField(data, fileFields);
 
     const r = await event.locals.pb.collection(Collection[collection]).update<T>(safeParams.id, data)
 
@@ -196,14 +229,23 @@ export async function remove(event: RequestEvent, collection: Collection) {
 }
 
 export function handleError(e: any) {
-    if (e instanceof ZodError) {
+    if (isHttpError(e)) {
+        throw e;
+    } else if (e instanceof ZodError) {
         return json({ message: "invalid_params", detail: e.issues }, { status: 400 })
     } else if (e instanceof ClientResponseError && e.status > 0) {
         const detail = e.response?.data ?? e.originalError?.data ?? null;
         return json({ ...e.response, message: e.message, detail }, { status: e.status })
     } else if (e instanceof SyntaxError) {
         return json({ message: "invalid_json" }, { status: 400 })
+    } else if (e instanceof Error) {
+        return json({ message: e.message }, { status: 500 })
     } else {
-        return json({ message: e instanceof Error ? e.message : String(e) }, { status: 500 })
+        const message = typeof e?.message === "string"
+            ? e.message
+            : typeof e === "string"
+                ? e
+                : "internal_server_error";
+        return json({ message, detail: e }, { status: 500 })
     }
 }

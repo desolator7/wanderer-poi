@@ -19,7 +19,7 @@ const WaypointCreateSchema = z.object({
     author: z.string().length(15),
     photos: z.array(z.string()).default([]),
     trail: z.string().length(15).optional()
-}) satisfies ZodType<Partial<Waypoint>>
+}) satisfies ZodType<Partial<Waypoint>, z.ZodTypeDef, unknown>
 
 const WaypointUpdateSchema = z.object({
     name: z.string().optional(),
@@ -32,6 +32,6 @@ const WaypointUpdateSchema = z.object({
     photos: z.array(z.string()).optional(),
     "photos-": z.string().optional(),
     "photos+": z.string().optional(),
-}) satisfies ZodType<Partial<Waypoint>>
+}) satisfies ZodType<Partial<Waypoint>, z.ZodTypeDef, unknown>
 
 export { WaypointCreateSchema, WaypointUpdateSchema };

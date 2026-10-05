@@ -51,8 +51,8 @@
 
     async function deleteAccount() {
         await users_delete($currentUser!);
-        logout();
-        goto("/");
+        void logout();
+        window.location.assign("/");
     }
 
     async function updateEmail(email: string, currentPassword: string) {

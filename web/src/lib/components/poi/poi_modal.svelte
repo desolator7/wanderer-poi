@@ -215,7 +215,7 @@
                         {:else if definition.type === "date"}
                             <Datepicker
                                 value={typeof draft.attributes?.[definition.key] === "string"
-                                    ? draft.attributes?.[definition.key]
+                                    ? String(draft.attributes?.[definition.key])
                                     : ""}
                                 disabled={!isAttributeEditable(definition)}
                                 label={definition.value_storage === "private"
@@ -231,7 +231,7 @@
                         {:else}
                             <TextField
                                 value={typeof draft.attributes?.[definition.key] === "string"
-                                    ? draft.attributes?.[definition.key]
+                                    ? String(draft.attributes?.[definition.key])
                                     : ""}
                                 disabled={!isAttributeEditable(definition)}
                                 label={definition.value_storage === "private"

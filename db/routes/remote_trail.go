@@ -12,7 +12,6 @@ import (
 	"pocketbase/federation"
 	"pocketbase/util"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -36,12 +35,39 @@ var remoteSyncThreshold = func() time.Duration {
 var trailSyncing sync.Map
 var listSyncing sync.Map
 
-// --- Main Handler ---
+var errRemoteUnavailable = errors.New("remote instance unavailable")
+
+// cachedRecordFallback returns the locally cached record to serve when a
+// blocking sync failed for a reason that says nothing about the content
+// itself. Only a copy that completed a full sync at least once qualifies: a
+// placeholder created from an inbound Create/Announce has a stored id but no
+// content, and serving it would present an empty trail/list as real.
+func cachedRecordFallback(app core.App, collection, id string, err error) *core.Record {
+	if id == "" || !isDegradableSyncError(err) {
+		return nil
+	}
+
+	cached, findErr := app.FindRecordById(collection, id)
+	if findErr != nil || !hasCompletedFullSync(cached) {
+		return nil
+	}
+
+	return cached
+}
+
+func hasCompletedFullSync(record *core.Record) bool {
+	return record.GetBool("full_sync_completed")
+}
+
+// isDegradableSyncError reports whether a failed sync may be answered from the
+// local cache
+func isDegradableSyncError(err error) bool {
+	return errors.Is(err, errRemoteUnavailable) || errors.Is(err, util.ErrRateLimited)
+}
 
 func RemoteTrailGet(e *core.RequestEvent) error {
 	handle := e.Request.URL.Query().Get("handle")
 	trailID := e.Request.PathValue("id")
-	expandQuery := e.Request.URL.Query().Get("expand")
 
 	var record *core.Record
 	var err error
@@ -71,12 +97,27 @@ func RemoteTrailGet(e *core.RequestEvent) error {
 		// If the record has no ID, it's a new Shell
 		if record.Id == "" || record.GetBool("needs_full_sync") {
 			// Blocking sync for new records
+			cachedID := record.Id
 			record, err = performFullSync(e.App, ctx, e.Request.URL, record)
 			if err != nil {
-				if errors.Is(err, util.ErrRateLimited) {
-					return e.TooManyRequestsError("Too many requests", err)
+				if errors.Is(err, errRemoteGone) {
+					dropGoneRemoteRecord(e.App, "trails", cachedID)
+					return e.NotFoundError("Trail not found", err)
 				}
-				return e.InternalServerError("Sync failed", err)
+				cached := cachedRecordFallback(e.App, "trails", cachedID, err)
+				if cached == nil {
+					if errors.Is(err, util.ErrRateLimited) {
+						return e.TooManyRequestsError("Too many requests", err)
+					}
+					return e.InternalServerError("Sync failed", err)
+				}
+
+				e.App.Logger().Warn(
+					"serving cached trail after failed remote sync",
+					"iri", cached.GetString("iri"),
+					"error", err,
+				)
+				record = cached
 			}
 			if record.Id == "" {
 				// Local content that does not exist (e.g. a stale URL to a
@@ -94,9 +135,17 @@ func RemoteTrailGet(e *core.RequestEvent) error {
 				if _, alreadySyncing := trailSyncing.LoadOrStore(iri, struct{}{}); !alreadySyncing {
 					urlCopy := *e.Request.URL
 					bgCtx := context.WithValue(context.Background(), "actor", ctx.Value("actor"))
+					// Sync hooks and remote data must not mutate the response record.
+					syncRecord := record.Fresh()
 					go func() {
 						defer trailSyncing.Delete(iri)
-						performFullSync(e.App, bgCtx, &urlCopy, record)
+						_, err := performFullSync(e.App, bgCtx, &urlCopy, syncRecord)
+						switch {
+						case errors.Is(err, errRemoteGone):
+							dropGoneRemoteRecord(e.App, "trails", syncRecord.Id)
+						case err != nil:
+							backgroundSyncFailed(e.App, "trails", iri, err)
+						}
 					}()
 				}
 			}
@@ -120,7 +169,7 @@ func RemoteTrailGet(e *core.RequestEvent) error {
 		return e.ForbiddenError("forbidden", err)
 	}
 
-	return expandAndReturn(e, record, expandQuery)
+	return expandAndReturn(e, record)
 }
 
 func findLocalTrailByRemoteInfo(e *core.RequestEvent, ctx context.Context, handle, trailID string) (*core.Record, error) {
@@ -136,13 +185,26 @@ func findLocalTrailByRemoteInfo(e *core.RequestEvent, ctx context.Context, handl
 
 	// 1. Get Actor to build the IRI
 	actor, err := federation.GetActorByHandle(e.App, ctx, handle, false)
-	if err != nil && !errors.Is(err, federation.ErrProfilePrivate) {
-		return nil, err
-	}
 	if actor == nil {
+		// No actor available at all — no cache, and the live lookup itself
+		// failed (e.g. remote instance unreachable, unknown handle). We can't
+		// construct the IRI, but a previously-synced trail may still exist
+		// locally under this exact ID, so fall back to a plain local lookup
+		// instead of failing the whole request. Skip this fallback for a
+		// private-profile error so the caller's 404 handling still applies.
+		if err != nil && !errors.Is(err, federation.ErrProfilePrivate) {
+			if local, localErr := e.App.FindRecordById("trails", trailID); localErr == nil {
+				return local, nil
+			}
+		}
 		return nil, err
 	}
 
+	// Actor is non-nil even though err may be set: federation.GetActorByHandle
+	// (via assembleActor) returns a previously-cached actor record alongside a
+	// transport error when a background refresh of stale actor data fails.
+	// That cached actor's IRI is still usable to look up the local trail, so
+	// use it instead of discarding it and 500ing the whole request.
 	actorURL, _ := url.Parse(actor.GetString("iri"))
 	iri := fmt.Sprintf("%s://%s/api/v1/trail/%s", actorURL.Scheme, actorURL.Host, trailID)
 
@@ -150,6 +212,14 @@ func findLocalTrailByRemoteInfo(e *core.RequestEvent, ctx context.Context, handl
 	existing, _ := e.App.FindFirstRecordByFilter("trails", "iri={:iri}||id={:id}", dbx.Params{"id": trailID, "iri": iri})
 	if existing != nil {
 		return existing, nil
+	}
+
+	// No cached copy of this trail exists locally. If the actor fetch failed
+	// for a real (non-private) reason, there's nothing usable to fall back to
+	// — surface the original error rather than fabricating a shell that a
+	// subsequent sync attempt would just fail on again.
+	if err != nil && !errors.Is(err, federation.ErrProfilePrivate) {
+		return nil, err
 	}
 
 	// 3. Not found? Return a new Shell
@@ -181,7 +251,7 @@ func performFullSync(app core.App, ctx context.Context, reqURL *url.URL, localTr
 		return localTrail, nil
 	}
 
-	client := util.SafeHTTPClient()
+	client := newRemoteSyncHTTPClient()
 	remoteUrl, _ := url.Parse(iri)
 	query := reqURL.Query()
 	query.Del("handle")
@@ -191,11 +261,18 @@ func performFullSync(app core.App, ctx context.Context, reqURL *url.URL, localTr
 	req, _ := http.NewRequestWithContext(ctx, "GET", remoteUrl.String(), nil)
 	res, err := client.Do(req)
 	if err != nil {
-		return localTrail, err
+		return localTrail, fmt.Errorf("%w: %w", errRemoteUnavailable, err)
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
-		return localTrail, fmt.Errorf("remote trail fetch %s returned: %d", remoteUrl.String(), res.StatusCode)
+		statusErr := fmt.Errorf("remote trail fetch %s returned: %d", remoteUrl.String(), res.StatusCode)
+		if res.StatusCode >= http.StatusInternalServerError {
+			return localTrail, fmt.Errorf("%w: %w", errRemoteUnavailable, statusErr)
+		}
+		if isGoneStatus(res.StatusCode) {
+			return localTrail, fmt.Errorf("%w: %w", errRemoteGone, statusErr)
+		}
+		return localTrail, statusErr
 	}
 
 	var remoteMap map[string]any
@@ -213,6 +290,7 @@ func performFullSync(app core.App, ctx context.Context, reqURL *url.URL, localTr
 		syncTrailMetadata(txApp, localTrail, remoteMap)
 
 		localTrail.Set("needs_full_sync", false)
+		localTrail.Set("full_sync_completed", true)
 
 		if err := txApp.Save(localTrail); err != nil {
 			return err
@@ -247,15 +325,39 @@ func performFullSync(app core.App, ctx context.Context, reqURL *url.URL, localTr
 // --- Sub-Sync Helpers ---
 
 func syncTrailMetadata(app core.App, record *core.Record, data map[string]any) {
-	// Resolve Category if present in expand
+	var federatedCategoryName, federatedSubcategoryName string
+
 	if expand, ok := data["expand"].(map[string]any); ok {
 		if cat, ok := expand["category"].(map[string]any); ok {
 			if name, ok := cat["name"].(string); ok {
-				if c, _ := app.FindFirstRecordByData("categories", "name", name); c != nil {
-					record.Set("category", c.Id)
-				}
+				federatedCategoryName = name
 			}
 		}
+		if subcat, ok := expand["subcategory"].(map[string]any); ok {
+			if name, ok := subcat["name"].(string); ok {
+				federatedSubcategoryName = name
+			}
+		}
+	}
+
+	if federatedCategoryName != "" {
+		record.Set("federated_category_name", federatedCategoryName)
+	}
+	if federatedSubcategoryName != "" {
+		record.Set("federated_subcategory_name", federatedSubcategoryName)
+	}
+
+	category, subcategory, err := util.ResolveCategoryAndSubcategoryByNormalizedNames(app, federatedCategoryName, federatedSubcategoryName)
+	if err == nil && category != nil {
+		record.Set("category", category.Id)
+		if subcategory != nil {
+			record.Set("subcategory", subcategory.Id)
+		} else {
+			record.Set("subcategory", "")
+		}
+	} else if err == nil && federatedCategoryName != "" {
+		record.Set("category", "")
+		record.Set("subcategory", "")
 	}
 
 	// Resolve Tags
@@ -270,9 +372,13 @@ func syncTrailMetadata(app core.App, record *core.Record, data map[string]any) {
 	delete(data, "gpx")
 	delete(data, "author")
 	delete(data, "category")
+	delete(data, "subcategory")
 	delete(data, "tags")
 	delete(data, "iri")
+	delete(data, "federated_category_name")
+	delete(data, "federated_subcategory_name")
 
+	stripLocalSyncFields(data)
 	record.Load(data)
 }
 
@@ -433,11 +539,4 @@ func downloadFile(ctx context.Context, origin, col, id, name string) (*filesyste
 
 	data, _ := io.ReadAll(res.Body)
 	return filesystem.NewFileFromBytes(data, name)
-}
-
-func expandAndReturn(e *core.RequestEvent, record *core.Record, query string) error {
-	if query != "" {
-		e.App.ExpandRecord(record, strings.Split(query, ","), nil)
-	}
-	return e.JSON(http.StatusOK, record)
 }

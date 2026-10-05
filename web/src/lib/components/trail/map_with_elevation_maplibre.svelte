@@ -40,6 +40,7 @@
     import type { Feature, FeatureCollection, GeoJSON } from "geojson";
     import * as M from "maplibre-gl";
     import "maplibre-gl/dist/maplibre-gl.css";
+    import "$lib/util/maplibre_worker";
     import { onDestroy, onMount, untrack } from "svelte";
 
     interface Props {
@@ -175,6 +176,7 @@
     let mapLoaded: boolean = false;
     let terrainEnabled: boolean | null = null;
     let suppressClickUntil = 0;
+    let elevationProfileVisibilityPreference: boolean | null = null;
 
     const trailColors = [
         "#3549bb", // blue
@@ -350,12 +352,8 @@
             return;
         }
 
-        if (showElevation && getActiveTrailDataIndex() !== null) {
-            epc?.showProfile();
-            void refreshElevationProfile();
-        } else {
-            epc?.hideProfile();
-        }
+        refreshElevationProfile();
+        syncElevationProfileVisibility();
 
         trails.forEach((t, i) => {
             const layerId = t.id!;
@@ -439,6 +437,19 @@
         await epc.setData(data[dataIndex]!, waypoints);
     }
 
+    function syncElevationProfileVisibility() {
+        if (
+            showElevation &&
+            data.length &&
+            activeTrail !== null &&
+            elevationProfileVisibilityPreference !== false
+        ) {
+            epc?.showProfile();
+        } else {
+            epc?.hideProfile();
+        }
+    }
+
     function getBounds() {
         let minX = Infinity,
             minY = Infinity,
@@ -473,17 +484,19 @@
         }
     }
 
-    function flyToBounds() {
-        const bounds =
-            activeTrail !== null && data[activeTrail]
-                ? (data[activeTrail].bbox as M.LngLatBoundsLike)
-                : getBounds();
+    export function fitToBounds(bounds?: M.LngLatBoundsLike) {
+        const activeData = activeTrail !== null ? data[activeTrail] : null;
+        const boundsToFit =
+            bounds ??
+            (activeData
+                ? (activeData.bbox as M.LngLatBoundsLike)
+                : getBounds());
 
-        if (!bounds || !map) {
+        if (!boundsToFit || !map) {
             return;
         }
 
-        map!.fitBounds(bounds, {
+        map!.fitBounds(boundsToFit, {
             animate: fitBounds == "animate",
             padding: {
                 top: 16,
@@ -496,6 +509,10 @@
                         : 0),
             },
         });
+    }
+
+    function flyToBounds() {
+        fitToBounds();
     }
 
     function removeTrailLayer(id: string) {
@@ -523,6 +540,7 @@
                     : 0
             ],
             {
+                listeners: {
                 onEnter: (e) =>
                     highlightTrail(id, trails[activeTrail ?? -1]?.id == id),
 
@@ -532,6 +550,7 @@
                 },
                 onMouseMove: moveCrosshairToCursorPosition,
                 onMouseDown: (e) => handleDragStart(e, id),
+                },
             },
         );
 
@@ -556,6 +575,7 @@
         layerManager.addLayer(
             "preview",
             new PreviewLayer(map, geojson, {
+                listeners: {
                 preview: {
                     onEnter: (e) => {
                         const trail = trails.find(
@@ -569,6 +589,7 @@
                     onLeave: (e) => {
                         // unHighlightCluster();
                     },
+                },
                 },
             }),
         );
@@ -738,12 +759,12 @@
         onselect?.(trail);
 
         try {
-            if (showElevation) {
-                epc?.showProfile();
+            refreshElevationProfile();
+            syncElevationProfileVisibility();
+            syncWaypointMarkers();
+            if (data[activeTrail]) {
+                addCaretLayer(data[activeTrail]);
             }
-            void refreshElevationProfile();
-            showWaypoints();
-            addCaretLayer(data[activeTrail]);
             flyToBounds();
         } catch (e) {
             console.warn(e);
@@ -1284,7 +1305,7 @@
             trackUserLocation: true,
         });
         geolocateControl.on("geolocate", (event) => {
-            const position = event as GeolocationPosition;
+            const position = event as unknown as GeolocationPosition;
             lastLivePosition = position;
             applyLiveTrackingCamera(position);
             syncUserHeadingMarker();
@@ -1302,7 +1323,7 @@
         });
         geolocateControl.on("error", (error) => {
             hideUserHeadingMarker();
-            onlocationerror?.(error as GeolocationPositionError);
+            onlocationerror?.(error as unknown as GeolocationPositionError);
         });
         map.addControl(geolocateControl);
         startDeviceCompass();
@@ -1331,6 +1352,9 @@
                 },
                 onLeave: () => {
                     elevationMarker.setOpacity("0");
+                },
+                onToggle: (visible) => {
+                    elevationProfileVisibilityPreference = visible;
                 },
                 onMove: (data) => {
                     if (!hoveringTrail) {

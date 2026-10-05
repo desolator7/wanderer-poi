@@ -156,7 +156,8 @@ export async function calculateRouteBetween(startLat: number, startLon: number, 
     const points = decodePolyline(shape);
     const startTime = new Date().getTime();
 
-    const waypoints = points.map((p, i) => new Waypoint({ $: { lat: p[1], lon: p[0] }, ele: heightResponse.height[i], time: new Date(startTime + (((duration * 1000) / points.length) * i)) }))
+    const intervals = Math.max(1, points.length - 1);
+    const waypoints = points.map((p, i) => new Waypoint({ $: { lat: p[1], lon: p[0] }, ele: heightResponse.height[i], time: new Date(startTime + (((duration * 1000) / intervals) * i)) }))
 
     return { waypoints, sacScaleSegments }
 }

@@ -87,22 +87,18 @@ func UpdateSummitLogHandler(client meilisearch.ServiceManager) func(e *core.Reco
 	}
 }
 
-func DeleteSummitLogHandler(client meilisearch.ServiceManager) func(e *core.RecordRequestEvent) error {
-	return func(e *core.RecordRequestEvent) error {
-		err := e.Next()
-		if err != nil {
-			return err
-		}
-
+// Run after deletion so cascades also update search and retract federation copies.
+func DeleteSummitLogHandler(client meilisearch.ServiceManager) func(e *core.RecordEvent) error {
+	return func(e *core.RecordEvent) error {
 		if err := reindexSummitLogTrails(e.App, e.Record, client); err != nil {
 			return err
 		}
 
-		err = federation.CreateSummitLogDeleteActivity(e.App, e.Record)
+		err := federation.CreateSummitLogDeleteActivity(e.App, e.Record)
 		if err != nil {
 			return err
 		}
-		return nil
+		return e.Next()
 	}
 }
 

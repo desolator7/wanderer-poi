@@ -39,6 +39,7 @@ services:
         condition: service_healthy
     environment:
       <<: *cenv
+      POCKETBASE_PROXY_SECRET: ${POCKETBASE_PROXY_SECRET:?Set POCKETBASE_PROXY_SECRET in .env}
       POCKETBASE_ENCRYPTION_KEY: ${POCKETBASE_ENCRYPTION_KEY:?Set POCKETBASE_ENCRYPTION_KEY in .env}
       POCKETBASE_CRON_SYNC_SCHEDULE: ${POCKETBASE_CRON_SYNC_SCHEDULE:-0 0 29 2 *}
       ORIGIN: ${ORIGIN:?Set ORIGIN in .env}
@@ -47,6 +48,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./data/pb_data:/pb_data
+      - ./data/plugins:/data/plugins
     healthcheck:
       test: ["CMD", "/curl", "--fail", "http://localhost:8090/health"]
       interval: 120s
@@ -74,6 +76,7 @@ services:
       <<: *cenv
       ORIGIN: ${ORIGIN:?Set ORIGIN in .env}
       BODY_SIZE_LIMIT: Infinity
+      POCKETBASE_PROXY_SECRET: ${POCKETBASE_PROXY_SECRET:?Set POCKETBASE_PROXY_SECRET in .env}
       PUBLIC_POCKETBASE_URL: http://db:8090
       PUBLIC_DISABLE_SIGNUP: "true"
       UPLOAD_FOLDER: /app/uploads

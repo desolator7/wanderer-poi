@@ -110,6 +110,97 @@ func generateKeyPair() (*rsa.PrivateKey, *rsa.PublicKey, error) {
 	return priv, pub, nil
 }
 
+// ObjectKind names the sort of thing an ActivityPub object IRI points at.
+type ObjectKind string
+
+const (
+	ObjectKindUnknown   ObjectKind = ""
+	ObjectKindTrail     ObjectKind = "trail"
+	ObjectKindComment   ObjectKind = "comment"
+	ObjectKindSummitLog ObjectKind = "summit-log"
+	ObjectKindList      ObjectKind = "list"
+	ObjectKindWaypoint  ObjectKind = "waypoint"
+	ObjectKindActor     ObjectKind = "actor"
+	ObjectKindActivity  ObjectKind = "activity"
+)
+
+// ObjectKindFromIRI classifies an object IRI by the path segment that names its
+// type.
+//
+// It exists because searching the whole IRI for a keyword is not safe: the host
+// is part of that string, so an instance at https://mylist.social matches "list"
+// for every object it ever sends, and a user called "trailrunner" matches
+// "trail" in their own actor IRI. Routing an activity on that basis hands it to
+// the wrong handler.
+//
+// Wanderer object IRIs are <origin>/api/v1/<kind>/<id>, with actors and
+// activities a level deeper under <origin>/api/v1/activitypub/<kind>/<id>. The
+// origin may carry a path prefix of its own, so the version segment is located
+// rather than assumed to sit at a fixed offset. Anything unrecognised — content
+// from other ActivityPub software, say — is reported as unknown for the caller
+// to decide about.
+func ObjectKindFromIRI(iri string) ObjectKind {
+	u, err := url.Parse(iri)
+	if err != nil {
+		return ObjectKindUnknown
+	}
+
+	segments := make([]string, 0, 6)
+	for _, s := range strings.Split(u.Path, "/") {
+		if s != "" {
+			segments = append(segments, s)
+		}
+	}
+
+	for i, s := range segments {
+		if s != "v1" || i == 0 || segments[i-1] != "api" {
+			continue
+		}
+
+		rest := segments[i+1:]
+		if len(rest) == 0 {
+			return ObjectKindUnknown
+		}
+
+		if rest[0] == "activitypub" {
+			// .../activitypub/<kind>/<id>; without an id this names a
+			// collection endpoint rather than an object.
+			if len(rest) < 3 {
+				return ObjectKindUnknown
+			}
+			switch rest[1] {
+			case "user":
+				return ObjectKindActor
+			case "activity":
+				return ObjectKindActivity
+			}
+			return ObjectKindUnknown
+		}
+
+		// Likewise: <kind> alone is the collection, <kind>/<id> is an object.
+		if len(rest) < 2 {
+			return ObjectKindUnknown
+		}
+
+		switch rest[0] {
+		case "trail":
+			return ObjectKindTrail
+		case "comment":
+			return ObjectKindComment
+		case "summit-log":
+			return ObjectKindSummitLog
+		case "list":
+			return ObjectKindList
+		case "waypoint":
+			return ObjectKindWaypoint
+		}
+
+		return ObjectKindUnknown
+	}
+
+	return ObjectKindUnknown
+}
+
 // IsLocalIRI reports whether iri belongs to this instance's own ORIGIN.
 // It is used to prevent the instance from federating with itself, i.e. treating
 // its own content as if it were remote.
@@ -173,7 +264,15 @@ func TrailFromActivity(activity pub.Activity, app core.App, actor *core.Record) 
 		}
 	} else {
 		// this trail exists already
-		// ensure that it is fully synced to catch waypoint/summit log updates
+		// keep searchable category metadata fresh from the update activity while
+		// still requiring a full sync to catch waypoint/summit log updates.
+		categoryMetadata, err := trailCategoryMetadataFromActivityObject(t)
+		if err != nil {
+			return nil, err
+		}
+		if err := applyTrailActivityCategoryMetadata(app, record, categoryMetadata); err != nil {
+			return nil, err
+		}
 
 		record.Set("needs_full_sync", true)
 		err = app.Save(record)
@@ -185,22 +284,22 @@ func TrailFromActivity(activity pub.Activity, app core.App, actor *core.Record) 
 	}
 
 	var distance, duration, elevation_gain, elevation_loss float64
-	var diffculty, category string
+	var diffculty string
 	trailTags := []string{}
 	tags, err := pub.ToItemCollection(t.Tag)
 	if err != nil {
 		return nil, err
 	}
+	categoryMetadata := trailCategoryMetadataFromTags(tags)
 
 	for _, tag := range tags.Collection() {
 		tagObj, err := pub.ToObject(tag)
 		if err != nil {
 			continue
 		}
+
 		content := tagObj.Content.First().Value.String()
 		switch tagObj.Name.First().Value.String() {
-		case "category":
-			category = content
 		case "difficulty":
 			diffculty = content
 		case "elevation_gain":
@@ -254,9 +353,8 @@ func TrailFromActivity(activity pub.Activity, app core.App, actor *core.Record) 
 	record.Set("author", actor.Id)
 	record.Set("needs_full_sync", true)
 
-	categoryRecord, err := app.FindFirstRecordByData("categories", "name", category)
-	if err == nil {
-		record.Set("category", categoryRecord.Id)
+	if err := applyTrailActivityCategoryMetadata(app, record, categoryMetadata); err != nil {
+		return nil, err
 	}
 
 	if t.Attachment != nil {
@@ -282,12 +380,12 @@ func TrailFromActivity(activity pub.Activity, app core.App, actor *core.Record) 
 
 		if len(photoURLs) > 0 {
 			photos := []*filesystem.File{}
-			for i, purl := range photoURLs {
+			for _, purl := range photoURLs {
 				photo, err := filesystem.NewFileFromURL(context.Background(), purl)
 				if err != nil {
 					continue
 				}
-				photos[i] = photo
+				photos = append(photos, photo)
 			}
 
 			record.Set("photos", photos)
@@ -306,6 +404,80 @@ func TrailFromActivity(activity pub.Activity, app core.App, actor *core.Record) 
 	return record, app.Save(record)
 }
 
+type trailActivityCategoryMetadata struct {
+	category       string
+	subcategory    string
+	categorySet    bool
+	subcategorySet bool
+}
+
+func trailCategoryMetadataFromActivityObject(object *pub.Object) (trailActivityCategoryMetadata, error) {
+	if len(object.Tag) == 0 {
+		return trailActivityCategoryMetadata{}, nil
+	}
+
+	tags, err := pub.ToItemCollection(object.Tag)
+	if err != nil {
+		return trailActivityCategoryMetadata{}, err
+	}
+
+	return trailCategoryMetadataFromTags(tags), nil
+}
+
+func trailCategoryMetadataFromTags(tags *pub.ItemCollection) trailActivityCategoryMetadata {
+	metadata := trailActivityCategoryMetadata{}
+	for _, tag := range tags.Collection() {
+		tagObj, err := pub.ToObject(tag)
+		if err != nil {
+			continue
+		}
+
+		switch tagObj.Name.First().Value.String() {
+		case "category":
+			metadata.category = tagObj.Content.First().Value.String()
+			metadata.categorySet = true
+		case "subcategory":
+			metadata.subcategory = tagObj.Content.First().Value.String()
+			metadata.subcategorySet = true
+		}
+	}
+
+	return metadata
+}
+
+func applyTrailActivityCategoryMetadata(app core.App, record *core.Record, metadata trailActivityCategoryMetadata) error {
+	if metadata.categorySet {
+		record.Set("federated_category_name", metadata.category)
+	}
+	if metadata.subcategorySet {
+		record.Set("federated_subcategory_name", metadata.subcategory)
+	} else if metadata.categorySet {
+		record.Set("federated_subcategory_name", "")
+	}
+
+	if !metadata.categorySet {
+		return nil
+	}
+
+	categoryRecord, subcategoryRecord, err := ResolveCategoryAndSubcategoryByNormalizedNames(app, metadata.category, metadata.subcategory)
+	if err != nil {
+		return err
+	}
+	if categoryRecord != nil {
+		record.Set("category", categoryRecord.Id)
+		if subcategoryRecord != nil {
+			record.Set("subcategory", subcategoryRecord.Id)
+		} else {
+			record.Set("subcategory", "")
+		}
+	} else {
+		record.Set("category", "")
+		record.Set("subcategory", "")
+	}
+
+	return nil
+}
+
 func ObjectFromTrail(app core.App, trail *core.Record, mentions *pub.ItemCollection) (*pub.Object, error) {
 	origin := os.Getenv("ORIGIN")
 	if origin == "" {
@@ -320,15 +492,20 @@ func ObjectFromTrail(app core.App, trail *core.Record, mentions *pub.ItemCollect
 	if len(errs) > 0 {
 		return nil, fmt.Errorf("failed to expand tags: %v", errs)
 	}
-	errs = app.ExpandRecord(trail, []string{"category"}, nil)
+	errs = app.ExpandRecord(trail, []string{"category", "subcategory"}, nil)
 	if len(errs) > 0 {
-		return nil, fmt.Errorf("failed to expand category: %v", errs)
+		return nil, fmt.Errorf("failed to expand category/subcategory: %v", errs)
 	}
 
 	category := ""
 	categoryRecord := trail.ExpandedOne("category")
 	if categoryRecord != nil {
 		category = categoryRecord.GetString("name")
+	}
+	subcategory := ""
+	subcategoryRecord := trail.ExpandedOne("subcategory")
+	if subcategoryRecord != nil {
+		subcategory = subcategoryRecord.GetString("name")
 	}
 
 	tagRecords := trail.ExpandedAll("tags")
@@ -370,6 +547,14 @@ func ObjectFromTrail(app core.App, trail *core.Record, mentions *pub.ItemCollect
 		for _, m := range *mentions {
 			tags.Append(m)
 		}
+	}
+
+	if subcategory != "" {
+		tags.Append(pub.Object{
+			Type:    pub.NoteType,
+			Name:    pub.NaturalLanguageValuesNew(pub.LangRefValueNew(pub.NilLangRef, "subcategory")),
+			Content: pub.NaturalLanguageValuesNew(pub.LangRefValueNew(pub.NilLangRef, subcategory)),
+		})
 	}
 
 	for _, v := range tagRecords {
@@ -598,6 +783,12 @@ func TrailObjectFromIRI(iri string) (*pub.Object, error) {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		// An error body decodes to an empty object, which would be stored as
+		// a trail without an id.
+		return nil, fmt.Errorf("fetching trail %s returned: %d", fetchURL, resp.StatusCode)
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
@@ -607,6 +798,9 @@ func TrailObjectFromIRI(iri string) (*pub.Object, error) {
 	err = json.Unmarshal(body, &object)
 	if err != nil {
 		return nil, err
+	}
+	if object.ID == "" {
+		return nil, fmt.Errorf("fetching trail %s returned an object without an id", fetchURL)
 	}
 
 	return &object, nil
@@ -633,8 +827,6 @@ func VerifySignature(app core.App, req *http.Request, publicKeyPem string) (bool
 
 	req.Header.Set("Host", url.Host)
 	req.Host = url.Host
-
-	app.Logger().Info(req.Header.Get("signature"))
 
 	publicKey, err := x509.ParsePKIXPublicKey(block.Bytes)
 	if err != nil {

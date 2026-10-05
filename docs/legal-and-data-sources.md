@@ -116,4 +116,4 @@ dürfen nicht als Kartenquelle konfiguriert werden.
 Der globale Footer enthält einen dezenten Link zu `/legal` und einen separaten
 Link zum [Quellcode dieses Forks](https://github.com/organization/repository).
 Die bestehenden Links zum Upstream-Projekt und dessen About-Seite bleiben davon
-unberührt. Die Rechtseite trägt die Kennzeichnung `0.19.2 · Ver. 161.26.018`.
+unberührt. Die Rechtseite trägt die Kennzeichnung `0.21.0 Ver. 161.26.023`.
