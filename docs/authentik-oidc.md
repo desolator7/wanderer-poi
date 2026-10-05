@@ -1,59 +1,48 @@
-# Authentik-OIDC-Anmeldung
+# OIDC authentication with Authentik
 
-## Aktiver Anmeldeweg
+## Configure an instance
 
-Die produktive Instanz unter `https://wanderer.example.org` verwendet
-Authentik unter `https://auth.example.org` als einzigen interaktiven
-Anmeldeweg. Die lokale Passwortanmeldung und die lokale Registrierung sind
-deaktiviert.
+An instance can use Authentik as an OpenID Connect (OIDC) identity provider.
+Configure the callback URL in the Authentik application as:
 
-Der Klick auf „Mit Authentik anmelden“ öffnet den eigenen Wanderer-Anmeldeflow.
-Dort sind „Noch kein Konto? Registrieren.“ und „Benutzername oder Passwort
-vergessen?“ verfügbar. Die Registrierung legt zunächst ein inaktives
-Authentik-Konto an. Der Bestätigungslink per E-Mail ist 30 Minuten gültig und
-aktiviert das Konto. Anschließend kann der Benutzer unter
-`https://auth.example.org/zugang/` Zugriff auf Wanderer beantragen. Nach
-Genehmigung erhält er die Gruppe `Wanderer App` und kann sich anmelden.
+~~~text
+https://your-domain.example/login/redirect
+~~~
 
-Wanderer verwendet den generischen OIDC-Anbieter von PocketBase. Der
-konfigurierte Rücksprung ist:
+Replace the example host with the public host name configured for your
+Wanderer instance. The application requests the `openid`, `profile`, and
+`email` scopes. Confirm that the provider returns the claims required by your
+PocketBase OIDC configuration.
 
-```text
-https://wanderer.example.org/login/redirect
-```
+Registration, email verification, access approval, and group membership are
+controlled by the instance's Authentik configuration. Their exact flows and
+labels can vary between deployments. If account registration should happen
+only through the identity provider, disable local registration with
+`PUBLIC_DISABLE_SIGNUP=true`.
 
-Die Anwendung fordert die Bereiche `openid`, `profile` und `email` an. Die
-Authentik-Anwendung und der OIDC-Anbieter heißen jeweils `Wanderer`; der
-Anwendungs-Slug lautet `wanderer`. Client-ID und Client-Secret sind
-Laufzeitgeheimnisse und gehören nicht in dieses Repository.
+PocketBase can create a Wanderer account on a user's first successful OIDC
+sign-in. Review the provider and account settings for the behavior required by
+your deployment. Keep the client ID and client secret in runtime secrets; do
+not commit them to the repository.
 
-## Benutzer und Gruppen
+## Access groups
 
-Authentik verwaltet den Zugriff mit diesen Gruppen:
+Group names and membership policies are defined by the instance operator.
+Use the identity provider to restrict access to the intended users. An
+Authentik group membership alone does not grant PocketBase superuser rights or
+change Wanderer's application-level authorization rules.
 
-| Gruppe | Zweck | Mitglieder |
-| --- | --- | --- |
-| `Wanderer App` | Anmeldung an der Anwendung | Nach Genehmigung eines Zugriffsantrags |
-| `Wanderer Admin` | Organisatorische Kennzeichnung für Administratoren | Zugewiesene Administratoren |
+## Persistent configuration
 
-`Wanderer Admin` ist eine untergeordnete Gruppe von `Wanderer App`. Die
-Admin-Gruppe gewährt keine PocketBase-Superuser-Rechte und ändert keine
-fachlichen Berechtigungen innerhalb von Wanderer.
+Store Authentik blueprints, application settings, and email templates in the
+deployment's managed configuration directory. For example, use a path such as
+`<deployment-config-directory>/authentik/` rather than adding instance-specific
+files to this repository.
 
-Das vorhandene PocketBase-Konto `instance-user` ist mit seiner stabilen
-Authentik-OIDC-ID verbunden. Für neue Benutzer erzeugt PocketBase beim ersten
-genehmigten OIDC-Login ein Wanderer-Konto.
+Manage group membership and access approvals through the identity provider.
+Treat configuration files that contain credentials or other secrets as
+sensitive runtime data.
 
-## Persistente Konfiguration
-
-Der Authentik-Provider, die Anwendung, die Registrierungs- und Anmeldeflows
-sowie die Zugriffsbindung werden durch den Blueprint
-`/path/to/deployment/config/authentik/wanderer.yaml` verwaltet. Der
-Blueprint erlaubt die Anwendung nur für Mitglieder von `Wanderer App`.
-Gruppenmitgliedschaften verwaltet die Zugriffsverwaltung nach Genehmigung.
-Die Vorlagen der Bestätigungs-E-Mail liegen unter
-`/path/to/deployment/config/authentik/email/` und sind im
-Authentik-Template-Verzeichnis bereitgestellt.
-
-`PUBLIC_DISABLE_SIGNUP=true` sperrt die lokale Registrierungsroute der
-Webanwendung. Die Registrierung findet ausschließlich in Authentik statt.
+The `PUBLIC_DISABLE_SIGNUP` setting controls local registration in the web
+application. It does not configure registration or access policies inside
+Authentik.

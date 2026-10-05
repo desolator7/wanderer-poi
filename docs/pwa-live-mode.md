@@ -1,276 +1,259 @@
-# PWA-Livemodus
+# PWA live mode
 
-## Startverhalten
+## Startup behavior
 
-Die installierte PWA verwendet `/pwa-start.html` als festen Einstieg. Diese
-Datei gehört zu den statischen Ressourcen und wird bei der Installation des
-Service Workers in den Versions-Cache übernommen. Dadurch kann der
-Start-Router geladen werden, bevor eine SvelteKit-Seite oder eine API-Antwort
-benötigt wird.
+The installed PWA uses /pwa-start.html as its fixed entry point. This file is
+a static asset that is added to the versioned cache when the service worker
+is installed. The start router can therefore load before a SvelteKit page or
+API response is required.
 
-Der Start-Router liest den lokalen Livemodus-Snapshot:
+The start router reads the local live-mode snapshot:
 
-- Ist ein gültiger aktiver Snapshot vorhanden, öffnet er `/live`.
-- Ist eine beendete Live-Sitzung gespeichert und das Gerät offline, bleibt er
-  auf einer lokalen Hinweisseite. Dort kann die letzte Live-Sitzung erneut
-  geöffnet werden.
-- Ist keine Live-Sitzung aktiv und das Gerät online, öffnet er `/`.
-- Ist weder eine aktive noch eine beendete Live-Sitzung gespeichert und das
-  Gerät offline, bleibt er auf der lokalen Hinweisseite ohne
-  Wiederherstellungsaktion.
+- If a valid active snapshot exists, it opens /live.
+- If an ended live session is stored and the device is offline, it shows a
+  local notice where the last session can be reopened.
+- If no live session is active and the device is online, it opens /.
+- If neither an active nor an ended session is stored and the device is
+  offline, it shows the local notice without a recovery action.
 
-Der Manifest-Eintrag `id` bleibt `/`. Damit besitzt die PWA unabhängig vom
-technischen Startpfad eine stabile Anwendungskennung.
+The manifest ID remains /, so the PWA keeps a stable application identity
+regardless of its technical start path.
 
-## Lokaler Routen-Snapshot
+## Local route snapshot
 
-Beim Starten des Livemodus speichert der Routen-Editor einen versionierten
-Snapshot unter dem Schlüssel `wanderer-pwa-live-route` in `localStorage`. Der
-Snapshot enthält:
+When live mode starts, the route editor stores a versioned snapshot in
+localStorage under the key wanderer-pwa-live-route. The snapshot contains:
 
-- die Routen-ID,
-- den Rücksprungpfad zum Routen-Editor,
-- die gewählte Live-Zoomstufe,
-- das Offlinekartenprofil und den SHA-256-Fingerabdruck der Route,
-- den Routennamen,
-- die geplante Gesamtdauer in Sekunden, sofern im Editor vorhanden,
-- die vollständigen GPX-Daten.
+- the route ID,
+- the return path to the route editor,
+- the selected live zoom level,
+- the offline map profile and SHA-256 route fingerprint,
+- the route name,
+- the planned total duration in seconds, if available in the editor,
+- the complete GPX data.
 
-Der Editor speichert die Route zuerst regulär auf dem Server. Erst nach einem
-erfolgreichen Speichervorgang erzeugt er den lokalen Snapshot und öffnet
-`/live`. Kann der Browser den Snapshot wegen seiner lokalen Speichergrenze
-nicht schreiben, bleibt der Editor geöffnet und zeigt einen Fehler.
+The editor first saves the route to the server. Only after a successful save
+does it create the local snapshot and open /live. If the browser cannot write
+the snapshot because of its local storage limit, the editor remains open and
+shows an error.
 
-## Offline-Shell
+## Offline shell
 
-Der Service Worker behandelt `/live` als eigenen Cache-Eintrag. Er versucht,
-die Shell bei seiner Installation zu laden. Beim Starten des Livemodus wird die
-Shell erneut angefordert, damit sie vor einem späteren Offline-Start verfügbar
-ist. Statische JavaScript-, CSS-, Schrift- und Symbolressourcen liegen im
-gleichen versionsgebundenen Cache.
+The service worker keeps /live as a separate cache entry. It tries to load the
+shell during installation and requests it again when live mode starts so it is
+available for a later offline launch. Static JavaScript, CSS, font, and icon
+resources use the same versioned cache.
 
-Die Live-Seite lädt ihre Routengeometrie nicht über die Trail-API. Sie baut das
-Trail-Modell aus dem lokalen GPX-Snapshot auf und startet die
-MapLibre-Geolokalisierung mit hoher Genauigkeit.
+The live page does not load its route geometry through the trail API. It builds
+the trail model from the local GPX snapshot and starts MapLibre geolocation
+with high accuracy.
 
-Beim clientseitigen Wechsel aus dem Routen-Editor stabilisiert die Live-Seite
-den iOS-Standalone-Viewport nach dem ersten Rendern. MapLibre erhält außerdem
-bei verzögerten `resize`-, `visualViewport`- und Orientierungsänderungen ein
-erneutes `resize()`, damit die Kartenfläche im Portrait- und Querformat den
-gesamten verfügbaren Bildschirm ausfüllt.
+After a client-side navigation from the route editor, the live page stabilizes
+the iOS standalone viewport after the first render. MapLibre also receives a
+new resize() call after delayed resize, visualViewport, and orientation
+changes so the map fills the available screen in portrait and landscape.
 
-## Kartenverhalten
+## Map behavior
 
-Der Livemodus bietet vier Auswahlmöglichkeiten. „Nah“ verwendet Zoom 17,
-„Mittel“ Zoom 15 und „Weit“ Zoom 14. Diese drei Modi zeigen die regulär
-konfigurierte Onlinekarte. „Weit (Offline)“ verwendet ebenfalls Zoom 14,
-schaltet aber als einziger Modus auf den gecachten OpenTopoMap-Rasterstil um.
-Ein Wechsel zwischen Online- und Offlinestil baut die Kartenansicht neu auf,
-damit keine Quellen oder Layer des vorherigen Stils erhalten bleiben.
+Live mode provides four map choices. Near uses zoom 17, Medium uses zoom 15,
+and Wide uses zoom 14. These three modes show the configured online map. Wide
+(Offline) also uses zoom 14, but switches to the cached OpenTopoMap raster
+style. Switching between online and offline styles rebuilds the map so that
+sources and layers from the previous style are not retained.
 
-Der Offlinestil fordert nur die Zoomstufen 12 bis 15 an; beim stärkeren
-Hineinzoomen vergrößert MapLibre die vorhandene Zoomstufe 15. Der Tile-Download
-läuft unabhängig von der aktuell gewählten Kartenansicht im Hintergrund, damit
-„Weit (Offline)“ nach Abschluss direkt verfügbar ist.
+The offline style requests only zoom levels 12 through 15. When zooming in
+further, MapLibre enlarges the existing zoom-level 15 tiles. Tile downloading
+continues in the background regardless of the selected map view, so Wide
+(Offline) is ready as soon as the download completes.
 
-Kann ein Tile nicht aus dem Cache geladen werden, bleibt an dieser Stelle die
-lokale MapLibre-Grundfläche sichtbar. Darauf bleiben weiterhin folgende
-Elemente verfügbar:
+When a tile is missing from the cache, the local MapLibre background remains
+visible in its place. The following elements remain available:
 
-- die gespeicherte Route,
-- Start- und Zielmarkierung,
-- die aktuelle Geräteposition,
-- die vier lokalen Zoom- und Kartenmodi,
-- Routenname, Fortschrittsanzeigen, Höhenprofil, Offline-Status und X zum Beenden.
+- the saved route,
+- start and destination markers,
+- the current device position,
+- the four local zoom and map modes,
+- the route name, progress displays, elevation profile, offline status, and
+  close control.
 
-Andere Basiskarten, Overlays, Terrain, Overpass und externe Glyphen sind nur im
-Modus „Weit (Offline)“ deaktiviert. Die drei Online-Modi verwenden die
-regulären Kartenfunktionen. Neue Kartenbereiche benötigen eine
-Netzwerkverbindung; bereits betrachtete Bereiche können aus dem flüchtigen
-Runtime-Cache kommen.
+Other base maps, overlays, terrain, Overpass, and external glyphs are disabled
+only in Wide (Offline). The three online modes use the regular map features.
+New map areas require a network connection; previously viewed areas may be
+available from the temporary runtime cache.
 
-## Flüchtiger Runtime-Cache
+## Temporary runtime cache
 
-In den Modi „Nah“, „Mittel“ und „Weit“ markiert die Live-Seite ausschließlich
-die von MapLibre angeforderten Kartenressourcen. Dazu gehören Style-Dateien,
-Raster- und Vector-Tiles, Glyphen, Sprites, Terrain und kachelbasierte
-Overlays. Normale Anwendungs- und Overpass-API-Anfragen werden nicht erfasst.
-Der Service Worker entfernt die interne Markierung vor der Anfrage; sie wird
-nicht an den Kartenanbieter übertragen.
+In Near, Medium, and Wide modes, the live page marks only map resources
+requested by MapLibre. These include style files, raster and vector tiles,
+glyphs, sprites, terrain, and tile-based overlays. Regular application and
+Overpass API requests are not captured. Before making a request, the service
+worker removes its internal marker so it is not sent to the map provider.
 
-Der Cache speichert nur Ressourcen, die bei der sichtbaren Kartennutzung
-tatsächlich angefordert wurden. Er lädt keine weiteren Gebiete, Routenkorridore
-oder Zoomstufen vor. Eingebaute und benutzerdefinierte Kartenquellen werden
-automatisch gleich behandelt. Ein Instanzbetreiber muss deshalb selbst prüfen,
-ob die Nutzungsbedingungen seiner konfigurierten Quellen dieses lokale
-Zwischenspeichern erlauben.
+The cache stores only resources requested during visible map use. It does not
+preload more areas, route corridors, or zoom levels. Built-in and custom map
+sources are treated the same way. Instance operators must check whether their
+configured sources' terms allow this local caching.
 
-Antworten mit `no-store` werden nicht gespeichert. `Cache-Control`, `Expires`,
-`no-cache` und `must-revalidate` bleiben maßgeblich. Fehlt eine auswertbare
-Laufzeit oder kann der Browser die Header einer opaque Antwort nicht lesen,
-gilt ein Fallback von sieben Tagen. Abgelaufene Ressourcen werden offline
-nicht ausgeliefert.
+Responses with no-store are not saved. Cache-Control, Expires, no-cache, and
+must-revalidate remain in effect. If no usable lifetime is available, or the
+browser cannot read the headers of an opaque response, a seven-day fallback
+is used. Expired resources are not served offline.
 
-Der Runtime-Cache ist auf höchstens 100 MB begrenzt und hält mindestens 10 MB
-Browserreserve frei, sofern die Storage-Estimate-API verfügbar ist. Zuerst
-werden abgelaufene, danach die am längsten nicht verwendeten Ressourcen
-entfernt. Der Cache besitzt bewusst keine Bereitschaftsanzeige, weil sein
-Inhalt opportunistisch und niemals als vollständig anzusehen ist. Die
-Cachezustandsanzeige unter „Weit (Offline)“ gehört ausschließlich zum
-vorbereiteten Routencache. Beide Caches liegen getrennt im Cache Storage und
-werden durch „PWA-Cache leeren“ gemeinsam entfernt. Dabei werden auch der
-lokale Routensnapshot und eine mögliche Wiederherstellungsmarkierung gelöscht.
+The runtime cache is limited to 100 MB and keeps at least 10 MB of browser
+storage available when the Storage Estimate API is supported. It removes
+expired resources first, followed by the least recently used resources. The
+cache has no readiness indicator because its contents are opportunistic and
+never guaranteed to be complete. The cache status shown in Wide (Offline)
+refers only to the prepared route cache. Both caches use separate Cache Storage
+entries and are removed together by the Clear PWA cache action. This also
+removes the local route snapshot and any recovery marker.
 
-## Begrenzter Tile-Cache
+## Bounded tile cache
 
-Nach dem Öffnen von `/live` berechnet die PWA aus den GPX-Segmenten einen
-500-Meter-Korridor. Der Download beginnt im Hintergrund, während Route,
-GPS-Verfolgung und Bedienelemente bereits benutzbar sind. Die vollständige
-Route wird zuerst in Zoom 12 und anschließend in den Zoomstufen 13, 14 und 15
-aufgenommen. Passt eine weitere vollständige Stufe nicht in das Tile-Limit,
-wird diese Stufe ausgelassen und kein einseitiger Routenabschnitt bevorzugt.
+After /live opens, the PWA calculates a 500-metre corridor from the GPX
+segments. The download starts in the background while the route, GPS tracking,
+and controls remain usable. It covers the complete route at zoom 12 first,
+then attempts zoom levels 13, 14, and 15. If a complete next level would exceed
+the tile limit, that level is skipped; the downloader does not favor a partial
+section of the route.
 
-Für das Profil gelten folgende Grenzen:
+The profile has these limits:
 
-- maximal 1.200 Tiles,
-- maximal 60 MB tatsächliche Antwortdaten,
-- höchstens zwei parallele Downloadanfragen,
-- 10 MB Speicherreserve für die übrigen Anwendungsdaten.
+- 1,200 tiles maximum,
+- 60 MB maximum of actual response data,
+- two concurrent download requests maximum,
+- 10 MB of storage reserved for other application data.
 
-Die PWA versucht vor dem Download, persistenten Browser-Speicher zu erhalten.
-Bei Speichermangel, Netzverlust oder einer Providerbegrenzung bleibt der
-vorhandene Teilcache nutzbar. Der Status im Livemodus zeigt Fortschritt und
-Fehler an und bietet „Download abbrechen“ oder „Erneut versuchen“ an. Eine
-Icon-Zeile unter „Weit (Offline)“ zeigt parallel den Cachezustand: blauer
-Spinner, grünes Häkchen, gelbes Warnsymbol oder rotes Fehlersymbol. Nach dem
-erfolgreichen Abschluss verschwindet die ausführliche Statusleiste. Ein
-abgebrochener oder unterbrochener Download wird bei einem späteren Online-Start
-anhand des Cachemanifests fortgesetzt.
+Before downloading, the PWA tries to obtain persistent browser storage. If
+storage runs low, the network is lost, or the provider applies a limit, the
+available partial cache remains usable. The live-mode status shows progress
+and errors and offers Cancel download or Retry. An icon row in Wide (Offline)
+also shows cache status: a blue spinner, green check mark, yellow warning, or
+red error. After a successful download, the detailed status bar disappears.
+An aborted or interrupted download resumes from the cache manifest the next
+time the app starts online.
 
-Es wird nur der Cache der aktiven Route verwaltet. Eine unveränderte Route
-verwendet ihren Cache erneut; eine andere oder geänderte Route ersetzt ihn.
-Beim Beenden des Livemodus bleibt der aktuelle Cache für einen späteren Start
-derselben Route erhalten.
+Only the cache for the active route is managed. An unchanged route reuses its
+cache; a different or changed route replaces it. Ending live mode keeps the
+current cache for a later session on the same route.
 
-Die Rasterbilder und das Cachemanifest liegen im Cache Storage. `localStorage`
-enthält weiterhin nur den kleinen Routensnapshot und ist für Binärdaten nicht
-geeignet. Wird die PWA durch das Betriebssystem beendet oder suspendiert, ist
-kein weiterer Hintergrunddownload garantiert. Beim nächsten Start wird der
-gespeicherte Stand abgeglichen.
+Raster images and the cache manifest are stored in Cache Storage.
+localStorage holds only the small route snapshot and is not suitable for
+binary data. If the operating system closes or suspends the PWA, no further
+background download is guaranteed. The saved state is reconciled on the next
+launch.
 
-OpenTopoMap erlaubt die Nutzung in Anwendungen mit sichtbarer Attribution,
-weist aber darauf hin, den öffentlichen Server nicht durch Massendownloads zu
-belasten. Das kleine Profil und die Downloadgrenzen dienen dieser Vorgabe.
-Maßgeblich bleiben die
-[Nutzungshinweise von OpenTopoMap](https://services.opentopomap.org/about).
+OpenTopoMap permits use in applications with visible attribution and asks users
+not to overload its public server with bulk downloads. The small profile and
+download limits are intended to respect this guidance. See the
+[OpenTopoMap usage notes](https://services.opentopomap.org/about/).
 
-## Position und Berechtigungen
+## Position and permissions
 
-Die aktuelle Position stammt aus der Geolocation-API des Geräts und nicht aus
-dem lokalen Snapshot. GPS kann ohne Internet funktionieren. Verfügbarkeit und
-Genauigkeit hängen vom Gerät, den Betriebssystemeinstellungen, der erteilten
-Standortberechtigung und dem aktuellen Empfang ab.
+The current position comes from the device Geolocation API, not from the local
+snapshot. GPS can work without internet access. Availability and accuracy
+depend on the device, operating system settings, granted location permission,
+and current reception.
 
-Die Anwendung speichert keine Positionshistorie. Sie verwendet die laufenden
-Positionsereignisse von MapLibre für Markierung, Kartenausschnitt und
-Routenfortschritt. Die letzte gültige Routenposition bleibt nur im Arbeitsspeicher
-der Live-Seite erhalten, auch wenn ein Kartenmoduswechsel die Karte neu aufbaut.
-Nach einem vollständigen Neustart wird sie aus der neuen GPS-Position ermittelt.
+The application does not store a position history. It uses MapLibre's
+continuous position events for the marker, map viewport, and route progress.
+The last valid route position remains only in the live page's memory, including
+when changing map modes rebuilds the map. After a full restart, it is
+calculated from the new GPS position.
 
-## Routenfortschritt und Höhenprofil
+## Route progress and elevation profile
 
-Der kompakte Bereich oben enthält zwei horizontal wischbare Seiten. Die erste
-zeigt Restzeit, Reststrecke und zurückgelegte Kilometer; die zweite zeigt das
-Höhenprofil der gesamten Route mit Positionslinie und Höhenpunkt. Die beiden
-Seitenindikatoren sind anklickbar und mit der Tastatur bedienbar. Routenname und
-X zum Beenden bleiben auf beiden Seiten sichtbar. Rechts bleibt Platz für die
-MapLibre-Controls; Statusmeldungen und Maßstab folgen unterhalb des Bereichs.
-Safe Areas werden im Hoch- und Querformat berücksichtigt.
+The compact panel at the top has two horizontally swipeable pages. The first
+shows remaining time, remaining distance, and distance travelled from the
+route start. The second shows the full route elevation profile with a position
+line and elevation marker. Page indicators can be clicked or operated with a
+keyboard. The route name and close control remain visible on both pages.
+MapLibre controls stay on the right, with status messages and the scale below
+the panel. Safe areas are supported in portrait and landscape orientations.
 
-„Zurückgelegt“ bezeichnet die Strecke vom Routenanfang bis zur aktuellen
-Position, auch wenn die Sitzung erst unterwegs gestartet wurde. Sie ist keine
-Aufzeichnung tatsächlich gelaufener Kilometer. Die Position wird auf die
-Verbindungen zwischen den GPX-Punkten projiziert. Lücken zwischen getrennten
-Segmenten zählen nicht zur Streckenlänge. Rückwärtsgehen verringert den
-Fortschritt und erhöht die Reststrecke wieder.
+“Distance travelled” means the route distance from its start to the current
+position, even if the session began partway through the route. It does not
+record the distance actually walked. The position is projected onto the
+connections between GPX points. Gaps between separate segments do not
+contribute to route length. Walking backwards reduces progress and increases
+the remaining distance.
 
-Die Zuordnung erlaubt 50 Meter seitlichen Abstand. Bei ungenauerem GPS steigt
-die Toleranz entsprechend der gemeldeten Genauigkeit bis auf 100 Meter. Bei
-annähernd gleich nahen Routenabschnitten mit höchstens 10 Metern
-Abstandsunterschied hilft die vorherige Routenposition bei der Auswahl. Ohne
-vorherige Position wird der früheste passende Abschnitt in Routenreihenfolge
-gewählt. Ein Start auf einer gemeinsam verlaufenden Hin- und Rückstrecke kann
-deshalb zunächst nicht eindeutig der Rückrichtung zugeordnet werden.
+Position matching allows a lateral distance of 50 metres. With less accurate
+GPS, the tolerance increases according to reported accuracy up to 100 metres.
+When route sections are nearly equally close, within 10 metres of each other,
+the previous route position helps choose between them. Without a previous
+position, the earliest matching section in route order is selected. A start on
+a shared outbound and return section may therefore be ambiguous at first.
 
-Bei größerem Abstand, GPS-Ungenauigkeit über 100 Meter, Standortfehlern oder
-mehr als 30 Sekunden ohne aktuelle Position werden die Werte nicht aktualisiert.
-Ein Hinweis kennzeichnet sie und den Profilmarker als letzten Stand. Liegt noch
-keine gültige Position vor, erscheinen Platzhalter. Bei erneut gültigem Empfang
-wird die Berechnung automatisch fortgesetzt.
+Values are not updated when the position is too far from the route, GPS
+accuracy is worse than 100 metres, a location error occurs, or no current
+position has been received for more than 30 seconds. A notice marks the
+displayed values and profile marker as the last valid state. Placeholders are
+shown if no valid position has been received. Calculation resumes
+automatically when the position becomes valid again.
 
-Die Restzeit verwendet vollständige, gültige GPX-Zeitverläufe der verbleibenden
-Abschnitte. Eine im Editor angegebene Gesamtdauer skaliert diese Zeitverläufe.
-Fehlen passende Zeitverläufe, wird die geplante Gesamtdauer proportional zur
-Reststrecke aufgeteilt. Fehlen beide Grundlagen, erscheint „Keine Zeitplanung“.
-Die Schätzung passt sich nicht an das tatsächliche Gehtempo an und zählt bei
-einer Pause nicht herunter. Die Anzeige verwendet Kilometer mit deutschem
-Dezimalkomma sowie Stunden und Minuten.
+Remaining time uses complete, valid GPX time series for the remaining
+segments. A total duration entered in the editor scales those time series. If
+no suitable time series is available, the planned total duration is divided
+according to the remaining distance. If neither is available, the display says
+that no schedule is available. The estimate does not adapt to actual walking
+speed and does not count down during a pause. Distance formatting follows the
+active locale; durations use hours and minutes.
 
-Das Höhenprofil nutzt ausschließlich die gespeicherten GPX-Höhen. Fehlende Höhen
-und getrennte Segmente bleiben als Lücken sichtbar; es werden keine Nullhöhen
-ergänzt. Liegt die Position in einer Höhenlücke, bleibt nur ihre Entfernungslinie
-sichtbar. Ohne Höhendaten wird ein entsprechender Hinweis angezeigt. Für
-Fortschritt, Zeitberechnung und Profil sind keine Netzwerkabfragen erforderlich.
+The elevation profile uses only GPX elevations. Missing elevations and
+separate segments remain visible as gaps; missing values are not replaced with
+zero. If the current position is in an elevation gap, only its distance marker
+is shown. A notice appears when no elevation data is available. Progress,
+time estimates, and the elevation profile require no network requests.
 
-## Beenden
+## Ending a session
 
-Beim Beenden behält die Anwendung den lokalen Snapshot und markiert ihn als
-inaktiv. Sie legt keine zweite Kopie der GPX-Daten an. Ist das Gerät online,
-öffnet sie anschließend den gespeicherten Routen-Editor. Ist das Gerät offline,
-kehrt sie zum lokalen Start-Router zurück. Dieser zeigt den Hinweis, dass keine
-Offline-Route aktiv ist, und bietet „Letzte Live-Sitzung fortsetzen“ an.
+When live mode ends, the application keeps the local snapshot and marks it
+inactive. It does not create another copy of the GPX data. If the device is
+online, the app opens the saved route editor. If it is offline, it returns to
+the local start router, which shows that no offline route is active and offers
+to resume the last live session.
 
-Die Wiederherstellungsaktion entfernt nur die Inaktiv-Markierung und öffnet
-`/live`; der Routensnapshot bleibt gespeichert. Beim nächsten Beenden kann
-dieselbe Sitzung deshalb erneut wiederhergestellt werden. Sobald das Gerät auf
-der Hinweisseite wieder online ist, folgt der Start-Router weiterhin seinem
-normalen Verhalten und öffnet `/`.
+The recovery action removes only the inactive marker and opens /live; the
+route snapshot remains stored. The same session can therefore be recovered
+again after a later exit. If the device reconnects while the notice is open,
+the start router resumes its normal behavior and opens /.
 
-## Prüfung nach einer Aktualisierung
+## Checks after an update
 
-Änderungen am Web-App-Manifest werden auf iOS nicht immer durch ein normales
-Neuladen übernommen. Für eine zuverlässige Prüfung ist die PWA vom Home Screen
-zu entfernen und neu zu installieren.
+Changes to the web app manifest are not always picked up by a regular reload
+on iOS. For a reliable check, remove the PWA from the Home Screen and install
+it again.
 
-Folgende Zustände müssen geprüft werden:
+Check these states:
 
-- Online-Start ohne aktiven Livemodus,
-- Online-Start mit aktivem Livemodus,
-- Offline-Kaltstart mit aktivem Livemodus,
-- Offline-Kaltstart ohne aktiven Livemodus,
-- Wiederherstellung der letzten beendeten Live-Sitzung im Offlinezustand,
-- Rückkehr zur Startseite, wenn die Wiederherstellungsseite wieder online ist,
-- Standortberechtigung erteilt, abgelehnt und noch nicht entschieden,
-- Beenden des Livemodus online und offline,
-- Nah-, Mittel-, Weit- und Weit-(Offline)-Modus,
-- Wechsel zwischen regulärer Onlinekarte und gecachter OpenTopoMap,
-- Wiederverwendung betrachteter Onlinekarten bei unterbrochener Verbindung,
-- Ablauf und LRU-Bereinigung des flüchtigen Runtime-Caches,
-- vollständiger, abgebrochener und fortgesetzter Tile-Download,
-- Speichermangel, Netzverlust und Providerbegrenzung,
-- Hoch- und Querformat auf der installierten iOS-PWA,
-- Wischen zwischen Kennzahlen und Höhenprofil sowie Bedienung der Kartencontrols,
-- GPS-Abweichung, ungenauer Empfang und Wiederaufnahme nach einem Standortfehler,
-- unveränderter Fortschritt und gewählte Wischseite nach einem Kartenmoduswechsel.
+- online launch without an active live session,
+- online launch with an active live session,
+- offline cold launch with an active live session,
+- offline cold launch without an active live session,
+- recovery of the last ended session while offline,
+- return to the home page when the recovery notice reconnects,
+- location permission granted, denied, and not yet decided,
+- ending live mode online and offline,
+- Near, Medium, Wide, and Wide (Offline) modes,
+- switching between the regular online map and cached OpenTopoMap,
+- reuse of viewed online map resources after a connection is interrupted,
+- expiry and LRU cleanup of the temporary runtime cache,
+- complete, aborted, and resumed tile downloads,
+- low storage, network loss, and provider limits,
+- portrait and landscape layouts in the installed iOS PWA,
+- swiping between metrics and elevation and operating map controls,
+- GPS deviations, poor reception, and recovery after a location error,
+- stable progress and page selection after changing map modes.
 
-Die automatisierten Browserprüfungen verwenden eine lokale Test-Route und
-simulierte GPS-Ereignisse, ohne produktive Routen zu verändern:
+Automated browser checks use a local test route and simulated GPS events
+without modifying production routes:
 
-```bash
+~~~bash
 cd web
 LIVE_MAP_TEST_URL=http://localhost:3000 npx playwright test tests/playwright/live-map.spec.ts --project=chromium --no-deps --workers=1
-```
+~~~
 
-Sie decken schmale Mobilansichten, Querformat, simulierte Safe Areas,
-Standortfehler und Offlinewechsel ab. Eine Prüfung auf einer tatsächlich
-installierten iOS-PWA ergänzt diese Chromium-Prüfungen.
+These checks cover narrow mobile layouts, landscape, simulated safe areas,
+location errors, and offline transitions. A check on an installed iOS PWA
+complements the Chromium checks.

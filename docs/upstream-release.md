@@ -1,74 +1,75 @@
-# Upstream-Version und Fork-Funktionen
+# Upstream release and fork behavior
 
-Die Anwendung verwendet Upstream **v0.21.0**, Commit `a93566bc`, mit der
-Fork-Kennzeichnung **0.21.0 Ver. 161.26.023**. Die Kennzeichnung steht klein
-unter `/legal`.
+The application is based on upstream **v0.21.0**, commit `a93566bc`, with the
+fork version **0.21.0 Ver. 161.26.025**. This version is shown in small text
+under `/legal`.
 
-## Kategorien und automatische Berechnungen
+## Categories and automatic calculations
 
-Alle Upstream-Kategorien mit ihren Unterkategorien stehen zur Auswahl. Kategorie
-und Berechnungsprofil werden getrennt behandelt: Hiking und Walking verwenden
-das Fußprofil, Biking das Fahrradprofil. Die Unterkategorien MTB und E-Bike
-wählen ihre jeweiligen Fahrradprofile; die Profile können weiter angepasst werden.
+All upstream categories and subcategories are available. The category and
+routing profile are configured separately: Hiking and Walking use the
+pedestrian profile, while Biking uses the bicycle profile. The MTB and E-Bike
+subcategories select their respective bicycle profiles, which can be adjusted.
 
-Distanz und Höhenmeter werden bei allen Sportarten aus der Geometrie berechnet.
-Eine automatische Dauer wird mit dem Fuß- oder Fahrradprofil berechnet.
-Bei Running, Skiing, Canoeing, Climbing, Other und eigenen Kategorien bleibt
-die Dauer aus dem Import oder der manuellen Eingabe erhalten. Das automatische
-Routing ist dort deaktiviert. Eine SAC-Einstufung wird ausschließlich für Hiking
-ausgewertet, wenn die Routingdaten eine Einstufung liefern. Sonst bleibt die
-Schwierigkeit aus dem Import oder der manuellen Eingabe maßgeblich.
+For all sports, distance and elevation gain are calculated from the route
+geometry. The application calculates duration automatically with the
+pedestrian or bicycle profile. For Running, Skiing, Canoeing, Climbing, Other,
+and custom categories, it keeps the imported or manually entered duration and
+disables automatic routing.
 
-## Persönliche Erledigt-Anzeige
+The application evaluates SAC difficulty only for Hiking when the routing data
+provides a rating. Otherwise, it keeps the difficulty from the import or
+manual entry.
 
-Eine Tour erscheint für einen angemeldeten Benutzer als erledigt, wenn er
-einen eigenen Gipfellog für sie besitzt oder seine eigene Tour manuell als
-erledigt markiert hat. Die manuelle Markierung einer fremden Tour zählt nicht
-als persönliche Begehung. Ohne Anmeldung gibt es keine persönliche Markierung.
+## Personal completion status
 
-`completed` und `completed_at` bleiben die Upstream-Felder der Tour. Die
-persönliche Anzeige wird zusätzlich aus dem angemeldeten Benutzer und seinen
-Gipfellogs berechnet. Die Statistik zählt eigene Gipfellogs und ergänzt manuell
-erledigte Touren nur, wenn es keinen eigenen Gipfellog dafür gibt.
+A trail is marked as completed for a signed-in user if that user has a summit
+log for it or manually marks a trail they own as completed. Manually marking
+another user's trail does not count as a personal activity. Anonymous users
+do not have a personal completion status.
 
-## Plugin-Import
+The upstream `completed` and `completed_at` trail fields remain unchanged.
+The personal status is calculated using the signed-in user and their summit
+logs. Statistics count the user's summit logs and include manually completed
+trails only when there is no summit log for the same trail.
 
-Die Bundles für Komoot, Strava und Hammerhead werden aus `plugins/` gebaut.
-Die Datenbank entdeckt sie unter `/data/plugins`; das Verzeichnis wird dauerhaft
-aus `data/plugins` eingebunden. Die Einstellungen stehen unter
-`/settings/plugins`. Bestehende Komoot-Instanzen behalten ihre Zugangsdaten und
-ihre Konfiguration.
+## Plugin imports
 
-Der gemeinsame Import berücksichtigt:
+The Komoot, Strava, and Hammerhead bundles are built from `plugins/`. The
+database discovers them in `/data/plugins`, which is mounted persistently from
+`data/plugins`. Plugin settings are available under `/settings/plugins`.
+Existing plugin instances retain their credentials and configuration.
 
-- `config.host.excludedTrailIds`: Quell-IDs, die dieser Plugin-Instanz nicht
-  erneut importieren darf. Die Einstellungen erlauben eine ID pro Zeile.
-- Duplikate anhand von Benutzer, Anbieter und Quell-ID, sowohl bei Touren als
-  auch bei bereits zugeordneten Gipfellogs.
-- Gipfellogs einschließlich GPX-Datei, Anbieter und externer Quell-ID für
-  abgeschlossene Aktivitäten.
-- Eine bereits importierte geplante Tour erhält beim späteren Import ihrer
-  Aktivität einen Gipfellog; ihre geplante Geometrie bleibt erhalten.
-- Wegpunkte aus der GPX-Geometrie, wenn der Anbieter keine Wegpunkte liefert.
-- Vor dem Löschen einer importierten Tour werden ihre Quell-IDs in den
-  passenden Plugin-Instanzen ihres Benutzers als Ausschlüsse gespeichert.
-  Das gilt auch beim Zuordnen einer Tour zu einem Gipfellog.
+The shared import process handles:
 
-Die Zuordnung zu Gipfellogs ist weiterhin im Tourmenü verfügbar. Vorhandene
-Gipfellogs werden auf die Zieltour verschoben. Fehlt ein Gipfellog, erzeugt die
-Zuordnung einen neuen mit den Tourdaten und der GPX-Datei.
+- `config.host.excludedTrailIds`: source IDs that a plugin instance must not
+  import again. The settings accept one ID per line.
+- Duplicate detection by user, provider, and source ID for both trails and
+  already-linked summit logs.
+- Summit logs for completed activities, including the GPX file, provider, and
+  external source ID.
+- Creating a summit log when an imported planned trail later appears as an
+  activity, while keeping the planned route geometry.
+- Creating waypoints from GPX geometry when the provider supplies no waypoints.
+- Saving source IDs to the user's matching plugin instances as exclusions
+  before an imported trail is deleted, including when it is linked to a summit
+  log.
 
-## Laufzeit und Datenbank
+The trail menu still provides the action to link a trail to a summit log.
+Existing summit logs are moved to the target trail. If there is no summit log,
+the action creates one from the trail data and GPX file.
 
-Die Datenbank benötigt Go 1.26; die WASM-Bundles benötigen TinyGo 0.41.1.
-Die Web-Abhängigkeiten entsprechen dem Upstream-Release. Web und Datenbank
-benötigen denselben zufälligen `POCKETBASE_PROXY_SECRET` in der lokalen `.env`.
-Die Datei und sämtliche Laufzeitdaten werden nicht versioniert.
+## Runtime and database
 
-Die offiziellen Upstream-Migrationen bleiben unverändert. PocketBase führt
-ausstehende Migrationen automatisch beim Start aus. Es gibt für dieses Update
-keine zusätzliche Fork-Migration. POIs, Attribute, Gipfellogs, Kategorien und
-Authentik-Verknüpfungen liegen weiterhin in der bestehenden Datenbank.
+The database requires Go 1.26; the WASM bundles require TinyGo 0.41.1. The web
+dependencies match the upstream release. The web and database services use the
+same randomly generated `POCKETBASE_PROXY_SECRET` from the local `.env` file.
+The file and runtime data are not version controlled.
 
-Build, Sicherung und Wiederherstellung sind in
-[Containerbetrieb](container-operations.md) beschrieben.
+The upstream migrations are unchanged. PocketBase applies pending migrations
+when the database starts. This release has no additional fork migration. POIs,
+attributes, summit logs, categories, and identity-provider links remain in the
+existing database.
+
+See [Container operations](container-operations.md) for build, backup, and
+restore instructions.

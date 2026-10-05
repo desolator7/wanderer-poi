@@ -1,119 +1,103 @@
-# Rechtliches und Datenquellen
+# Legal information and data sources
 
-## Geltungsbereich
+## Scope
 
-Dieses Dokument beschreibt den aktuellen Stand der rechtlichen Hinweise und
-der bereitgestellten POI-Daten in diesem Fork. Die Anwendung stellt dieselben
-Kernhinweise öffentlich unter `/legal` bereit. Die Route bleibt auch erreichbar,
-wenn die Instanz mit `PUBLIC_PRIVATE_INSTANCE=true` betrieben wird.
+This document describes the current legal notes and POI data distributed with
+this fork. The application publishes the same core notices at `/legal`. That
+route remains available when an instance runs with
+`PUBLIC_PRIVATE_INSTANCE=true`.
 
-Die Hinweise sind keine vollständigen Anbieterangaben und keine individuelle
-Rechtsberatung. Betreiber einer eigenen Instanz müssen prüfen, welche weiteren
-Angaben und Pflichten für ihren konkreten Betrieb gelten.
+These notes are not complete provider disclosures or individual legal advice.
+Operators of their own instances must determine which additional notices and
+obligations apply to their specific deployment.
 
-## Unabhängigkeit
+## Independence
 
-Dieser experimentelle wanderer-POI-Fork ist ein unabhängiges Softwareprojekt.
-Er wird weder von der Harzer Wandernadel GmbH noch von anderen Vereinen,
-Markeninhabern oder Betreibern der genannten Points of Interest betrieben,
-beauftragt, unterstützt oder verantwortet.
+This experimental wanderer POI fork is an independent software project. It is
+not operated, commissioned, endorsed, or controlled by the rights holders,
+organizations, or operators associated with the Points of Interest represented
+in the application.
 
-Namen und Bezeichnungen von Orten, Stempelstellen oder anderen POIs dienen der
-Beschreibung und geografischen Zuordnung. Ihre Nennung begründet keine
-organisatorische, wirtschaftliche oder sonstige offizielle Verbindung. Der
-gesetzliche Rahmen für die beschreibende Verwendung von Kennzeichen ist unter
-[§ 23 Markengesetz](https://www.gesetze-im-internet.de/markeng/__23.html)
-abrufbar.
+Names and labels for places, markers, and other POIs are used to describe and
+locate them. Their appearance does not imply an organizational, commercial, or
+official relationship with a rights holder or operator.
 
-## Bereitgestellter POI-Datenbestand
+## Distributed POI data
 
-Das Projekt stellt als vorbefüllten POI-Datenbestand ausschließlich den aus
-OpenStreetMap abgeleiteten Snapshot `/data/osm-stamp-points.json` bereit. Dieser
-Snapshot ist kein offizieller Datensatz der Harzer Wandernadel GmbH, eines
-Vereins oder eines anderen POI-Betreibers. Er bildet die zugrunde liegenden
-OpenStreetMap-Daten nur zum Zeitpunkt seiner Erstellung ab.
+The project provides an OpenStreetMap-derived snapshot at
+`/data/osm-stamp-points.json`. It is not an official dataset from any rights
+holder, organization, or POI operator. It reflects the underlying
+OpenStreetMap data only at the time the snapshot was created.
 
-Der Snapshot kann unvollständige, unrichtige, veraltete oder mehrfach erfasste
-Angaben enthalten. Aus seiner Bereitstellung folgt keine Zusicherung zu
-Vollständigkeit, Richtigkeit, Aktualität, Verfügbarkeit oder Eignung für einen
-bestimmten Zweck. Für Wanderungen und andere Aktivitäten sind die tatsächlichen
-Gegebenheiten, Sperrungen, Beschilderungen und Hinweise der zuständigen Stellen
-maßgeblich.
+The snapshot may contain missing, inaccurate, outdated, or duplicate records.
+Its availability does not guarantee completeness, accuracy, currency,
+availability, or fitness for a particular purpose. For hikes and other
+activities, follow current conditions, closures, signs, and notices from the
+responsible authorities.
 
-### Abgrenzung zur offiziellen GPS-Datei
+### Separation from third-party GPS files
 
-Die auf der offiziellen Seite veröffentlichten
-[GPS-Nutzungsbedingungen](https://www.harzer-wandernadel.de/stempelstellen/gps-download/)
-wurden bei der Quellenabgrenzung berücksichtigt. Die dort angebotene
-GPX-/GPI-Datei ist weder Quelle dieses Snapshots noch Abgleichs- oder
-Vollständigkeitsmaßstab. Sie wird für Erzeugung, Prüfung und Import des
-OSM-Datenbestands nicht heruntergeladen oder verarbeitet.
+Third-party terms of use for GPS downloads were considered when defining the
+data sources. Such files are not a source for this snapshot and are not used
+as a completeness or verification standard. They are not downloaded or
+processed to create, check, or import the OpenStreetMap dataset.
 
-## Inhalte von Nutzern
+## User-generated content
 
-Nutzer einer Instanz können eigene POIs und weitere Inhalte anlegen oder
-vorhandene Angaben bearbeiten. Diese Inhalte sind vom bereitgestellten
-OSM-Snapshot zu unterscheiden. Sie stammen von den jeweils einstellenden
-Nutzern und werden durch das Projekt nicht vollständig geprüft. Das Projekt
-gibt für nutzergenerierte Inhalte keine Zusicherung zu Richtigkeit,
-Vollständigkeit, Rechtmäßigkeit, Aktualität oder dauerhafter Verfügbarkeit.
+Users of an instance can create POIs and other content or edit existing
+records. This content is separate from the distributed OpenStreetMap snapshot.
+It comes from the users who submit it and is not fully reviewed by the project.
+The project does not guarantee the accuracy, completeness, legality, currency,
+or continued availability of user-generated content.
 
-Der jeweilige Instanzbetreiber legt Registrierung, Sichtbarkeit und Moderation
-für seine Installation fest. Daraus entsteht keine Verantwortung der Harzer
-Wandernadel GmbH, anderer Vereine, Markeninhaber, POI-Betreiber oder des
-OpenStreetMap-Projekts für diese Nutzerinhalte.
+Each instance operator sets registration, visibility, and moderation policies
+for their installation. The organizations and operators associated with POIs,
+as well as the OpenStreetMap project, are not responsible for user-generated
+content on an instance.
 
-## OpenStreetMap-Attribution und ODbL
+## OpenStreetMap attribution and ODbL
 
-Die im Snapshot enthaltenen Geodaten basieren auf Daten von
-[© OpenStreetMap-Mitwirkenden](https://www.openstreetmap.org/copyright).
-OpenStreetMap-Daten stehen unter der Open Data Commons Open Database License
-(ODbL) 1.0. Die erforderliche Namensnennung muss auf OpenStreetMap und dessen
-Mitwirkende hinweisen. Bei öffentlicher Nutzung oder Weitergabe sind außerdem
-die jeweils anwendbaren Lizenz- und Share-Alike-Bedingungen zu beachten.
+The geographic data in the snapshot is based on
+[© OpenStreetMap contributors](https://www.openstreetmap.org/copyright).
+OpenStreetMap data is available under the Open Data Commons Open Database
+License (ODbL) 1.0. Attribution must identify OpenStreetMap and its
+contributors. Public use or redistribution must also follow the applicable
+license and share-alike requirements.
 
-Maßgebliche Informationen:
+Authoritative information:
 
 - [OpenStreetMap Attribution Guidelines](https://osmfoundation.org/wiki/Licence/Attribution_Guidelines)
 - [Open Data Commons ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/)
 - [OpenStreetMap Substantial Guideline](https://osmfoundation.org/wiki/Licence/Community_Guidelines/Substantial_-_Guideline)
 
-Ob eine konkrete Entnahme oder Weiterverwendung wesentlich ist und welche
-Pflichten daraus folgen, hängt von der tatsächlichen Verwendung ab. Neben der
-ODbL können Datenbankrechte relevant sein; siehe
-[§ 87b Urheberrechtsgesetz](https://www.gesetze-im-internet.de/urhg/__87b.html).
+Whether an extraction or reuse is substantial, and which obligations apply,
+depends on the actual use. Database rights may also be relevant; see
+[Section 87b of the German Copyright Act](https://www.gesetze-im-internet.de/urhg/__87b.html).
 
-## OpenTopoMap-Kartenkacheln
+## OpenTopoMap tiles
 
-Der PWA-Livemodus kann einen kleinen, auf die aktive Route begrenzten
-Offlinecache mit Rasterkacheln von
-[OpenTopoMap](https://www.opentopomap.org/) anlegen. Die Kartenansicht zeigt die
-Namensnennung für OpenTopoMap und OpenStreetMap an. Das Downloadprofil ist auf
-einen 500-Meter-Routenkorridor, die Zoomstufen 12 bis 15, 1.200 Tiles und 60 MB
-begrenzt. Der öffentliche Dienst wird ohne Zusicherung dauerhafter
-Verfügbarkeit genutzt. Betreiber müssen die
-[Nutzungshinweise von OpenTopoMap](https://services.opentopomap.org/about/)
-beachten.
+PWA live mode can create a small offline raster-tile cache limited to the active
+route. The map displays attribution for OpenTopoMap and OpenStreetMap. The
+download profile is limited to a 500-metre route corridor, zoom levels 12
+through 15, 1,200 tiles, and 60 MB. The public service is used without a
+guarantee of continued availability. Instance operators must follow the
+[OpenTopoMap usage notes](https://services.opentopomap.org/about/).
 
-## Flüchtiger Cache für Onlinekarten
+## Temporary cache for online maps
 
-Die Online-Modi des PWA-Livemodus speichern ausschließlich Kartenressourcen,
-die MapLibre während der sichtbaren Nutzung tatsächlich anfordert. Es werden
-keine zusätzlichen Gebiete oder Zoomstufen vorgeladen. Die Anwendung beachtet
-auswertbare HTTP-Cachevorgaben; ohne auswertbare Laufzeit gilt ein Fallback von
-sieben Tagen. Der separate Runtime-Cache ist auf 100 MB begrenzt und entfernt
-abgelaufene beziehungsweise zuletzt lange nicht verwendete Einträge.
+The online modes of PWA live mode store only map resources that MapLibre
+requests during visible use. They do not preload additional areas or zoom
+levels. The application follows readable HTTP cache directives; if no usable
+lifetime is available, it uses a seven-day fallback. The separate runtime
+cache is limited to 100 MB and removes expired or least-recently-used entries.
 
-Diese technische Zwischenspeicherung gilt automatisch auch für durch einen
-Instanzbetreiber konfigurierte Kartenquellen. Sie ist keine Aussage darüber,
-ob ein Anbieter die konkrete Nutzung gestattet. Betreiber müssen die
-Lizenz-, Namensnennungs- und Nutzungsbedingungen jeder eingebundenen Quelle
-selbst prüfen. Quellen mit einem ausdrücklichen Verbot lokaler Speicherung
-dürfen nicht als Kartenquelle konfiguriert werden.
+This technical caching also applies to map sources configured by an instance
+operator. It does not establish whether a provider permits that use. Operators
+must review the license, attribution, and usage terms for every configured
+source. Do not configure sources that explicitly prohibit local storage.
 
-## Sichtbarkeit in der Anwendung
+## Application notice
 
-Der globale Footer enthält einen dezenten Link zu `/legal` und einen separaten
-Link zum [Quellcode dieses Forks](https://github.com/organization/repository).
-Die bestehenden Links zum Upstream-Projekt und dessen About-Seite bleiben davon
-unberührt. Die Rechtseite trägt die Kennzeichnung `0.21.0 Ver. 161.26.023`.
+The application footer links to `/legal`. Other project links point to the
+upstream project's public resources. The legal page shows the current
+application version.

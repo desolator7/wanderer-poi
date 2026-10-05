@@ -65,7 +65,6 @@
         class="col-span-2 md:col-span-3 lg:col-span-4 border-t border-white/15 pt-4 text-xs text-white/70 flex flex-wrap gap-x-4 gap-y-1"
     >
         <a href="/legal">Rechtliches &amp; Datenquellen</a>
-        <a href="https://github.com/organization/repository">Fork-Quellcode</a>
     </div>
 </footer>
 

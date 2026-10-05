@@ -3,7 +3,7 @@
 This repository contains an independent, experimental fork of
 [open-wanderer/wanderer](https://github.com/open-wanderer/wanderer).
 
-Current version: **0.21.0 Ver. 161.26.023**, based on upstream release
+Current version: **0.21.0 Ver. 161.26.025**, based on upstream release
 `v0.21.0` (`a93566bc`).
 
 The fork adds first-class Points of Interest (POIs) to wanderer. A POI is a
@@ -66,54 +66,49 @@ test these changes as you would review any other contribution.
 The current POI UI includes English and German text. Other translations can be
 incomplete for the experimental POI areas.
 
-## Rechtliches und Datenquellen
+## Legal information and data sources
 
-Der Fork ist unabhängig von der Harzer Wandernadel GmbH und anderen Vereinen
-oder POI-Betreibern. Als vorbefüllter POI-Datenbestand wird ausschließlich der
-OpenStreetMap-basierte Snapshot `data/osm-stamp-points.json` bereitgestellt. Die
-Anwendung zeigt die Hinweise zu Unabhängigkeit, Datenqualität und ODbL unter
-`/legal`. Der aktuelle rechtliche und technische Ist-Stand ist in
-[Rechtliches und Datenquellen](docs/legal-and-data-sources.md) beschrieben.
+This fork is independent of the organizations and operators associated with
+the POIs described by the project. The repository provides an OpenStreetMap-
+based snapshot at data/osm-stamp-points.json. The application publishes notes
+about independence, data quality, and the ODbL at /legal. The current legal
+and technical details are documented in
+[Legal information and data sources](docs/legal-and-data-sources.md).
 
-## PWA-Livemodus
+## PWA live mode
 
-Die installierte PWA startet über einen lokalen Start-Router. Bei aktivem
-Livemodus öffnet sie direkt die lokal gespeicherte Route unter `/live`, ohne
-zuvor die serverabhängige Startseite zu laden. Der Livemodus zeigt die Route
-und die Geräteposition auch ohne Netzwerk. Eine kartografische Basiskarte ist
-im Modus „Weit (Offline)“ entlang der aktiven Route verfügbar, sobald der
-begrenzte OpenTopoMap-Download abgeschlossen ist. Die Modi „Nah“, „Mittel“ und
-„Weit“ zeigen dagegen die reguläre Onlinekarte und speichern nur die dabei
-tatsächlich angeforderten Kartenressourcen in einem flüchtigen Runtime-Cache.
-Bereits betrachtete Bereiche können deshalb vorübergehend auch ohne Netzwerk
-sichtbar bleiben. Außerhalb des vorbereiteten Routenkorridors oder bei
-fehlenden Ressourcen verwendet die Offlineansicht eine lokale Grundfläche.
-Wird der Livemodus versehentlich beendet, bleibt der letzte Routensnapshot
-gespeichert. Solange das Gerät offline ist, kann die letzte Live-Sitzung über
-den lokalen Start-Router erneut geöffnet werden.
+The installed PWA starts through a local router. When live mode is active, it
+opens the locally stored route at /live without first loading the
+server-dependent home page. The route and device position remain available
+without a network connection. In Wide (Offline) mode, a base map is available
+along the active route after the bounded OpenTopoMap download completes. The
+Near, Medium, and Wide modes use the configured online map and keep a temporary
+runtime cache of map resources requested during use. Recently viewed areas may
+therefore remain visible for a while without a connection. Outside the prepared
+route corridor, or when resources are missing, the offline view uses a local
+background.
 
-Ein kompakter Wischbereich oben zeigt wahlweise Restzeit, Reststrecke und
-zurückgelegte Kilometer ab Routenanfang oder das Höhenprofil mit der aktuellen
-Position. Die Berechnung erfolgt lokal anhand der gespeicherten Route und
-Zeitplanung. Eine GPS-Toleranz von 50 bis 100 Metern berücksichtigt kleine
-Abweichungen; bei größeren Abständen oder fehlendem GPS bleiben die letzten
-gültigen Werte mit einem Hinweis sichtbar. Das X beendet den Livemodus.
+If live mode is closed by mistake, its last route snapshot remains stored. The
+local start router can reopen the last live session while the device is offline.
+A compact swipeable panel shows remaining time, remaining distance, distance
+from the route start, or the elevation profile with the current position.
+Calculations use the stored route and schedule. A GPS tolerance of 50 to
+100 metres accounts for small deviations; for larger deviations or missing
+GPS, the last valid values remain visible with a status message. The close
+control exits live mode.
 
-Der technische Ist-Stand und die Grenzen sind unter
-[PWA-Livemodus](docs/pwa-live-mode.md) beschrieben.
+See [PWA live mode](docs/pwa-live-mode.md) for technical details and limitations.
 
 ## Authentication
 
-The productive instance uses Authentik as its only interactive login method.
-Local password login and local registration are disabled. The existing
-`instance-user` account is linked to its Authentik identity. New users register in
-Authentik, verify their email address, and request access to the Wanderer App
-group. PocketBase creates their Wanderer account on the first approved OIDC
-login.
+An instance can use Authentik as its OIDC identity provider. The operator
+chooses the available sign-in, registration, and access-approval flows.
+PocketBase can create a Wanderer account after the user's first successful
+OIDC sign-in. Keep provider credentials in runtime secrets; do not store them
+in this repository.
 
-The current provider, callback, and access-group configuration is documented
-in [Authentik OIDC authentication](docs/authentik-oidc.md). Client credentials
-remain runtime secrets and are not stored in this repository.
+See [OIDC authentication with Authentik](docs/authentik-oidc.md) for generic
+configuration guidance.
 
 ## POI features
 
@@ -484,6 +479,6 @@ possible. This keeps the fork small and makes upstream comparison easier.
 
 This fork uses the [AGPLv3 license](LICENSE), in line with the upstream project.
 
-## Containerbetrieb
+## Container operations
 
-[Healthchecks, Logrotation und Betriebseinstellungen](docs/container-operations.md).
+[Health checks, log rotation, and operating settings](docs/container-operations.md).

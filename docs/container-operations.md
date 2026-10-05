@@ -1,53 +1,60 @@
-# Containerbetrieb
+# Container operations
 
-Die regelmäßigen Docker-Healthchecks von `web` laufen alle 300 Sekunden. In der Startphase erfolgen Prüfungen alle fünf Sekunden.
+The `web` service runs scheduled Docker health checks every 300 seconds, with
+checks every five seconds during startup.
 
-Für `db`, `search` bleiben die kürzeren Intervalle erhalten, weil andere Dienste beim Stack-Start auf `service_healthy` warten.
+The `db` and `search` services keep shorter intervals because other services
+wait for them to become healthy during stack startup.
 
-Die laufenden Dienste verwenden den Docker-Logtreiber `json-file` mit höchstens drei Dateien zu jeweils 20 MB pro Container. Die Rotation wird bei der Container-Erstellung eingerichtet.
+Running services use Docker's `json-file` logging driver, with at most three
+files of 20 MB per container. Docker configures log rotation when it creates
+the containers.
 
-Der Webcheck ruft mit `curl` `/healthz` auf. Der Server beantwortet GET und HEAD vor den Authentifizierungs- und Datenbank-Hooks; andere Methoden erhalten HTTP 405. Der vorhandene Valhalla-Router ist als Dienst `valhalla` mit seinem Datenverzeichnis und Port 8002 in der Compose-Datei enthalten.
+The web health check uses `curl` to request `/healthz`. The server handles GET
+and HEAD before the authentication and database hooks; other methods receive
+HTTP 405. The Compose file includes the Valhalla router as the `valhalla`
+service, with its data directory and port 8002.
 
-## Einstellungen anwenden
+## Apply settings
 
-```sh
+~~~sh
 docker compose up -d --no-build --pull never --force-recreate
-```
+~~~
 
-Bei geänderten Anwendungsquellen zuerst den betroffenen Dienst gezielt bauen. Die Compose-Datei legt die Intervalle und Loggrenzen fest; ein bloßer Container-Neustart übernimmt diese Einstellungen nicht.
+For changed application source, build the affected service first. The Compose
+file defines the health-check intervals and log limits, so restarting existing
+containers alone does not apply those settings.
 
-## Anwendungs- und Plugin-Build
+## Build the application and plugins
 
-Die lokalen Images heißen `wanderer-poi-web:local` und `wanderer-poi-db:local`.
-Sie werden nicht von Watchtower aktualisiert. Die Compose-Datei erhält die
-Routing-Konfiguration, den Valhalla-Dienst und die lokalen Datenverzeichnisse.
+The local images are named `wanderer-poi-web:local` and `wanderer-poi-db:local`.
+Watchtower does not update them. The Compose file also configures routing, the
+Valhalla service, and persistent local data directories.
 
-```sh
+~~~sh
 make web-build-docker db-build-docker
 make plugins-install-local
 docker compose up -d --no-build --pull never --no-deps --force-recreate db web
-```
+~~~
 
-`plugins-install-local` ersetzt ausschließlich die drei mitgelieferten Bundles
-in `data/plugins`. Dafür müssen Go 1.26 und TinyGo 0.41.1 im `PATH` verfügbar
-sein. Web und Datenbank verwenden denselben `POCKETBASE_PROXY_SECRET` aus der
-lokalen `.env`; ein bestehender Wert darf bei einem gewöhnlichen Neustart
-nicht neu erzeugt werden.
+`plugins-install-local` replaces only the three bundled plugins in
+`data/plugins`. Go 1.26 and TinyGo 0.41.1 must be available in `PATH`. The web
+and database services use the same `POCKETBASE_PROXY_SECRET` from the local
+`.env` file. Do not generate a new value during a routine restart.
 
-## Sicherung und Wiederherstellung
+## Backup and restore
 
-Vor einem Versionswechsel werden Web und Datenbank angehalten, damit
-`data/pb_data` einschließlich Dateispeicher konsistent gesichert werden kann.
-Zur Sicherung gehören außerdem `.env`, `docker-compose.yml`, `data/uploads`
-und die installierten Plugin-Bundles. Sicherungen enthalten Zugangsdaten und
-werden nur mit eingeschränkten Dateirechten lokal gespeichert.
+Before changing versions, stop the web and database services so that
+`data/pb_data`, including its file storage, can be backed up consistently.
+Also include `.env`, `docker-compose.yml`, `data/uploads`, and the installed
+plugin bundles. Backups contain credentials and must be stored locally with
+restricted file permissions.
 
-Die bisherigen Datenbank- und Web-Images erhalten vor dem Build separate
-Sicherungstags. Diese Tags bleiben nach erfolgreicher Aktualisierung erhalten;
-die Bereinigung betrifft nur nicht mehr benötigte Build-Artefakte.
+The existing database and web images receive separate backup tags before a
+build. Keep those tags after a successful update; cleanup should remove only
+unused build artifacts.
 
-Bei einem fehlgeschlagenen Upgrade werden Web und Datenbank wieder angehalten.
-Die gesicherte Datenbank mit Dateispeicher und die gesicherte Konfiguration
-werden gemeinsam zurückgespielt. Anschließend werden die bisherigen Images
-wieder als `:local` getaggt und beide Container neu erstellt. Eine migrierte
-Datenbank darf nicht mit dem vorherigen Datenbank-Image gestartet werden.
+If an upgrade fails, stop the web and database services again. Restore the
+database, its file storage, and the configuration together. Then retag the
+previous images as `:local` and recreate both containers. Do not start a
+migrated database with the previous database image.

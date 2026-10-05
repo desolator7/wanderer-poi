@@ -25,24 +25,24 @@ An actor represents a user of <span class="-tracking-[0.075em]">wanderer</span> 
 
 ```json
 {
-    "id": "https://demo.wanderer.to/api/v1/activitypub/user/demo",
+    "id": "https://wanderer.example.org/api/v1/activitypub/user/demo",
     "type": "Person",
-    "inbox": "https://demo.wanderer.to/api/v1/activitypub/user/demo/inbox",
-    "outbox": "https://demo.wanderer.to/api/v1/activitypub/user/demo/outbox",
+    "inbox": "https://wanderer.example.org/api/v1/activitypub/user/demo/inbox",
+    "outbox": "https://wanderer.example.org/api/v1/activitypub/user/demo/outbox",
     "summary": "Born the day we installed the site.",
     "name": "demo",
     "preferredUsername": "demo",
-    "followers": "https://demo.wanderer.to/api/v1/activitypub/user/demo/followers",
-    "following": "https://demo.wanderer.to/api/v1/activitypub/user/demo/following",
-    "url": "https://demo.wanderer.to/profile/@demo",
+    "followers": "https://wanderer.example.org/api/v1/activitypub/user/demo/followers",
+    "following": "https://wanderer.example.org/api/v1/activitypub/user/demo/following",
+    "url": "https://wanderer.example.org/profile/@demo",
     "published": "2025-05-05T15:07:59.943Z",
     "icon": {
         "type": "Image",
-        "url": "https://demo.wanderer.to/api/v1/files/users/26b1si1344ficl6/example-profile.jpg"
+        "url": "https://wanderer.example.org/api/v1/files/users/example-user-id/example-profile.jpg"
     },
     "publicKey": {
-        "id": "https://demo.wanderer.to/api/v1/activitypub/user/demo#main-key",
-        "owner": "https://demo.wanderer.to/api/v1/activitypub/user/demo",
+        "id": "https://wanderer.example.org/api/v1/activitypub/user/demo#main-key",
+        "owner": "https://wanderer.example.org/api/v1/activitypub/user/demo",
         "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAw0xyaRWP5X955bwSnUbr\nmwEF/2Fdmn5nlRRmEvej1BR0oBcPMVPYrrK4sz37mrAJ7Wbmg4KjmSDEROD4sApr\nM5FmKeU1OBsV2O3bL1DSW/8PXaf4JQRgl0AO+LiSAd7A/GO0viAzJXyJT4Rpaamf\n8Naclh7YR5E4JXrsjahPEWtUWcQ4g8Yhc6n2ptQ33ACI7Q1R3+U7q1tMaRCKAbdT\nbRahzqGs3iSxV+FjnsMR109KqDQJDMjwRB11USJTA4/nMpV6w8RS+171xNHl12Sg\nGpiuusmXMYYuoECdKDtLY7AsntusYMzXUjPzKfE+5EqPmIj5OTbg3A24p9hWIv5s\nmwIDAQAB\n-----END PUBLIC KEY-----\n"
     }
 }
@@ -55,29 +55,29 @@ Paginated outbox of an actor.
 ```json
 {
     "type": "OrderedCollectionPage",
-    "first": "https://demo.wanderer.to/api/v1/activitypub/user/demo/outbox?page=1",
-    "next": "https://demo.wanderer.to/api/v1/activitypub/user/demo/outbox?page=2",
-    "partOf": "https://demo.wanderer.to/api/v1/activitypub/user/demo/outbox",
+    "first": "https://wanderer.example.org/api/v1/activitypub/user/demo/outbox?page=1",
+    "next": "https://wanderer.example.org/api/v1/activitypub/user/demo/outbox?page=2",
+    "partOf": "https://wanderer.example.org/api/v1/activitypub/user/demo/outbox",
     "totalItems": 23,
     "orderedItems": [
         {
-            "id": "https://demo.wanderer.to/api/v1/activitypub/activity/ecy96j9vpke00hr",
-            "actor": "https://demo.wanderer.to/api/v1/activitypub/user/demo",
+            "id": "https://wanderer.example.org/api/v1/activitypub/activity/ecy96j9vpke00hr",
+            "actor": "https://wanderer.example.org/api/v1/activitypub/user/demo",
             "type": "Create",
             "to": [
                 "https://www.w3.org/ns/activitystreams#Public"
             ],
             "cc": [
                 "https://federated.example.org/users/example/inbox",
-                "https://demo.wanderer.to/api/v1/activitypub/user/demo/inbox"
+                "https://wanderer.example.org/api/v1/activitypub/user/demo/inbox"
             ],
             "published": "2025-01-01 19:41:53.504Z",
             "object": {
-                "id": "https://demo.wanderer.to/api/v1/comment/htm169g4b2i48fc",
+                "id": "https://wanderer.example.org/api/v1/comment/example-comment-id",
                 "type": "Note",
                 "content": "<p><a href=\"/profile/@example@federated.example.org\" class=\"mention\" rel=\"nofollow\">@example@federated.example.org</a> </p><p>Wow! What a beautiful trail!</p>",
-                "attributedTo": "https://demo.wanderer.to/api/v1/activitypub/user/demo",
-                "inReplyTo": "https://demo.wanderer.to/api/v1/trail/2ce3af7a2e80f52",
+                "attributedTo": "https://wanderer.example.org/api/v1/activitypub/user/demo",
+                "inReplyTo": "https://wanderer.example.org/api/v1/trail/example-trail-id",
                 "tag": [
                     {
                         "id": "https://federated.example.org/users/example",
@@ -100,8 +100,8 @@ Paginated collection of followers of an actor.
 ```json
 {
     "type": "OrderedCollectionPage",
-    "first": "https://demo.wanderer.to/api/v1/activitypub/user/demo/followers?page=1",
-    "partOf": "https://demo.wanderer.to/api/v1/activitypub/user/demo/followers",
+    "first": "https://wanderer.example.org/api/v1/activitypub/user/demo/followers?page=1",
+    "partOf": "https://wanderer.example.org/api/v1/activitypub/user/demo/followers",
     "totalItems": 3,
     "orderedItems": [
         "https://federated.example.org/users/example",
@@ -118,8 +118,8 @@ Paginated collection of actors being followed by an actor.
 ```json
 {
     "type": "OrderedCollectionPage",
-    "first": "https://demo.wanderer.to/api/v1/activitypub/user/demo/following?page=1",
-    "partOf": "https://demo.wanderer.to/api/v1/activitypub/user/demo/following",
+    "first": "https://wanderer.example.org/api/v1/activitypub/user/demo/following?page=1",
+    "partOf": "https://wanderer.example.org/api/v1/activitypub/user/demo/following",
     "totalItems": 3,
     "orderedItems": [
         "https://federated.example.org/users/example",
@@ -141,23 +141,23 @@ Waypoints, comments and summit logs are not part of a federated trail object. Th
 
 ```json
 {
-    "id": "https://demo.wanderer.to/api/v1/trail/2ce3af7a2e80f52",
+    "id": "https://wanderer.example.org/api/v1/trail/example-trail-id",
     "type": "Note",
     "name": "Example trail",
-    "content": "<h1>Example trail</h1><p><a href=\"/profile/@example@federated.example.org\" class=\"mention\" rel=\"nofollow\">@example@federated.example.org</a> </p><p><a href=\"https://demo.wanderer.to/trail/view/@demo/2ce3af7a2e80f52\">https://demo.wanderer.to/trail/view/@demo/2ce3af7a2e80f52</a></p>",
+    "content": "<h1>Example trail</h1><p><a href=\"/profile/@example@federated.example.org\" class=\"mention\" rel=\"nofollow\">@example@federated.example.org</a> </p><p><a href=\"https://wanderer.example.org/trail/view/@example/trail-id\">https://wanderer.example.org/trail/view/@example/trail-id</a></p>",
     "attachment": [
         {
             "type": "Image",
             "mediaType": "image/jpeg",
-            "url": "https://demo.wanderer.to/api/v1/files/trails/2ce3af7a2e80f52/example-route-preview.webp"
+            "url": "https://wanderer.example.org/api/v1/files/trails/example-trail-id/example-route-preview.webp"
         },
         {
             "type": "Document",
             "mediaType": "application/xml+gpx",
-            "url": "https://demo.wanderer.to/api/v1/files/trails/2ce3af7a2e80f52/example-trail_5ts04zgsuk.gpx"
+            "url": "https://wanderer.example.org/api/v1/files/trails/example-trail-id/example-trail_5ts04zgsuk.gpx"
         }
     ],
-    "attributedTo": "https://demo.wanderer.to/api/v1/activitypub/user/demo",
+    "attributedTo": "https://wanderer.example.org/api/v1/activitypub/user/demo",
     "location": {
         "type": "Place",
         "name": "Murnau am Staffelsee, Bayern, Deutschland",
@@ -207,7 +207,7 @@ Waypoints, comments and summit logs are not part of a federated trail object. Th
             "content": "My awesome tag"
         }
     ],
-    "url": "https://demo.wanderer.to/trail/view/@demo/2ce3af7a2e80f52",
+    "url": "https://wanderer.example.org/trail/view/@example/trail-id",
     "published": "2025-06-17T21:40:02Z",
     "startTime": "2025-06-14T00:00:00Z"
 }
@@ -219,23 +219,23 @@ Represents a summit log that is attached to a trail. The trail is referenced in 
 
 ```json
 {
-  "id": "https://demo.wanderer.to/api/v1/summit-log/0l889g7nbju9ic2",
+  "id": "https://wanderer.example.org/api/v1/summit-log/example-summit-log-id",
   "type": "Note",
   "content": "<p>Hello World! This is a summit log!</p><p><a href=\"/profile/@example@federated.example.org\" class=\"mention\" rel=\"nofollow\">@example@federated.example.org</a> </p>",
   "attachment": [
     {
       "type": "Image",
       "mediaType": "image/jpeg",
-      "url": "https://demo.wanderer.to/api/v1/files/summit_logs/0l889g7nbju9ic2/example-trail_loncv4fixp.jpg"
+      "url": "https://wanderer.example.org/api/v1/files/summit_logs/example-summit-log-id/example-trail_loncv4fixp.jpg"
     },
     {
       "type": "Document",
       "mediaType": "application/xml+gpx",
-      "url": "https://demo.wanderer.to/api/v1/files/summit_logs/0l889g7nbju9ic2/example-trail_8mw5gysia0.gpx"
+      "url": "https://wanderer.example.org/api/v1/files/summit_logs/example-summit-log-id/example-trail_8mw5gysia0.gpx"
     }
   ],
-  "attributedTo": "https://demo.wanderer.to/api/v1/activitypub/user/demo",
-  "inReplyTo": "https://demo.wanderer.to/api/v1/trail/2ce3af7a2e80f52",
+  "attributedTo": "https://wanderer.example.org/api/v1/activitypub/user/demo",
+  "inReplyTo": "https://wanderer.example.org/api/v1/trail/example-trail-id",
   "tag": [
     {
       "type": "Note",
@@ -264,7 +264,7 @@ Represents a summit log that is attached to a trail. The trail is referenced in 
       "href": "https://federated.example.org/users/example"
     }
   ],
-  "url": "https://demo.wanderer.to/trail/view/@demo/2ce3af7a2e80f52",
+  "url": "https://wanderer.example.org/trail/view/@example/trail-id",
   "published": "2025-01-01T19:38:19Z",
   "startTime": "2025-01-01T00:00:00Z"
 }
@@ -276,11 +276,11 @@ A comment attached to a trail. The trail is referenced in the "InReplyTo" field.
 
 ```json
 {
-  "id": "https://demo.wanderer.to/api/v1/comment/htm169g4b2i48fc",
+  "id": "https://wanderer.example.org/api/v1/comment/example-comment-id",
   "type": "Note",
   "content": "<p><a href=\"/profile/@example@federated.example.org\" class=\"mention\" rel=\"nofollow\">@example@federated.example.org</a> </p><p>Wow! What a beautiful trail!</p>",
-  "attributedTo": "https://demo.wanderer.to/api/v1/activitypub/user/demo",
-  "inReplyTo": "https://demo.wanderer.to/api/v1/trail/2ce3af7a2e80f52",
+  "attributedTo": "https://wanderer.example.org/api/v1/activitypub/user/demo",
+  "inReplyTo": "https://wanderer.example.org/api/v1/trail/example-trail-id",
   "tag": [
     {
       "id": "https://federated.example.org/users/example",
@@ -299,19 +299,19 @@ A collection of trails.
 
 ```json
 {
-  "id": "https://demo.wanderer.to/api/v1/list/65i686yf6u3b394",
+  "id": "https://wanderer.example.org/api/v1/list/example-list-id",
   "type": "Note",
   "name": "My Awesome List",
-  "content": "<p>With my awesome description.</p><p><a href=\"https://demo.wanderer.to/lists/@demo/65i686yf6u3b394\">https://demo.wanderer.to/lists/@demo/65i686yf6u3b394</a></p>",
+  "content": "<p>With my awesome description.</p><p><a href=\"https://wanderer.example.org/lists/@demo/example-list-id\">https://wanderer.example.org/lists/@demo/example-list-id</a></p>",
   "attachment": [
     {
       "type": "Image",
       "mediaType": "image/jpeg",
-      "url": "https://demo.wanderer.to/api/v1/files/lists/65i686yf6u3b394/example-trail_m1ubtj7rwk.jpg"
+      "url": "https://wanderer.example.org/api/v1/files/lists/example-list-id/example-trail_m1ubtj7rwk.jpg"
     }
   ],
-  "attributedTo": "https://demo.wanderer.to/api/v1/activitypub/user/demo",
-  "url": "https://demo.wanderer.to/lists/@demo/65i686yf6u3b394",
+  "attributedTo": "https://wanderer.example.org/api/v1/activitypub/user/demo",
+  "url": "https://wanderer.example.org/lists/@demo/example-list-id",
   "published": "2025-05-18T22:03:19Z"
 }
 ```
@@ -324,14 +324,14 @@ Issued whenever a trail is created or updated. Broadcasted to all followers and 
 
 ```json
 {
-    "id": "https://demo.wanderer.to/api/v1/activitypub/activity/wqt6poxjevq9oax",
-    "actor": "https://demo.wanderer.to/api/v1/activitypub/user/demo",
+    "id": "https://wanderer.example.org/api/v1/activitypub/activity/wqt6poxjevq9oax",
+    "actor": "https://wanderer.example.org/api/v1/activitypub/user/demo",
     "type": "Create",
     "to": [
         "https://www.w3.org/ns/activitystreams#Public"
     ],
     "cc": [
-        "https://demo.wanderer.to/api/v1/activitypub/user/demo/followers",
+        "https://wanderer.example.org/api/v1/activitypub/user/demo/followers",
         "https://federated.example.org/users/example/inbox"
     ],
     "published": "2025-01-01 14:56:38.800Z",
@@ -345,12 +345,12 @@ Issued whenever a summit log is created or updated. Broadcasted to the trail aut
 
 ```json
 {
-    "id": "https://demo.wanderer.to/api/v1/activitypub/activity/i31uc0lki3crxwm",
-    "actor": "https://demo.wanderer.to/api/v1/activitypub/user/demo",
+    "id": "https://wanderer.example.org/api/v1/activitypub/activity/i31uc0lki3crxwm",
+    "actor": "https://wanderer.example.org/api/v1/activitypub/user/demo",
     "to": "https://www.w3.org/ns/activitystreams#Public",
     "type": "Create",
     "cc": [
-        "https://demo.wanderer.to/api/v1/activitypub/user/demo/followers",
+        "https://wanderer.example.org/api/v1/activitypub/user/demo/followers",
         "https://federated.example.org/users/example/inbox"
     ],
     "published": "2025-01-01 19:38:19.978Z",
@@ -364,15 +364,15 @@ Issued whenever a comment is created or updated. Broadcasted to the trail's auth
 
 ```json
 {
-    "id": "https://demo.wanderer.to/api/v1/activitypub/activity/ecy96j9vpke00hr",
-    "actor": "https://demo.wanderer.to/api/v1/activitypub/user/demo",
+    "id": "https://wanderer.example.org/api/v1/activitypub/activity/ecy96j9vpke00hr",
+    "actor": "https://wanderer.example.org/api/v1/activitypub/user/demo",
     "type": "Create",
     "to": [
         "https://www.w3.org/ns/activitystreams#Public"
     ],
     "cc": [
         "https://federated.example.org/users/example/inbox",
-        "https://demo.wanderer.to/api/v1/activitypub/user/demo/inbox"
+        "https://wanderer.example.org/api/v1/activitypub/user/demo/inbox"
     ],
     "published": "2025-01-01 19:41:53.504Z",
     "object": {}
@@ -386,14 +386,14 @@ Issued whenever a list is created or updated. Broadcasted to all followers. Edit
 
 ```json
 {
-    "id": "https://demo.wanderer.to/api/v1/activitypub/activity/zq30he84ng9of67",
-    "actor": "https://demo.wanderer.to/api/v1/activitypub/user/demo",
+    "id": "https://wanderer.example.org/api/v1/activitypub/activity/zq30he84ng9of67",
+    "actor": "https://wanderer.example.org/api/v1/activitypub/user/demo",
     "type": "Create",
     "to": [
         "https://www.w3.org/ns/activitystreams#Public"
     ],
     "cc": [
-        "https://demo.wanderer.to/api/v1/activitypub/user/demo/followers",
+        "https://wanderer.example.org/api/v1/activitypub/user/demo/followers",
     ],
     "published": "2025-01-01 19:51:37.079Z",
     "object": {}
@@ -406,8 +406,8 @@ Each actor in <span class="-tracking-[0.075em]">wanderer</span> can be followed.
 
 ```json
 {
-    "id": "https://demo.wanderer.to/api/v1/activitypub/activity/ika3t06qjyvlx72",
-    "actor": "https://demo.wanderer.to/api/v1/activitypub/user/demo",
+    "id": "https://wanderer.example.org/api/v1/activitypub/activity/ika3t06qjyvlx72",
+    "actor": "https://wanderer.example.org/api/v1/activitypub/user/demo",
     "type": "Follow",
     "to": null,
     "cc": null,
@@ -422,17 +422,17 @@ Automatically send by an actor as a response upon receiving a `Follow` activity.
 
 ```json
 {
-    "id": "https://demo.wanderer.to/api/v1/activitypub/activity/9jpjjvvi79ayp9d",
-    "actor": "https://demo.wanderer.to/api/v1/activitypub/user/demo",
+    "id": "https://wanderer.example.org/api/v1/activitypub/activity/9jpjjvvi79ayp9d",
+    "actor": "https://wanderer.example.org/api/v1/activitypub/user/demo",
     "type": "Accept",
     "to": null,
     "cc": null,
     "published": "2025-06-17 19:48:29.417Z",
     "object": {
-        "id": "https://federated.example.org/8f702e81-9f85-419f-8e45-c44c8b6d8365",
+        "id": "https://federated.example.org/example-follow-activity-id",
         "type": "Follow",
         "actor": "https://federated.example.org/users/example",
-        "object": "https://demo.wanderer.to/api/v1/activitypub/user/demo"
+        "object": "https://wanderer.example.org/api/v1/activitypub/user/demo"
     }
 }
 ```
@@ -443,16 +443,16 @@ An unfollow is represented by an `Undo` activity with the original follow as its
 
 ```json
 {
-    "id": "https://demo.wanderer.to/api/v1/activitypub/activity/n3n7ka5msa3il84",
-    "actor": "https://demo.wanderer.to/api/v1/activitypub/user/demo",
+    "id": "https://wanderer.example.org/api/v1/activitypub/activity/n3n7ka5msa3il84",
+    "actor": "https://wanderer.example.org/api/v1/activitypub/user/demo",
     "type": "Undo",
     "to": null,
     "cc": null,
     "published": "2025-01-01 20:14:37.107Z",
     "object": {
-        "id": "https://demo.wanderer.to/api/v1/activitypub/activity/ika3t06qjyvlx72",
+        "id": "https://wanderer.example.org/api/v1/activitypub/activity/ika3t06qjyvlx72",
         "type": "Follow",
-        "actor": "https://demo.wanderer.to/api/v1/activitypub/user/demo",
+        "actor": "https://wanderer.example.org/api/v1/activitypub/user/demo",
         "object": "https://federated.example.org/users/example"
     }
 }
@@ -464,13 +464,13 @@ A like for a trail.
 
 ```json
 {
-    "id": "https://demo.wanderer.to/api/v1/activitypub/activity/jjlcgm0il3jy2y7",
-    "actor": "https://demo.wanderer.to/api/v1/activitypub/user/demo",
+    "id": "https://wanderer.example.org/api/v1/activitypub/activity/jjlcgm0il3jy2y7",
+    "actor": "https://wanderer.example.org/api/v1/activitypub/user/demo",
     "type": "Like",
     "to": null,
     "cc": null,
     "published": "2025-06-18 18:48:55.300Z",
-    "object": "https://demo.wanderer.to/api/v1/trail/23fd1747a29c3af"
+    "object": "https://wanderer.example.org/api/v1/trail/23fd1747a29c3af"
 }
 ```
 
@@ -480,12 +480,12 @@ Removing a like from a previously liked trail.
 
 ```json
 {
-    "id": "https://demo.wanderer.to/api/v1/activitypub/activity/jjlcgm0il3jy2y7",
-    "actor": "https://demo.wanderer.to/api/v1/activitypub/user/demo",
+    "id": "https://wanderer.example.org/api/v1/activitypub/activity/jjlcgm0il3jy2y7",
+    "actor": "https://wanderer.example.org/api/v1/activitypub/user/demo",
     "type": "Undo",
     "to": null,
     "cc": null,
     "published": "2025-06-18 18:48:55.300Z",
-    "object": "https://demo.wanderer.to/api/v1/trail/23fd1747a29c3af"
+    "object": "https://wanderer.example.org/api/v1/trail/23fd1747a29c3af"
 }
 ```
